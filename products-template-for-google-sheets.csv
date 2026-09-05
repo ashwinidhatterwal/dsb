@@ -1,0 +1,6 @@
+id,name,nameHindi,category,subcategory,price,mrp,costPrice,image,images,description,stock,stockQty,tags
+DSB-0001,Padded T-Shirt Bra,पैडेड टी-शर्ट ब्रा,Lingerie,Bras,249,399,150,https://placehold.co/400x400/C81163/FFF6E9?text=Bra,,Everyday comfort bra with removable padding,in stock,,"bra,lingerie"
+DSB-0002,Matte Lipstick - Rani Red,मैट लिपस्टिक,Cosmetics,Lips,149,220,80,https://placehold.co/400x400/F2A93B/201B3D?text=Lipstick,,Long-stay matte lipstick in bridal red,in stock,,"lipstick,makeup"
+DSB-0003,Anti-Dandruff Shampoo 340ml,,Hair Care,Shampoo,180,210,,https://placehold.co/400x400/3E7C59/FFF6E9?text=Shampoo,,Anti-dandruff shampoo for daily use,in stock,,"shampoo,hair"
+DSB-0004,Ruled Notebook 172 Pages,,Stationery,Notebooks,40,45,,https://placehold.co/400x400/F2A93B/201B3D?text=Notebook,,Long ruled notebook 172 pages,in stock,,"notebook,stationery"
+DSB-0005,Nail Clipper - Stainless Steel,,Personal Care,Grooming,25,35,,https://placehold.co/400x400/C81163/FFF6E9?text=Nail+Clipper,,Sharp stainless steel nail clipper,in stock,,"nail clipper,grooming"

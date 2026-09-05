@@ -1,0 +1,175 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>DSB Command Center</title><meta name="robots" content="noindex,nofollow"><link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Hind:wght@400;500;600;700&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet"><style>
+:root{--bg:#070a17;--panel:#0d1228;--panel2:#111833;--line:rgba(160,174,255,.14);--text:#eef1ff;--muted:#9aa4c7;--violet:#8b5cf6;--pink:#ec4899;--cyan:#22d3ee;--green:#22c55e;--orange:#f59e0b;--red:#fb7185;--shadow:0 24px 70px rgba(0,0,0,.38)}
+*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;background:radial-gradient(900px 650px at 78% -10%,rgba(111,66,193,.14),transparent 60%),radial-gradient(700px 500px at -5% 80%,rgba(34,211,238,.07),transparent 60%),var(--bg);color:var(--text);font-family:Hind,system-ui,sans-serif;min-height:100vh}button,input,select,textarea{font:inherit}button{cursor:pointer}.hint{color:var(--muted)!important}.primary-btn,.ghost-btn{border-radius:14px;padding:11px 15px;font-weight:700}.primary-btn{border:0;background:linear-gradient(135deg,var(--violet),var(--pink));color:white;box-shadow:0 12px 28px rgba(139,92,246,.22)}.ghost-btn{background:rgba(255,255,255,.035);border:1px solid var(--line);color:var(--text)}label{display:block;color:#b8c1df;font-size:12px;font-weight:700;margin:13px 0 6px}input,select,textarea{width:100%;background:rgba(5,8,22,.55);border:1px solid var(--line);border-radius:14px;color:var(--text);padding:12px 14px;outline:none;transition:.2s}input:focus,select:focus,textarea:focus{border-color:rgba(139,92,246,.75);box-shadow:0 0 0 4px rgba(139,92,246,.11)}textarea{min-height:100px}.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.statusline{font-size:12px;margin-top:8px}.statusline.ok{color:#4ade80}.statusline.err{color:#fb7185}
+/* connection */.connect-screen{min-height:100vh;display:grid;place-items:center;padding:22px;background:radial-gradient(circle at 50% 20%,rgba(139,92,246,.22),transparent 40%)}.connect-card{width:min(430px,100%);padding:34px;border:1px solid var(--line);border-radius:28px;background:linear-gradient(145deg,rgba(19,25,53,.96),rgba(8,11,28,.96));box-shadow:var(--shadow)}.connect-logo{width:66px;height:66px;display:grid;place-items:center;border-radius:22px;background:linear-gradient(135deg,var(--violet),var(--pink));font-size:28px;font-weight:900;margin-bottom:18px;box-shadow:0 16px 35px rgba(236,72,153,.24)}.connect-card h1{margin:0;font:700 26px/1.1 'Baloo 2',sans-serif}.connect-card .sub{color:var(--muted);font-size:13px;margin:4px 0 20px}
+/* shell */.admin-app{display:none;min-height:100vh}.admin-sidebar{position:fixed;inset:0 auto 0 0;width:254px;padding:18px 14px;border-right:1px solid var(--line);background:linear-gradient(180deg,rgba(10,14,34,.98),rgba(6,9,22,.98));z-index:40;display:flex;flex-direction:column}.admin-brand{display:flex;gap:12px;align-items:center;padding:8px 10px 26px}.admin-brand-mark{width:50px;height:50px;border-radius:17px;display:grid;place-items:center;background:linear-gradient(135deg,#ff5f6d,#ffc371);font-size:24px;box-shadow:0 15px 35px rgba(255,95,109,.18)}.admin-brand b{font-size:29px;letter-spacing:.04em;background:linear-gradient(90deg,#ff7b54,#d59cff);-webkit-background-clip:text;color:transparent}.admin-brand small{display:block;color:#8792b6;font:700 10px Rajdhani,sans-serif;letter-spacing:.16em}.admin-nav{display:grid;gap:7px}.admin-nav button{display:flex;align-items:center;gap:13px;text-align:left;color:#aab3d0;background:transparent;border:1px solid transparent;border-radius:14px;padding:13px 14px;font-weight:700;transition:.2s}.admin-nav button:hover{background:rgba(255,255,255,.035);color:#fff}.admin-nav button.active{color:white;background:linear-gradient(90deg,rgba(139,92,246,.75),rgba(236,72,153,.45));border-color:rgba(217,70,239,.45);box-shadow:0 10px 30px rgba(139,92,246,.18)}.nav-ico{font-size:19px;width:24px;text-align:center}.admin-side-bottom{margin-top:auto}.admin-side-mini{border:1px solid var(--line);border-radius:18px;padding:14px;color:#8994b8;font:700 10px Rajdhani,sans-serif;letter-spacing:.12em}.admin-side-mini a{display:block;color:#d9ddf0;text-decoration:none;letter-spacing:0;font:600 13px Hind,sans-serif;margin-top:5px}.admin-main{margin-left:254px;min-width:0}.admin-topbar{position:sticky;top:0;height:76px;z-index:30;display:flex;align-items:center;justify-content:space-between;padding:0 30px;border-bottom:1px solid var(--line);background:rgba(7,10,23,.78);backdrop-filter:blur(22px)}.topbar-search{width:min(430px,40vw);display:flex;align-items:center;gap:9px;border:1px solid var(--line);background:rgba(17,24,51,.75);padding:10px 14px;border-radius:13px;color:var(--muted)}.topbar-search input{border:0;padding:0;background:transparent;box-shadow:none;color:#cfd6ef}.top-actions{display:flex;align-items:center;gap:11px}.live-pill{border:1px solid rgba(34,197,94,.25);background:rgba(34,197,94,.08);color:#74e89b;border-radius:999px;padding:7px 10px;font:700 11px Rajdhani,sans-serif;letter-spacing:.1em}.view-store{color:#dbe2ff;text-decoration:none;border:1px solid var(--line);padding:8px 12px;border-radius:12px;font-size:12px}.admin-tab{display:none;width:min(1440px,100%);margin:auto;padding:28px 30px 42px}.admin-tab.active{display:block}.admin-section-title{font:700 30px/1.1 'Baloo 2',sans-serif;margin:0;color:#fff}.section-sub{color:var(--muted);margin:5px 0 18px;font-size:13px}
+/* dashboard command center */.dash-hero{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:18px;padding:4px 0}.dash-kicker{color:#b99bff;font:700 11px Rajdhani,sans-serif;letter-spacing:.17em}.dash-hero p{margin:7px 0 0;color:var(--muted)}.dash-refresh-icon{width:48px;height:48px;border-radius:15px;border:1px solid var(--line);background:rgba(255,255,255,.035);color:white;font-size:23px}.dash-refresh-icon:hover{transform:rotate(90deg);border-color:var(--cyan)}.dash-attention{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 16px}.dash-alert{display:flex;align-items:center;gap:12px;text-align:left;padding:14px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(120deg,rgba(255,255,255,.035),rgba(255,255,255,.01));color:var(--text)}.dash-alert:hover{border-color:rgba(236,72,153,.55);transform:translateY(-2px)}.alert-icon{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:rgba(236,72,153,.12);font-size:20px}.alert-copy{display:grid;gap:2px}.alert-copy strong{font-size:14px}.alert-copy small{color:var(--muted)}.alert-arrow{margin-left:auto;font-size:26px;color:#bda7ff}.dash-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:16px}.dash-stat{position:relative;overflow:hidden;min-height:132px;border:1px solid var(--line);border-radius:20px;padding:18px;background:linear-gradient(145deg,rgba(18,25,53,.95),rgba(11,15,34,.95));box-shadow:0 12px 35px rgba(0,0,0,.14)}.dash-stat:before{content:'';position:absolute;width:120px;height:120px;border-radius:50%;right:-50px;top:-55px;background:radial-gradient(circle,rgba(139,92,246,.22),transparent 65%)}.dash-stat:nth-child(2):before{background:radial-gradient(circle,rgba(34,211,238,.19),transparent 65%)}.dash-stat:nth-child(3):before{background:radial-gradient(circle,rgba(34,197,94,.19),transparent 65%)}.dash-stat:nth-child(4):before{background:radial-gradient(circle,rgba(236,72,153,.19),transparent 65%)}.dash-stat-label{position:relative;color:#9ba6c7;font:700 11px Rajdhani,sans-serif;letter-spacing:.1em}.dash-stat-value{position:relative;font:700 31px Rajdhani,sans-serif;margin:11px 0 4px;color:white}.dash-stat-sub{position:relative;color:#8994b8;font-size:12px}.dash-layout{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(340px,.75fr);gap:16px}.dash-stack{display:grid;gap:16px}.dash-panel{border:1px solid var(--line);border-radius:21px;padding:18px;background:linear-gradient(145deg,rgba(15,21,46,.9),rgba(9,13,29,.9));box-shadow:0 16px 45px rgba(0,0,0,.13)}.dash-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}.dash-panel h3{margin:3px 0 0;font:700 18px 'Baloo 2',sans-serif}.dash-panel-value{font:700 18px Rajdhani,sans-serif;color:#67e8f9}.dash-link-btn{background:transparent;border:0;color:#c5b4ff;font-weight:700}.dash-chart{height:260px;display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:24px 4px 2px;border-radius:16px;background:linear-gradient(180deg,rgba(139,92,246,.06),transparent);position:relative}.dash-bar-wrap{height:100%;flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:7px;min-width:20px}.dash-bar{width:min(34px,72%);min-height:8px;border-radius:9px 9px 4px 4px;background:linear-gradient(180deg,#d946ef,#7c3aed);box-shadow:0 0 18px rgba(217,70,239,.35);transition:height .6s ease}.dash-bar-value{font-size:10px;color:#b8c1df;min-height:16px}.dash-bar-label{font:700 10px Rajdhani,sans-serif;color:#7782a7}.dash-chart-empty{margin:auto}.dash-product-row{display:grid;grid-template-columns:25px minmax(90px,1fr) minmax(60px,1.2fr) 72px;gap:9px;align-items:center;padding:9px 0;border-bottom:1px solid rgba(160,174,255,.08)}.dash-rank{width:25px;height:25px;border-radius:9px;display:grid;place-items:center;background:rgba(139,92,246,.15);color:#d4c5ff;font:700 13px Rajdhani,sans-serif}.dash-product-name strong{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dash-product-meta{font-size:10px;color:var(--muted)}.dash-product-bar-track{height:6px;background:#161e3c;border-radius:999px;overflow:hidden}.dash-product-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--violet),var(--pink))}.dash-product-value{text-align:right;font:700 12px Rajdhani,sans-serif;color:#e6e9ff}.dash-status-bar{height:14px;border-radius:999px;overflow:hidden;background:#151d39;display:flex}.dash-status-seg{display:grid;place-items:center;font-size:9px;color:white;min-width:0}.dash-status-seg.pending{background:var(--orange)}.dash-status-seg.fulfilled{background:var(--green)}.dash-status-seg.cancelled{background:var(--red)}.dash-status-legend{display:flex;gap:9px;flex-wrap:wrap;margin-top:13px}.dash-legend{padding:6px 9px;border-radius:10px;background:rgba(255,255,255,.035);color:var(--muted);font-size:11px}.dash-legend b{color:white}.dash-lowstock-item,.dash-recent-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid rgba(160,174,255,.09)}.lowstock-name{font-weight:700;font-size:13px}.lowstock-state{font-size:11px;color:#fbbf24;margin-top:2px}.dash-lowstock-item .qty{font:700 14px Rajdhani,sans-serif;color:#fda4af}.dash-recent-icon{width:39px;height:39px;border-radius:13px;display:grid;place-items:center;background:rgba(34,211,238,.09)}.dash-recent-copy{flex:1;min-width:0}.dash-recent-copy strong{display:block;font-size:13px}.dash-recent-copy span{display:block;color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dash-recent-total{text-align:right;font:700 14px Rajdhani,sans-serif}.status-pill{display:inline-block;padding:3px 7px;border-radius:999px;font-size:9px;margin-top:3px}.status-pill.pending{background:rgba(245,158,11,.13);color:#fbbf24}.status-pill.fulfilled{background:rgba(34,197,94,.12);color:#86efac}.status-pill.cancelled{background:rgba(251,113,133,.12);color:#fda4af}.dash-quick-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.dash-quick{min-height:84px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.025);color:#cfd6ef;display:grid;place-items:center;gap:5px;font-weight:700}.dash-quick:hover{transform:translateY(-2px);border-color:rgba(139,92,246,.65);background:rgba(139,92,246,.08)}.dash-quick span{font-size:22px}
+/* products */#tab-products .admin-section-title,#tab-orders .admin-section-title,#tab-add .admin-section-title{font-size:28px}.search-row{display:flex;margin:16px 0}.search-row input,#orderFilterInput{max-width:620px}.search-row:before{content:'⌕';font-size:20px;color:#8490b7;margin-right:-38px;z-index:1;pointer-events:none;display:grid;place-items:center;width:38px}.search-row input{padding-left:42px}#productList{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.arow{display:flex;align-items:center;gap:11px;padding:12px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(145deg,rgba(18,24,50,.92),rgba(10,14,30,.92));transition:.2s}.arow:hover{transform:translateY(-2px);border-color:rgba(139,92,246,.45)}.arow-thumb{width:58px;height:58px;object-fit:cover;border-radius:14px;background:#151d39}.arow-body{min-width:0;flex:1}.arow-title{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.arow-sub{font-size:10px;color:var(--muted);margin-top:3px}.arow-actions{display:flex;gap:5px}.arow-actions button{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:white}.arow-actions .danger{border-color:rgba(251,113,133,.3)}
+/* forms */#tab-add{max-width:900px}.upload-row{display:flex;gap:9px;align-items:center}.upload-row input[type=file]{padding:9px}.img-preview img{width:110px;height:110px;border-radius:17px;object-fit:cover;border:1px solid var(--line);margin-top:8px}.extra-images-preview{display:flex;flex-wrap:wrap;gap:9px;margin-top:10px}.extra-thumb{position:relative;width:76px;height:76px}.extra-thumb img{width:100%;height:100%;object-fit:cover;border-radius:14px;border:1px solid var(--line)}.extra-thumb button{position:absolute;right:-5px;top:-5px;width:23px;height:23px;border-radius:50%;border:0;background:#fb7185;color:#111}
+/* orders */.order-controls{display:flex;gap:10px;margin:15px 0}.orow{border:1px solid var(--line);border-radius:18px;padding:14px;background:linear-gradient(145deg,rgba(18,24,50,.92),rgba(10,14,30,.92));margin-top:10px}.ohead,.ofoot{display:flex;justify-content:space-between;gap:12px}.oid{font:700 14px Rajdhani,sans-serif;color:#d8ccff}.odate,.ophone{font-size:11px;color:var(--muted)}.ocust{font-weight:700;margin-top:7px}.oaddress,.oitems{font-size:12px;color:#bdc6e4;margin-top:5px}.oitems{padding:8px;border-radius:10px;background:rgba(255,255,255,.03)}.ototal{font:700 16px Rajdhani,sans-serif}.admin-tabbar{display:none}.toast{position:fixed;left:50%;bottom:25px;transform:translate(-50%,20px);opacity:0;background:#151d39;color:white;border:1px solid var(--line);padding:11px 16px;border-radius:12px;transition:.25s;z-index:100}.toast.show{opacity:1;transform:translate(-50%,0)}
+@media(max-width:1180px){#productList{grid-template-columns:repeat(2,1fr)}.dash-layout{grid-template-columns:1fr}.dash-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:900px){.admin-sidebar{display:none}.admin-main{margin-left:0}.admin-topbar{padding:0 14px;height:68px}.topbar-search{width:45vw}.admin-tab{padding:20px 14px 95px}.admin-tabbar{position:fixed;display:flex;justify-content:space-around;left:0;right:0;bottom:0;z-index:50;padding:8px max(8px,env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom));background:rgba(7,10,23,.92);backdrop-filter:blur(18px);border-top:1px solid var(--line)}.admin-tabbar button{flex:1;background:transparent;border:0;color:#8994b8;display:grid;gap:3px;place-items:center;font-size:10px}.admin-tabbar button.active{color:#d6c8ff}.tab-icon{font-size:19px}.dash-attention{grid-template-columns:1fr}.dash-quick-actions{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:560px){.topbar-search{display:none}.view-store{font-size:10px;padding:7px 9px}.live-pill{font-size:9px}.admin-section-title{font-size:26px}.dash-grid{grid-template-columns:1fr 1fr;gap:9px}.dash-stat{min-height:112px;padding:14px}.dash-stat-value{font-size:25px}.dash-chart{height:210px}.dash-layout{gap:11px}.dash-panel{padding:14px;border-radius:18px}.dash-quick-actions{grid-template-columns:repeat(2,1fr)}#productList{grid-template-columns:1fr}.row2{grid-template-columns:1fr}.upload-row{flex-wrap:wrap}.dash-product-row{grid-template-columns:24px minmax(75px,1fr) 1fr 62px}.dash-product-value{font-size:11px}.order-controls{flex-direction:column}.dash-hero{align-items:flex-start}.dash-hero .admin-section-title{font-size:28px}}
+</style></head><body><!-- ===== Connect screen ===== -->
+<div class="connect-screen" id="connectScreen"><div class="connect-card"><div class="connect-logo">D</div><h1>DSB Command Center</h1><div class="sub">Securely connect your store workspace</div><div class="field"><label>Apps Script URL</label><input type="text" id="apiUrl" placeholder="https://script.google.com/macros/s/XXXX/exec"></div><div class="field"><label>Admin key</label><input type="password" id="adminKey" placeholder="Enter admin key"></div><button class="primary-btn" id="connectBtn" style="width:100%;margin-top:10px">Launch dashboard →</button><div class="statusline" id="connectStatus"></div><div style="margin-top:16px"><a href="index.html" style="color:#aab3d0;font-size:12px;text-decoration:none">← Back to store</a></div></div></div><!-- ===== Main app ===== -->
+<div class="admin-app" id="adminApp"><aside class="admin-sidebar" aria-label="Admin navigation"><div class="admin-brand"><div class="admin-brand-mark">🛍️</div><div><b>DSB</b><small>ADMIN PANEL</small></div></div><nav class="admin-nav"><button type="button" class="active" data-tab="dashboard"><span class="nav-ico">⌂</span>Dashboard</button><button type="button" data-tab="orders"><span class="nav-ico">🛒</span>Orders</button><button type="button" data-tab="products"><span class="nav-ico">◈</span>Products</button><button type="button" data-tab="add"><span class="nav-ico">＋</span>Add product</button></nav><div class="admin-side-bottom"><div class="admin-side-mini">STORE STATUS<br><a href="index.html">● Live storefront ↗</a></div></div></aside><main class="admin-main"><header class="admin-topbar"><div class="topbar-search"><span>⌕</span><input aria-label="Search" placeholder="Search workspace..."><kbd style="margin-left:auto;color:#6f7a9d;font-size:10px">CTRL K</kbd></div><div class="top-actions"><span class="live-pill">● LIVE</span><a class="view-store" href="index.html">View store ↗</a></div></header>  <!-- Products tab -->
+  <div class="admin-tab" id="tab-products">
+    <div class="admin-section-title">Products (<span id="countLabel">0</span>)</div>
+    <div class="search-row"><input type="text" id="filterInput" placeholder="Search products…"></div>
+    <div id="productList"><p class="hint">Loading…</p></div>
+  </div>
+
+  <!-- Add/Edit tab -->
+  <div class="admin-tab" id="tab-add">
+    <div class="admin-section-title" id="addTabTitle">Add a product</div>
+    <label>Product ID <span style="font-weight:400;">(leave blank to auto-generate)</span></label>
+    <input type="text" id="f-id" placeholder="DSB-0001">
+    <label>Name</label>
+    <input type="text" id="f-name" placeholder="Padded T-Shirt Bra">
+    <label>Name in Hindi <span style="font-weight:400;">(optional, shown alongside the English name)</span></label>
+    <input type="text" id="f-nameHindi" placeholder="पैडेड टी-शर्ट ब्रा">
+    <div class="row2">
+      <div>
+        <label>Category</label>
+        <input type="text" id="f-category" list="categoryList" placeholder="Lingerie">
+        <datalist id="categoryList"></datalist>
+      </div>
+      <div>
+        <label>Subcategory</label>
+        <input type="text" id="f-subcategory" list="subcategoryList" placeholder="Bras">
+        <datalist id="subcategoryList"></datalist>
+      </div>
+    </div>
+    <div class="row2">
+      <div>
+        <label>Price (₹)</label>
+        <input type="number" id="f-price" placeholder="249">
+      </div>
+      <div>
+        <label>MRP (₹)</label>
+        <input type="number" id="f-mrp" placeholder="399">
+      </div>
+    </div>
+    <label>Cost price (₹) <span style="font-weight:400;">(optional — what you paid, never shown to customers, used for the profit numbers in Dashboard)</span></label>
+    <input type="number" id="f-costprice" placeholder="150">
+    <label>Product Photo</label>
+    <div class="upload-row">
+      <input type="file" id="f-imagefile" accept="image/*">
+      <button type="button" class="ghost-btn" id="uploadBtn">Upload photo</button>
+    </div>
+    <div class="statusline" id="uploadStatus"></div>
+    <div class="img-preview" id="imgPreview"></div>
+    <label>Image URL <span style="font-weight:400;">(fills in automatically after upload, or paste one directly / leave blank for a placeholder)</span></label>
+    <input type="text" id="f-image" placeholder="https://...">
+
+    <label>Additional photos <span style="font-weight:400;">(optional — shown as a swipeable gallery on the product page)</span></label>
+    <div class="upload-row">
+      <input type="file" id="f-extraimagefile" accept="image/*">
+      <button type="button" class="ghost-btn" id="uploadExtraBtn">Add photo</button>
+    </div>
+    <div class="upload-row" style="margin-top:6px;">
+      <input type="text" id="f-extraimageurl" placeholder="or paste an image URL">
+      <button type="button" class="ghost-btn" id="addExtraUrlBtn">Add</button>
+    </div>
+    <div class="statusline" id="extraUploadStatus"></div>
+    <div class="extra-images-preview" id="extraImagesPreview"></div>
+
+    <label>Description</label>
+    <textarea id="f-description" placeholder="Short product description"></textarea>
+    <div class="row2">
+      <div>
+        <label>Stock</label>
+        <select id="f-stock">
+          <option value="in stock">In stock</option>
+          <option value="out of stock">Out of stock</option>
+        </select>
+      </div>
+      <div>
+        <label>Stock quantity <span style="font-weight:400;">(optional)</span></label>
+        <input type="number" id="f-stockqty" placeholder="Leave blank to not track">
+      </div>
+    </div>
+    <label>Tags <span style="font-weight:400;">(comma separated)</span></label>
+    <input type="text" id="f-tags" placeholder="bra, lingerie, everyday">
+    <button class="primary-btn" id="saveBtn" style="width:100%; margin-top:14px;">Save product</button>
+    <button class="ghost-btn" id="clearFormBtn" style="width:100%; margin-top:8px;">Clear form</button>
+    <div class="statusline" id="saveStatus"></div>
+  </div>
+
+  <!-- Orders tab -->
+  <div class="admin-tab" id="tab-orders">
+    <div class="admin-section-title">Orders (<span id="orderCountLabel">0</span>)</div>
+    <p class="hint">Requires an "Orders" tab in your Google Sheet — see SETUP-GUIDE.md.</p>
+    <div class="order-controls">
+      <select id="orderSort">
+        <option value="date-desc">Newest first</option>
+        <option value="date-asc">Oldest first</option>
+        <option value="name-asc">Customer name (A–Z)</option>
+      </select>
+      <select id="orderStatusFilter">
+        <option value="all">All statuses</option>
+        <option value="Pending">Pending</option>
+        <option value="Fulfilled">Fulfilled</option>
+        <option value="Cancelled">Cancelled</option>
+      </select>
+    </div>
+    <input type="text" id="orderFilterInput" placeholder="Search by name, phone, order ID…">
+    <div id="orderList" style="margin-top:10px;"><p class="hint">Loading…</p></div>
+  </div>
+
+  <!-- Dashboard tab -->
+  <div class="admin-tab active" id="tab-dashboard">
+    <div class="dash-hero">
+      <div><span class="dash-kicker">DSB • COMMAND CENTER</span><div class="admin-section-title">Good to see you, Admin 👋</div><p id="dashGreetingSub">Your store is ready. Here is what needs your attention.</p></div>
+      <button class="dash-refresh-icon" id="dashRefreshBtn" aria-label="Refresh dashboard">↻</button>
+    </div>
+
+    <div id="dashAttention" class="dash-attention"></div>
+
+    <div class="dash-grid dash-grid-main">
+      <div class="dash-stat"><div class="dash-stat-label">TODAY'S REVENUE</div><div class="dash-stat-value" id="statTodayRevenue">₹0</div><div class="dash-stat-sub" id="statTodayOrders">0 orders today</div></div>
+      <div class="dash-stat"><div class="dash-stat-label">MONTHLY REVENUE</div><div class="dash-stat-value" id="statMonthRevenue">₹0</div><div class="dash-stat-sub" id="statMonthOrders">0 orders this month</div></div>
+      <div class="dash-stat accent"><div class="dash-stat-label">MONTHLY PROFIT</div><div class="dash-stat-value" id="statMonthProfit">₹0</div><div class="dash-stat-sub">after cost price</div></div>
+      <div class="dash-stat"><div class="dash-stat-label">AVERAGE ORDER</div><div class="dash-stat-value" id="statAverageOrder">₹0</div><div class="dash-stat-sub" id="statPending">0 pending orders</div></div>
+    </div>
+
+    <div class="dash-layout">
+      <div class="dash-stack">
+        <div class="dash-panel">
+          <div class="dash-panel-head"><div><span class="dash-kicker">PERFORMANCE • LAST 7 DAYS</span><h3>Sales activity</h3></div><span id="dashWeekTotal" class="dash-panel-value">₹0</span></div>
+          <div class="dash-chart" id="dashSalesChart"><p class="hint">Loading activity…</p></div>
+        </div>
+        <div class="dash-panel">
+          <div class="dash-panel-head"><div><span class="dash-kicker">LIVE FEED</span><h3>Recent orders</h3></div><button class="dash-link-btn" data-dash-action="orders">View all →</button></div>
+          <div id="dashRecentOrders"><p class="hint">Loading orders…</p></div>
+        </div>
+        <div class="dash-panel">
+          <div class="dash-panel-head"><div><span class="dash-kicker">INVENTORY INTELLIGENCE</span><h3>Low stock alert</h3></div><button class="dash-link-btn" data-dash-action="products">Manage →</button></div>
+          <div id="dashLowStock"><p class="hint">Loading…</p></div>
+        </div>
+      </div>
+      <div class="dash-stack">
+        <div class="dash-panel">
+          <div class="dash-panel-head"><div><span class="dash-kicker">BEST SELLERS</span><h3>Top products this month</h3></div></div>
+          <div id="dashTopProducts"><p class="hint">Loading…</p></div>
+        </div>
+        <div class="dash-panel">
+          <div class="dash-panel-head"><div><span class="dash-kicker">ORDER HEALTH</span><h3>Order status</h3></div></div>
+          <div class="dash-status-bar" id="dashStatusBar"></div>
+          <div class="dash-status-legend" id="dashStatusLegend"></div>
+          <p class="hint" id="dashStatusEmpty" style="display:none;">No orders yet.</p>
+        </div>
+        <div class="dash-panel">
+          <div class="dash-panel-head"><div><span class="dash-kicker">QUICK ACTIONS</span><h3>Control your store</h3></div></div>
+          <div class="dash-quick-actions">
+            <button class="dash-quick" data-dash-action="orders"><span>🧾</span>All orders</button>
+            <button class="dash-quick" data-dash-action="pending"><span>⏳</span>Pending</button>
+            <button class="dash-quick" data-dash-action="products"><span>◈</span>Products</button>
+            <button class="dash-quick" data-tab="add"><span>＋</span>Add product</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<nav class="admin-tabbar"><button type="button" class="active" data-tab="dashboard"><span class="tab-icon">⌂</span>Home</button><button type="button" data-tab="orders"><span class="tab-icon">🛒</span>Orders</button><button type="button" data-tab="products"><span class="tab-icon">◈</span>Products</button><button type="button" data-tab="add"><span class="tab-icon">＋</span>Add</button></nav></main></div><div class="toast" id="toast"></div><script src="admin.js"></script></body></html>

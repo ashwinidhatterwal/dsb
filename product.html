@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Product — Dhatterwal Suhag Bhandar</title>
+<meta name="description" content="Shop this product and more at Dhatterwal Suhag Bhandar — lingerie, cosmetics, hair care, snacks, stationery and daily essentials in Hanumangarh, Rajasthan. Order on WhatsApp.">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#C81163">
+<link rel="canonical" id="canonicalLink" href="https://shimmering-fox-5f2be6.netlify.app/product.html">
+
+<meta property="og:type" content="product">
+<meta property="og:site_name" content="Dhatterwal Suhag Bhandar">
+<meta id="ogTitle" property="og:title" content="Dhatterwal Suhag Bhandar">
+<meta id="ogDescription" property="og:description" content="Shop lingerie, cosmetics, hair care, snacks, stationery and more — order on WhatsApp.">
+<meta id="ogUrl" property="og:url" content="https://shimmering-fox-5f2be6.netlify.app/product.html">
+<meta id="ogImage" property="og:image" content="https://placehold.co/1200x630/C81163/FFF6E9?text=Dhatterwal%20Suhag%20Bhandar">
+<meta property="og:locale" content="en_IN">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta id="twitterTitle" name="twitter:title" content="Dhatterwal Suhag Bhandar">
+<meta id="twitterDescription" name="twitter:description" content="Shop lingerie, cosmetics, hair care, snacks, stationery and more — order on WhatsApp.">
+<meta id="twitterImage" name="twitter:image" content="https://placehold.co/1200x630/C81163/FFF6E9?text=Dhatterwal%20Suhag%20Bhandar">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Hind:wght@400;500;600;700&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+</head>
+<body>
+
+<!-- ===== Slim sticky bar: search + cart ONLY ===== -->
+<div class="stickybar solid" id="stickyBar">
+  <a class="brandmark" href="index.html"><span class="glyph">D</span><span class="hide-sm">DSB</span></a>
+  <button class="searchwrap" id="searchTrigger" style="text-align:left;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <span style="color:#8a83a0; font-size:13px;">Search the shop…</span>
+  </button>
+  <button class="iconbtn" id="trackOrderTrigger" aria-label="Track your order">
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+  </button>
+  <button class="iconbtn" id="cartTrigger" aria-label="Cart">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+    <span class="badge" id="cartBadge" style="display:none;">0</span>
+  </button>
+</div>
+
+<div id="pdRoot">
+  <div class="empty-state" style="padding:60px 16px;">Loading product…</div>
+</div>
+
+<footer>
+  <div class="fname">Dhatterwal Suhag Bhandar</div>
+  Order confirmation happens on WhatsApp<br>
+  <a href="index.html">← Back to shop</a> &nbsp;•&nbsp; <a href="about.html">About</a> &nbsp;•&nbsp; <a href="contact.html">Contact</a><br>
+  <a href="privacy.html">Privacy</a> &nbsp;•&nbsp; <a href="returns.html">Returns</a> &nbsp;•&nbsp; <a href="admin.html">Shop admin</a>
+</footer>
+
+<!-- ===== Cart drawer ===== -->
+<div class="overlay" id="cartOverlay">
+  <div class="cart-drawer" id="cartContent"></div>
+</div>
+
+<!-- ===== Track your order overlay ===== -->
+<div class="search-overlay" id="trackOverlay">
+  <div class="searchhead">
+    <button class="iconbtn" id="trackOverlayClose" aria-label="Close">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    </button>
+    <div style="flex:1; font-family:var(--font-display); font-weight:700; font-size:16px; color:var(--indigo);">Track your order</div>
+  </div>
+  <div class="results" style="padding:16px;">
+    <div id="trackForm">
+      <p class="track-intro">Enter your Order ID and the phone number you used at checkout to see the latest status.</p>
+      <div class="field">
+        <label>Order ID</label>
+        <input type="text" id="trackOrderId" placeholder="e.g. ORD-0001" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Phone number</label>
+        <input type="tel" id="trackPhone" placeholder="10-digit mobile number" autocomplete="off">
+      </div>
+      <p class="track-error" id="trackError"></p>
+      <button class="primary-btn" id="trackSubmitBtn" style="width:100%;">Track order</button>
+    </div>
+    <div id="trackResult" style="display:none;"></div>
+  </div>
+</div>
+
+<a class="wa-float" id="waFloat" href="#" target="_blank" rel="noopener" aria-label="Chat with us on WhatsApp">
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+</a>
+
+<div class="toast" id="toast"></div>
+
+<script src="config.js"></script>
+<script src="utils.js"></script>
+<script src="cart.js"></script>
+<script src="products-data.js"></script>
+<script src="render-helpers.js"></script>
+<script src="cart-ui.js"></script>
+<script src="product.js"></script>
+</body>
+</html>
