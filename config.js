@@ -14,7 +14,7 @@ const CONFIG = {
   // Your live site's address — used to build canonical links and share-preview
   // tags. Update this the moment you move to a custom domain, or every page's
   // canonical/og:url will keep pointing at the old address.
-  SITE_URL: 'https://shimmering-fox-5f2be6.netlify.app',
+  SITE_URL: 'https://suhagbhandar.in',
   // Optional: your UPI ID (e.g. 'yourname@okicici'), for the "Pay via UPI"
   // checkout option. Leave UPI_ID blank to hide that option entirely and
   // only offer Cash on Delivery.

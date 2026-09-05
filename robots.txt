@@ -3,4 +3,4 @@ Allow: /
 Disallow: /admin.html
 Disallow: /admin.js
 
-Sitemap: https://shimmering-fox-5f2be6.netlify.app/sitemap.xml
+Sitemap: https://suhagbhandar.in/sitemap.xml
