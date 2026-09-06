@@ -149,10 +149,10 @@ function createPager(container, sentinelEl){
       if (sentinelEl) sentinelEl.style.display = 'none';
       return;
     }
-    const temp = document.createElement('div');
-    temp.innerHTML = next.map(cardHtml).join('');
-    const cards = Array.from(temp.children);
-    cards.forEach(c => container.appendChild(c));
+    const template = document.createElement('template');
+    template.innerHTML = next.map(cardHtml).join('');
+    const cards = Array.from(template.content.children);
+    container.appendChild(template.content);
     bindCardEvents(cards, list);
     renderedCount += next.length;
     if (sentinelEl) sentinelEl.style.display = renderedCount >= list.length ? 'none' : 'block';
@@ -240,9 +240,17 @@ function initUI(){
   searchPager = createPager($('#searchResults'), $('#searchSentinel'));
   renderSkeletonGrid($('#productGrid'), 8);
 
+  // Scroll events can fire dozens of times per frame on mobile. Queue the
+  // visual navbar update once per animation frame without changing the effect.
+  let stickyTicking = false;
   window.addEventListener('scroll', () => {
-    $('#stickyBar').classList.toggle('solid', window.scrollY > 8);
-  });
+    if (stickyTicking) return;
+    stickyTicking = true;
+    requestAnimationFrame(() => {
+      $('#stickyBar').classList.toggle('solid', window.scrollY > 8);
+      stickyTicking = false;
+    });
+  }, { passive: true });
 
   $('#searchTrigger').addEventListener('click', openSearch);
   $('#searchOverlayClose').addEventListener('click', closeSearch);

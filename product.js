@@ -57,7 +57,7 @@ function renderProduct(p){
       <div class="pd-gallery">
         ${disc ? `<span class="discount">${disc}% OFF</span>` : ''}
         <div class="pd-gallery-track" id="pdGalleryTrack">
-          ${p.gallery.map(src => `<div class="pd-slide"><img src="${escapeHtml(src)}" alt="${escapeHtml(p.name)}"></div>`).join('')}
+          ${p.gallery.map((src, i) => `<div class="pd-slide"><img src="${escapeHtml(src)}" alt="${escapeHtml(p.name)}" decoding="async" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'}></div>`).join('')}
         </div>
         ${p.gallery.length > 1 ? `
         <div class="pd-dots" id="pdDots">

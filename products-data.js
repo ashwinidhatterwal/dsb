@@ -86,10 +86,19 @@ async function loadReviewSummaries(){
   if (!CONFIG.SHEET_API_URL) return REVIEW_SUMMARY;
   try{
     const res = await fetch(`${CONFIG.SHEET_API_URL}?action=reviews&summary=1`, { cache: 'no-store' });
-    const rows = await res.json();
-    if (!Array.isArray(rows)) return REVIEW_SUMMARY;
+    const payload = await res.json();
+
+    // The current Apps Script endpoint already returns the compact
+    // { productId: { avg, count } } map. Use it directly instead of
+    // rebuilding it in the browser. Keep array support for older deployments.
+    if (payload && !Array.isArray(payload) && typeof payload === 'object') {
+      REVIEW_SUMMARY = payload;
+      return REVIEW_SUMMARY;
+    }
+
+    if (!Array.isArray(payload)) return REVIEW_SUMMARY;
     const totals = {};
-    rows.forEach(r => {
+    payload.forEach(r => {
       const pid = String(r.productid ?? r.productId ?? '').trim();
       if (!pid) return;
       if (!totals[pid]) totals[pid] = { sum: 0, count: 0 };

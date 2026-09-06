@@ -41,7 +41,7 @@ function cardHtml(p){
     <a class="imgwrap" href="${href}">
       ${disc ? `<span class="discount">${disc}% OFF</span>` : ''}
       <span class="subtag">${escapeHtml(p.subcategory)}</span>
-      <img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}" loading="lazy">
+      <img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}" loading="lazy" decoding="async">
     </a>
     <button type="button" class="card-share" data-share="${escapeHtml(p.id)}" aria-label="Share ${escapeHtml(p.name)}">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>

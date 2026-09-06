@@ -194,7 +194,7 @@ function renderProductList(){
   }
   wrap.innerHTML = list.map(p => `
     <div class="arow" data-id="${escapeHtml(p.id)}">
-      <img class="arow-thumb" src="${escapeHtml(p.image)}" alt="">
+      <img class="arow-thumb" src="${escapeHtml(p.image)}" alt="" loading="lazy" decoding="async">
       <div class="arow-body">
         <div class="arow-title">${escapeHtml(p.name) || '(unnamed)'}</div>
         <div class="arow-sub">${escapeHtml(p.id)} • ${escapeHtml(p.category)} • ₹${Number(p.price)||0}${(p.stockqty !== undefined && p.stockqty !== null && p.stockqty !== '') ? ` • Qty ${Number(p.stockqty)||0}` : ''}</div>
@@ -305,7 +305,7 @@ function renderExtraImagesPreview(){
   const box = $('#extraImagesPreview');
   box.innerHTML = currentExtraImages.map((url, i) => `
     <div class="extra-thumb">
-      <img src="${escapeHtml(url)}" alt="">
+      <img src="${escapeHtml(url)}" alt="" loading="lazy" decoding="async">
       <button type="button" data-i="${i}" aria-label="Remove photo">✕</button>
     </div>
   `).join('');

@@ -68,15 +68,15 @@ const ALLOWED_ORDER_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'De
 // CHANGE THIS before deploying — it's the password the admin page uses to
 // add/delete products and manage orders. Anyone who has this key can edit
 // your sheet and see customer order details.
-const ADMIN_KEY = 'ashwini';
+const ADMIN_KEY = 'change-this-secret-key';
 
 // Optional — silently pings a Telegram chat/channel the instant a new order
 // comes in, so you don't have to keep the Sheet or admin page open to know.
 // Leave TELEGRAM_BOT_TOKEN blank to turn this off entirely; nothing else
 // about order-taking changes either way. See SETUP-GUIDE.md for how to get
 // a bot token and chat ID from @BotFather in about two minutes.
-const TELEGRAM_BOT_TOKEN = '7986254241:AAH0I0vCQe2LEe6dUf-u5gc8Bcw6DLyfoJg'; // e.g. '123456789:AAExampleTokenFromBotFather'
-const TELEGRAM_CHAT_ID = '629369496';   // your numeric chat ID, or '@yourchannel'
+const TELEGRAM_BOT_TOKEN = ''; // e.g. '123456789:AAExampleTokenFromBotFather'
+const TELEGRAM_CHAT_ID = '';   // your numeric chat ID, or '@yourchannel'
 
 function doGet(e) {
   const action = (e.parameter.action || 'products').toString();
