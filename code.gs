@@ -8,7 +8,7 @@
  *
  * "Products" — id | name | nameHindi | category | subcategory | price | mrp | costPrice | image | images | description | stock | stockQty | tags
  * "Reviews"  — id | productId | name | rating | comment | date
- * "Orders"   — orderId | date | customerName | phone | address | paymentMethod | promoCode | discount | items | total | status
+ * "Orders"   — orderId | date | customerName | phone | address | paymentMethod | promoCode | discount | deliveryCharge | codCharge | items | total | status
  * "Promos"   — code | type | value | active | maxUses | onePerCustomer | uses
  * "PromoCustomers" — created automatically when a one-per-customer promo is used;
  *                    stores only code+phone hashes and is hidden by the script.
@@ -56,6 +56,13 @@ const PROMOS_CACHE_TTL = 60; // seconds
 const DASHBOARD_CACHE_KEY = 'dsb.adminDashboard.v1';
 const DASHBOARD_CACHE_TTL = 20; // seconds
 const ALLOWED_PAYMENT_METHODS = ['Cash on Delivery', 'UPI'];
+
+// Checkout fee settings. Edit these three values whenever your policy changes.
+// Delivery is charged only when the discounted merchandise value is BELOW
+// DELIVERY_FREE_ABOVE. Set a charge to 0 to disable it.
+const DELIVERY_FREE_ABOVE = 499; // ₹ — orders at/above this merchandise value get free delivery
+const DELIVERY_CHARGE = 40;      // ₹ — delivery fee below the threshold
+const COD_CHARGE = 20;           // ₹ — extra fee when Cash on Delivery is selected
 const ALLOWED_ORDER_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Delivered', 'Cancelled', 'Fulfilled'];
 
 // CHANGE THIS before deploying — it's the password the admin page uses to
@@ -84,6 +91,9 @@ function doGet(e) {
   }
   if (action === 'promos') {
     return jsonResponse(getActivePromos());
+  }
+  if (action === 'checkoutConfig') {
+    return jsonResponse(getCheckoutConfig_());
   }
   if (action === 'orders') {
     return jsonResponse({ error: 'admin reads require POST' });
@@ -186,6 +196,15 @@ function nextId_(sheet, prefix) {
 function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+
+function getCheckoutConfig_() {
+  return {
+    deliveryFreeAbove: Math.max(0, safeNumber_(DELIVERY_FREE_ABOVE, 0)),
+    deliveryCharge: Math.max(0, safeNumber_(DELIVERY_CHARGE, 0)),
+    codCharge: Math.max(0, safeNumber_(COD_CHARGE, 0))
+  };
 }
 
 /* ---------------- Cache helpers ---------------- */
@@ -552,7 +571,10 @@ function addOrder(o) {
       if (verdict.ok) discount = Math.min(Math.max(verdict.discountFor(subtotal), 0), subtotal);
       else { promoRejected = true; promoCode = ''; }
     }
-    const total = Math.max(0, subtotal - discount);
+    const merchandiseTotal = Math.max(0, subtotal - discount);
+    const deliveryCharge = DELIVERY_CHARGE > 0 && merchandiseTotal < DELIVERY_FREE_ABOVE ? DELIVERY_CHARGE : 0;
+    const codCharge = order.paymentMethod === 'Cash on Delivery' ? Math.max(0, COD_CHARGE) : 0;
+    const total = merchandiseTotal + deliveryCharge + codCharge;
 
     // All business validations have passed before any write happens.
     // Stock changes are captured so an unexpected order-sheet write failure
@@ -562,7 +584,8 @@ function addOrder(o) {
     const record = {
       orderid: id, date: now, customername: order.customerName, phone: order.phone,
       address: order.address, paymentmethod: order.paymentMethod, promocode: promoCode,
-      discount: discount, items: priced.summary, total: total, status: 'Pending'
+      discount: discount, deliverycharge: deliveryCharge, codcharge: codCharge,
+      items: priced.summary, total: total, status: 'Pending'
     };
     const heads = sheets.orderHeads;
     const row = heads.map(h => record[h] !== undefined ? record[h] : '');
@@ -581,8 +604,9 @@ function addOrder(o) {
     try { invalidatePublicCaches_(); } catch (err) { console.error(err); }
 
     result = {
-      success: true, orderId: id, promoRejected: promoRejected,
-      subtotal: subtotal, correctedTotal: total, discount: discount,
+      success: true, orderId: id, orderDate: now, promoRejected: promoRejected,
+      subtotal: subtotal, merchandiseTotal: merchandiseTotal, correctedTotal: total, discount: discount,
+      deliveryCharge: deliveryCharge, codCharge: codCharge,
       items: priced.items.map(item => ({ id: item.id, name: item.name, qty: item.qty, unitPrice: item.unitPrice, lineTotal: item.lineTotal }))
     };
   } catch (err) {
@@ -597,7 +621,8 @@ function addOrder(o) {
       phone: cleanPhone_(o.phone), address: String(o.address || '').slice(0, 500),
       paymentmethod: result.items ? String(o.paymentMethod || 'Cash on Delivery').slice(0, 30) : 'Cash on Delivery',
       items: result.items.map(x => `${x.id} ${x.name} x${x.qty}`).join(' | '),
-      promocode: String(o.promoCode || o.promocode || '').trim(), discount: result.discount, total: result.correctedTotal
+      promocode: String(o.promoCode || o.promocode || '').trim(), discount: result.discount,
+      deliverycharge: result.deliveryCharge || 0, codcharge: result.codCharge || 0, total: result.correctedTotal
     };
     notifyTelegramOrder_(telegramRecord);
   }
@@ -732,6 +757,8 @@ function notifyTelegramOrder_(record) {
     if (Number(record.discount) > 0) {
       lines.push('🏷️ Discount (' + escapeTelegramMarkdown_(record.promocode || 'Promo') + '): ₹' + Number(record.discount));
     }
+    if (Number(record.deliverycharge) > 0) lines.push('🚚 Delivery: ₹' + Number(record.deliverycharge));
+    if (Number(record.codcharge) > 0) lines.push('💵 COD fee: ₹' + Number(record.codcharge));
 
     lines.push('💰 *Total: ₹' + Number(record.total || 0) + '*');
     lines.push('━━━━━━━━━━━━━━━━');
@@ -948,6 +975,6 @@ function trackOrder(orderId, phone) {
 
   return {
     success: true, orderId: order.orderid, date: order.date, status: order.status || 'Pending',
-    items: order.items, total: order.total, discount: order.discount, paymentMethod: order.paymentmethod
+    items: order.items, total: order.total, discount: order.discount, deliveryCharge: order.deliverycharge || 0, codCharge: order.codcharge || 0, paymentMethod: order.paymentmethod
   };
 }

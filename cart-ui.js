@@ -35,8 +35,11 @@ const checkoutState = {
   promoInput: '',
   appliedPromo: null,   // { code, type, value }
   promoStatus: '',
-  availablePromos: null // fetched once per page load, cached here
+  availablePromos: null, // fetched once per page load, cached here
+  feeConfig: null         // authoritative checkout fee policy from Apps Script
 };
+
+let lastReceipt = null;
 
 function updateCartBadge(){
   const badge = $('#cartBadge');
@@ -214,6 +217,8 @@ function renderTrackResult(o){
       <div class="track-details">
         ${o.items ? `<div class="row"><span>Items</span><span style="text-align:right; max-width:60%;">${escapeHtml(o.items)}</span></div>` : ''}
         ${Number(o.discount) > 0 ? `<div class="row"><span>Discount</span><span>−${money(o.discount)}</span></div>` : ''}
+        ${Number(o.deliveryCharge) > 0 ? `<div class="row"><span>Delivery</span><span>${money(o.deliveryCharge)}</span></div>` : ''}
+        ${Number(o.codCharge) > 0 ? `<div class="row"><span>COD fee</span><span>${money(o.codCharge)}</span></div>` : ''}
         <div class="row total"><span>Total</span><span>${money(o.total)}</span></div>
         ${o.paymentMethod ? `<div class="row"><span>Payment</span><span>${escapeHtml(o.paymentMethod)}</span></div>` : ''}
       </div>
@@ -267,6 +272,9 @@ function openCart(){
   lockPageForCart();
   $('#cartOverlay').classList.add('open');
   fetchPromosIfNeeded();
+  fetchCheckoutConfigIfNeeded().then(() => {
+    if ($('#cartOverlay') && $('#cartOverlay').classList.contains('open')) renderCartDrawer();
+  });
 }
 function closeCart(){
   $('#cartOverlay').classList.remove('open');
@@ -318,6 +326,31 @@ function computeDiscount(subtotal){
   return Math.min(Math.max(raw, 0), subtotal);
 }
 
+async function fetchCheckoutConfigIfNeeded(){
+  if (checkoutState.feeConfig !== null) return checkoutState.feeConfig;
+  const fallback = { deliveryFreeAbove: 0, deliveryCharge: 0, codCharge: 0 };
+  if (!CONFIG.SHEET_API_URL){ checkoutState.feeConfig = fallback; return fallback; }
+  try{
+    const res = await fetch(`${CONFIG.SHEET_API_URL}?action=checkoutConfig`, { cache: 'no-store' });
+    const data = await res.json();
+    checkoutState.feeConfig = {
+      deliveryFreeAbove: Math.max(0, Number(data.deliveryFreeAbove) || 0),
+      deliveryCharge: Math.max(0, Number(data.deliveryCharge) || 0),
+      codCharge: Math.max(0, Number(data.codCharge) || 0)
+    };
+  } catch(err){ checkoutState.feeConfig = fallback; }
+  return checkoutState.feeConfig;
+}
+
+function computeCheckoutTotals(subtotal){
+  const discount = computeDiscount(subtotal);
+  const merchandiseTotal = Math.max(0, subtotal - discount);
+  const cfg = checkoutState.feeConfig || { deliveryFreeAbove: 0, deliveryCharge: 0, codCharge: 0 };
+  const deliveryCharge = cfg.deliveryCharge > 0 && cfg.deliveryFreeAbove > 0 && merchandiseTotal < cfg.deliveryFreeAbove ? cfg.deliveryCharge : 0;
+  const codCharge = checkoutState.paymentMethod === 'COD' ? cfg.codCharge : 0;
+  return { discount, merchandiseTotal, deliveryCharge, codCharge, grandTotal: merchandiseTotal + deliveryCharge + codCharge };
+}
+
 /* ---------------- UPI ---------------- */
 function buildUpiLink(amount){
   const params = new URLSearchParams({
@@ -351,8 +384,7 @@ function renderCartDrawer(){
   }
 
   const subtotal = CartStore.total();
-  const discount = computeDiscount(subtotal);
-  const grandTotal = Math.max(0, subtotal - discount);
+  const { discount, merchandiseTotal, deliveryCharge, codCharge, grandTotal } = computeCheckoutTotals(subtotal);
   const showUpi = !!CONFIG.UPI_ID;
 
   wrap.innerHTML = `
@@ -416,9 +448,13 @@ function renderCartDrawer(){
           <div class="row"><span>Items</span><span>${CartStore.count()}</span></div>
           <div class="row"><span>Subtotal</span><span>${money(subtotal)}</span></div>
           ${discount > 0 ? `<div class="row"><span>Discount</span><span>−${money(discount)}</span></div>` : ''}
+          ${deliveryCharge > 0 ? `<div class="row"><span>Delivery</span><span>${money(deliveryCharge)}</span></div>` : ''}
+          ${codCharge > 0 ? `<div class="row"><span>Cash on Delivery fee</span><span>${money(codCharge)}</span></div>` : ''}
+          ${(checkoutState.feeConfig && checkoutState.feeConfig.deliveryCharge > 0 && deliveryCharge === 0) ? `<div class="row fee-free"><span>Delivery</span><span>FREE</span></div>` : ''}
           <div class="row total"><span>Total</span><span>${money(grandTotal)}</span></div>
         </div>
-        <button class="primary-btn whatsapp-btn" id="orderWaBtn" type="button">📲 Send order on WhatsApp</button>
+        ${checkoutState.feeConfig && checkoutState.feeConfig.deliveryCharge > 0 ? `<p class="checkout-fee-note">Free delivery on orders of ${money(checkoutState.feeConfig.deliveryFreeAbove)} or more.</p>` : ''}
+        <button class="primary-btn" id="orderWaBtn" type="button">Place order</button>
         <button class="ghost-btn cart-clear" id="clearCartBtn" type="button">Clear cart</button>
       </div>
     </div>`;
@@ -445,28 +481,54 @@ function renderCartDrawer(){
   $('#promoInput').addEventListener('input', e => { checkoutState.promoInput = e.target.value; });
   $('#applyPromoBtn').addEventListener('click', applyPromoCode);
   $$('input[name="payMethod"]', wrap).forEach(radio => radio.addEventListener('change', e => { checkoutState.paymentMethod = e.target.value; saveCheckoutInfo(); renderCartDrawer(); }));
-  $('#orderWaBtn').addEventListener('click', sendOrderToWhatsApp);
+  $('#orderWaBtn').addEventListener('click', submitOrder);
   $('#clearCartBtn').addEventListener('click', () => { if (confirm('Clear all items from your cart?')) { CartStore.clear(); updateCartBadge(); renderCartDrawer(); } });
   requestAnimationFrame(() => { const main = $('#cartMain'); if (main) main.scrollTop = Math.min(previousScroll, main.scrollHeight); });
 }
 
-function renderOrderConfirmation(orderId){
+function renderOrderConfirmation(receipt){
   const wrap = $('#cartContent');
+  const orderId = receipt && receipt.orderId ? receipt.orderId : '';
   wrap.innerHTML = `
     <button class="closebtn" id="cartClose" aria-label="Close">✕</button>
     <div class="order-confirm">
       <div class="confirm-icon">✓</div>
-      <h2>Order placed!</h2>
+      <h2>Your order is confirmed</h2>
       ${orderId ? `<p class="confirm-id">Order ID: <strong>${escapeHtml(orderId)}</strong></p>` : ''}
-      <p class="hint">We've sent your order details — we'll be in touch shortly to confirm.</p>
-      <button class="primary-btn" id="confirmCloseBtn" style="width:100%; margin-top:14px;">Continue shopping</button>
+      <p class="confirm-message">Your order has been received successfully. You will get a confirmation message on WhatsApp shortly.</p>
+      <div class="confirm-actions">
+        <button class="primary-btn" id="downloadReceiptBtn" type="button">⬇ Download order slip</button>
+        <button class="ghost-btn" id="confirmCloseBtn" type="button">Continue shopping</button>
+      </div>
     </div>`;
   const close = () => closeCart();
   $('#cartClose').addEventListener('click', close);
   $('#confirmCloseBtn').addEventListener('click', close);
+  $('#downloadReceiptBtn').addEventListener('click', () => downloadReceipt(receipt));
 }
 
-async function sendOrderToWhatsApp(){
+function downloadReceipt(receipt){
+  if (!receipt) return;
+  const isUpi = receipt.paymentMethod === 'UPI';
+  const paymentNote = isUpi
+    ? `<div class="notice"><strong>Important:</strong> This is an order confirmation slip only. It is <strong>not a payment receipt</strong> and does not confirm that a UPI payment was received.</div>`
+    : `<div class="notice"><strong>Payment:</strong> Cash on Delivery selected. Payment is due at delivery.</div>`;
+  const itemRows = (receipt.items || []).map(item => `
+    <tr><td>${escapeHtml(item.name)}</td><td>${Number(item.qty)||0}</td><td>${money(item.unitPrice)}</td><td>${money(item.lineTotal)}</td></tr>`).join('');
+  const feeRows = `${receipt.discount > 0 ? `<tr><td colspan="3">Discount${receipt.promoCode ? ` (${escapeHtml(receipt.promoCode)})` : ''}</td><td>−${money(receipt.discount)}</td></tr>` : ''}
+    ${receipt.deliveryCharge > 0 ? `<tr><td colspan="3">Delivery</td><td>${money(receipt.deliveryCharge)}</td></tr>` : ''}
+    ${receipt.codCharge > 0 ? `<tr><td colspan="3">Cash on Delivery fee</td><td>${money(receipt.codCharge)}</td></tr>` : ''}`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Order Confirmation ${escapeHtml(receipt.orderId)}</title><style>body{font-family:Arial,sans-serif;color:#222;max-width:760px;margin:40px auto;padding:0 20px}h1{margin:0 0 6px}p{line-height:1.5}.muted{color:#666}.notice{margin:16px 0;padding:12px 14px;border:1px solid #ddd;border-radius:10px;background:#fff8e8;line-height:1.5}table{width:100%;border-collapse:collapse;margin:24px 0}th,td{padding:10px 8px;border-bottom:1px solid #ddd;text-align:left}th:nth-child(n+2),td:nth-child(n+2){text-align:right}.total td{font-size:18px;font-weight:700;border-top:2px solid #222}.box{background:#f7f7f7;padding:14px;border-radius:10px;margin:16px 0}@media print{body{margin:0}.no-print{display:none}}</style></head><body><h1>${escapeHtml(CONFIG.SHOP_NAME)}</h1><p class="muted"><strong>Order Confirmation Slip</strong></p><div class="box"><strong>Order ID:</strong> ${escapeHtml(receipt.orderId)}<br><strong>Date:</strong> ${escapeHtml(formatDateTime(receipt.orderDate || new Date()))}<br><strong>Customer:</strong> ${escapeHtml(receipt.name)}<br><strong>Phone:</strong> ${escapeHtml(receipt.phone)}<br><strong>Address:</strong> ${escapeHtml(receipt.address)}<br><strong>Payment method:</strong> ${escapeHtml(receipt.paymentMethod)}</div>${paymentNote}<table><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead><tbody>${itemRows}<tr><td colspan="3">Subtotal</td><td>${money(receipt.subtotal)}</td></tr>${feeRows}<tr class="total"><td colspan="3">Order total</td><td>${money(receipt.total)}</td></tr></tbody></table><p>Thank you for shopping with ${escapeHtml(CONFIG.SHOP_NAME)}.</p><p class="muted">This document confirms the order details recorded by the store website.</p></body></html>`;
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `order-confirmation-${String(receipt.orderId || 'order').replace(/[^a-z0-9_-]/gi,'-')}.html`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function submitOrder(){
   const items = Object.values(CartStore.getAll());
   if (!items.length) return;
 
@@ -480,10 +542,6 @@ async function sendOrderToWhatsApp(){
 
   const btn = $('#orderWaBtn');
   if (btn){ btn.disabled = true; btn.textContent = 'Checking stock…'; }
-
-  // Reserve the tab immediately so mobile browsers do not block WhatsApp.
-  // It stays blank/closed unless the Sheet backend actually accepts the order.
-  const waWindow = window.open('', '_blank');
 
   const localSubtotal = CartStore.total();
   const paymentMethod = checkoutState.paymentMethod === 'UPI' ? 'UPI' : 'Cash on Delivery';
@@ -517,7 +575,6 @@ async function sendOrderToWhatsApp(){
       }
     } catch(err){
       console.error('Could not save order to sheet', err);
-      if (waWindow) waWindow.close();
       if (btn){ btn.disabled = false; btn.textContent = 'Place order'; }
       const msg = String(err && err.message || err);
       showToast(msg.length > 90 ? 'Could not place order. Please try again.' : msg);
@@ -533,44 +590,46 @@ async function sendOrderToWhatsApp(){
       return;
     }
   } else {
-    // Local/demo mode: preserve the old WhatsApp-only behavior when no
-    // Apps Script URL is configured. Production configuration should always
+    // Local/demo mode is only for local UI testing. Production configuration should always
     // have SHEET_API_URL set, so real orders cannot bypass server validation.
     data = {
       success: true,
       orderId: '',
       subtotal: localSubtotal,
-      discount: computeDiscount(localSubtotal),
-      correctedTotal: Math.max(0, localSubtotal - computeDiscount(localSubtotal)),
+      discount: computeCheckoutTotals(localSubtotal).discount,
+      deliveryCharge: computeCheckoutTotals(localSubtotal).deliveryCharge,
+      codCharge: computeCheckoutTotals(localSubtotal).codCharge,
+      correctedTotal: computeCheckoutTotals(localSubtotal).grandTotal,
       items: items.map(({product, qty}) => ({ id: product.id, name: product.name, qty, unitPrice: Number(product.price) || 0, lineTotal: (Number(product.price) || 0) * qty }))
     };
   }
 
   const verifiedItems = Array.isArray(data.items) ? data.items : [];
-  const lines = verifiedItems.map((item, i) =>
-    `${i+1}. *${item.id}* — ${item.name} × ${item.qty} — ${money(item.lineTotal)}`
-  );
-
   const finalDiscount = Number(data.discount) || 0;
+  const finalDeliveryCharge = Number(data.deliveryCharge) || 0;
+  const finalCodCharge = Number(data.codCharge) || 0;
   const finalTotal = Number(data.correctedTotal) || 0;
-  const messageLines = [`🛍️ New order — ${CONFIG.SHOP_NAME}`];
-  if (data.orderId) messageLines.push(`Order ID: ${data.orderId}`);
-  messageLines.push(`Name: ${name}`, `Phone: ${phone}`, `Address: ${address}`, `Payment: ${paymentMethod}`);
-  messageLines.push('', ...lines, '');
-  if (finalDiscount > 0) messageLines.push(`Discount (${promoCode}): −${money(finalDiscount)}`);
-  messageLines.push(`Total: ${money(finalTotal)}`, '', '(Sent from the Dhatterwal Suhag Bhandar website)');
-  const message = messageLines.join('\n');
-  const url = `https://wa.me/${CONFIG.WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
 
   if (data.promoRejected) showToast('That promo code no longer applies — order placed at full price');
-  if (waWindow) waWindow.location.href = url;
+
+  lastReceipt = {
+    orderId: data.orderId || '',
+    orderDate: data.orderDate || new Date().toISOString(),
+    name, phone, address, paymentMethod, promoCode,
+    subtotal: Number(data.subtotal) || localSubtotal,
+    discount: finalDiscount,
+    deliveryCharge: finalDeliveryCharge,
+    codCharge: finalCodCharge,
+    total: finalTotal,
+    items: verifiedItems
+  };
 
   CartStore.clear();
   updateCartBadge();
   checkoutState.promoInput = '';
   checkoutState.appliedPromo = null;
   checkoutState.promoStatus = '';
-  renderOrderConfirmation(data.orderId || '');
+  renderOrderConfirmation(lastReceipt);
   if (typeof renderGrid === 'function') renderGrid();
   if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard();
 }

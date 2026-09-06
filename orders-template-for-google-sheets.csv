@@ -1,1 +1,1 @@
-orderId,date,customerName,phone,address,paymentMethod,promoCode,discount,items,total,status
+orderId,date,customerName,phone,address,paymentMethod,promoCode,discount,deliveryCharge,codCharge,items,total,status

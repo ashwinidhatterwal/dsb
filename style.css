@@ -1292,3 +1292,18 @@ body.modal-open{
 .app-loader.hide{transition:opacity .22s ease,visibility .22s ease;transform:translateZ(0)}
 @keyframes loaderSpin{to{transform:rotate(360deg)}}@keyframes loaderSweep{from{transform:translateX(-120%)}to{transform:translateX(300%)}}@keyframes loaderBreathe{50%{transform:scale(1.08);opacity:.7}}
 @media(prefers-reduced-motion:reduce){.loader-ring,.loader-progress i,.app-loader:before{animation:none!important}}
+
+/* =========================================================
+   V8.3 CHECKOUT — fees + order confirmation
+   ========================================================= */
+.checkout-fee-note{margin:8px 0 12px;font-size:11px;color:var(--muted,#777);line-height:1.45}
+.cart-total-box .fee-free span:last-child{font-weight:800;color:#157347}
+#orderWaBtn{width:100%;display:flex;align-items:center;justify-content:center;text-align:center}
+.confirm-message{max-width:440px;margin:10px auto 0;line-height:1.6;color:var(--muted,#666)}
+.confirm-actions{display:grid;gap:9px;margin-top:18px}
+.confirm-actions .primary-btn,.confirm-actions .ghost-btn{width:100%}
+
+/* V8.3.2 — retain the uploaded Digital Bazaar hero, just reduce its height. */
+.hero:not(.hero-compact){min-height:340px;padding-top:56px;padding-bottom:24px}
+@media(min-width:900px){.hero:not(.hero-compact){min-height:360px;padding-top:62px;padding-bottom:26px}}
+@media(max-width:640px){.hero:not(.hero-compact){min-height:320px;padding-top:48px;padding-bottom:20px}}
