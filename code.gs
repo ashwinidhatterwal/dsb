@@ -68,15 +68,15 @@ const ALLOWED_ORDER_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'De
 // CHANGE THIS before deploying — it's the password the admin page uses to
 // add/delete products and manage orders. Anyone who has this key can edit
 // your sheet and see customer order details.
-const ADMIN_KEY = 'change-this-secret-key';
+const ADMIN_KEY = 'ashwini';
 
 // Optional — silently pings a Telegram chat/channel the instant a new order
 // comes in, so you don't have to keep the Sheet or admin page open to know.
 // Leave TELEGRAM_BOT_TOKEN blank to turn this off entirely; nothing else
 // about order-taking changes either way. See SETUP-GUIDE.md for how to get
 // a bot token and chat ID from @BotFather in about two minutes.
-const TELEGRAM_BOT_TOKEN = ''; // e.g. '123456789:AAExampleTokenFromBotFather'
-const TELEGRAM_CHAT_ID = '';   // your numeric chat ID, or '@yourchannel'
+const TELEGRAM_BOT_TOKEN = '7986254241:AAH0I0vCQe2LEe6dUf-u5gc8Bcw6DLyfoJg'; // e.g. '123456789:AAExampleTokenFromBotFather'
+const TELEGRAM_CHAT_ID = '629369496';   // your numeric chat ID, or '@yourchannel'
 
 function doGet(e) {
   const action = (e.parameter.action || 'products').toString();
@@ -460,8 +460,9 @@ function getAllOrders() {
 // Server-side dashboard aggregation keeps the browser light. The short cache
 // absorbs repeated refreshes; product/order mutations explicitly invalidate it.
 function getDashboardData() {
-  const cached = cacheGetJson_(DASHBOARD_CACHE_KEY);
-  if (cached) return cached;
+  // Dashboard data is deliberately read fresh from Sheets. Admins sometimes
+  // edit/delete order rows directly in Google Sheets, which cannot invalidate
+  // Apps Script CacheService and could otherwise leave stale profit visible.
 
   const now = new Date();
   const tz = Session.getScriptTimeZone();
@@ -470,9 +471,12 @@ function getDashboardData() {
   const orders = rowsAsObjects_(getSheet_(ORDERS_SHEET));
   const statusCounts = {};
   const cancelledIds = {};
+  const existingOrderIds = {};
   let todayRevenue = 0, todayOrders = 0, monthRevenue = 0, monthOrders = 0;
 
   orders.forEach(order => {
+    const orderId = String(order.orderid || '').trim();
+    if (orderId) existingOrderIds[orderId] = true;
     const status = String(order.status || 'Pending').trim() || 'Pending';
     statusCounts[status] = (statusCounts[status] || 0) + 1;
     if (status === 'Cancelled') cancelledIds[String(order.orderid || '')] = true;
@@ -496,8 +500,10 @@ function getDashboardData() {
   try {
     const items = rowsAsObjects_(getSheet_(ORDER_ITEMS_SHEET));
     items.forEach(item => {
-      const orderId = String(item.orderid || '');
-      if (cancelledIds[orderId]) return;
+      const orderId = String(item.orderid || '').trim();
+      // OrderItems is accounting history, but an orphaned line must not count
+      // after its parent order has been deleted manually from the Orders tab.
+      if (!orderId || !existingOrderIds[orderId] || cancelledIds[orderId]) return;
       const date = new Date(item.date);
       if (isNaN(date.getTime()) || Utilities.formatDate(date, tz, 'yyyy-MM') !== monthKey) return;
       const qty = Math.max(0, safeNumber_(item.qty, 0));
@@ -516,7 +522,6 @@ function getDashboardData() {
   const topProducts = Object.keys(productStats).map(k => productStats[k])
     .sort((a, b) => b.revenue - a.revenue || b.qty - a.qty).slice(0, 5);
   const dashboard = { todayRevenue, todayOrders, monthRevenue, monthOrders, monthProfit, statusCounts, lowStock, topProducts };
-  cachePutJson_(DASHBOARD_CACHE_KEY, dashboard, DASHBOARD_CACHE_TTL);
   return dashboard;
 }
 
@@ -538,12 +543,96 @@ function updateOrderStatus(orderId, statusValue) {
     if (idCol === -1 || statusCol === -1) return { success: false, error: 'Orders sheet is missing orderId/status columns' };
     const hit = sheet.getRange(2, idCol + 1, sheet.getLastRow() - 1, 1).createTextFinder(id).matchEntireCell(true).findNext();
     if (!hit) return { success: false, error: 'order not found' };
+
+    const oldStatus = String(sheet.getRange(hit.getRow(), statusCol + 1).getValue() || 'Pending').trim() || 'Pending';
+    if (oldStatus === status) return { success: true, orderId: id, status: status };
+
+    // Inventory follows the Cancelled boundary exactly once. Moving INTO
+    // Cancelled restores the quantities; moving OUT deducts them again.
+    // Other status changes do not touch stock.
+    if (oldStatus !== 'Cancelled' && status === 'Cancelled') {
+      restoreOrderStock_(id);
+    } else if (oldStatus === 'Cancelled' && status !== 'Cancelled') {
+      const deduct = redeductOrderStock_(id);
+      if (!deduct.success) return deduct;
+    }
+
     sheet.getRange(hit.getRow(), statusCol + 1).setValue(status);
-    invalidateDashboardCache_();
+    invalidatePublicCaches_();
     return { success: true, orderId: id, status: status };
   } finally {
     lock.releaseLock();
   }
+}
+
+// Returns the permanent item snapshot for an order. Stock restoration uses
+// product IDs + quantities only; prices/costs remain historical accounting.
+function getOrderItemQuantities_(orderId) {
+  let sheet;
+  try { sheet = getSheet_(ORDER_ITEMS_SHEET); } catch (err) { return []; }
+  const rows = rowsAsObjects_(sheet);
+  const totals = {};
+  rows.forEach(item => {
+    if (String(item.orderid || '').trim() !== String(orderId).trim()) return;
+    const id = String(item.productid || '').trim();
+    const qty = Math.max(0, Math.floor(safeNumber_(item.qty, 0)));
+    if (id && qty) totals[id] = (totals[id] || 0) + qty;
+  });
+  return Object.keys(totals).map(id => ({ id: id, qty: totals[id] }));
+}
+
+function restoreOrderStock_(orderId) {
+  const items = getOrderItemQuantities_(orderId);
+  if (!items.length) return { success: true };
+  const sheet = getSheet_(PRODUCTS_SHEET);
+  const heads = headers_(sheet);
+  const idCol = heads.indexOf('id'), qtyCol = heads.indexOf('stockqty'), stockCol = heads.indexOf('stock');
+  if (idCol === -1 || qtyCol === -1) return { success: true };
+  const data = sheet.getDataRange().getValues();
+  const byId = {};
+  for (let r = 1; r < data.length; r++) byId[String(data[r][idCol] || '').trim()] = r;
+  items.forEach(item => {
+    const r = byId[item.id];
+    if (r === undefined) return;
+    // Blank stockQty means this product is intentionally not quantity-tracked.
+    if (data[r][qtyCol] === '' || data[r][qtyCol] === null || data[r][qtyCol] === undefined) return;
+    const newQty = Math.max(0, Math.floor(safeNumber_(data[r][qtyCol], 0))) + item.qty;
+    sheet.getRange(r + 1, qtyCol + 1).setValue(newQty);
+    if (stockCol !== -1 && newQty > 0) sheet.getRange(r + 1, stockCol + 1).setValue('in stock');
+  });
+  return { success: true };
+}
+
+function redeductOrderStock_(orderId) {
+  const items = getOrderItemQuantities_(orderId);
+  if (!items.length) return { success: true };
+  const sheet = getSheet_(PRODUCTS_SHEET);
+  const heads = headers_(sheet);
+  const idCol = heads.indexOf('id'), nameCol = heads.indexOf('name'), qtyCol = heads.indexOf('stockqty'), stockCol = heads.indexOf('stock');
+  if (idCol === -1 || qtyCol === -1) return { success: true };
+  const data = sheet.getDataRange().getValues();
+  const byId = {};
+  for (let r = 1; r < data.length; r++) byId[String(data[r][idCol] || '').trim()] = r;
+
+  // Validate the entire order before changing a single product.
+  for (const item of items) {
+    const r = byId[item.id];
+    if (r === undefined) return { success: false, error: 'Cannot reactivate order: product ' + item.id + ' no longer exists.' };
+    if (data[r][qtyCol] === '' || data[r][qtyCol] === null || data[r][qtyCol] === undefined) continue;
+    const available = Math.max(0, Math.floor(safeNumber_(data[r][qtyCol], 0)));
+    if (available < item.qty) {
+      const name = nameCol === -1 ? item.id : String(data[r][nameCol] || item.id);
+      return { success: false, error: 'Cannot reactivate order: only ' + available + ' left for ' + name + '.' };
+    }
+  }
+  items.forEach(item => {
+    const r = byId[item.id];
+    if (data[r][qtyCol] === '' || data[r][qtyCol] === null || data[r][qtyCol] === undefined) return;
+    const newQty = Math.max(0, Math.floor(safeNumber_(data[r][qtyCol], 0)) - item.qty);
+    sheet.getRange(r + 1, qtyCol + 1).setValue(newQty);
+    if (stockCol !== -1) sheet.getRange(r + 1, stockCol + 1).setValue(newQty === 0 ? 'out of stock' : 'in stock');
+  });
+  return { success: true };
 }
 
 function addOrder(o) {
