@@ -189,7 +189,7 @@ function filteredProducts(){
     if (activeSubcategory !== 'All' && p.subcategory !== activeSubcategory) return false;
     if (inStockOnly && isOutOfStock(p)) return false;
     if (searchQuery){
-      const hay = `${p.name} ${p.category} ${p.subcategory} ${p.tags}`.toLowerCase();
+      const hay = `${p.name} ${p.nameHindi || ''} ${p.category} ${p.subcategory} ${p.tags}`.toLowerCase();
       if (!hay.includes(searchQuery.toLowerCase())) return false;
     }
     return true;
@@ -228,7 +228,7 @@ function renderSearchResults(){
     return;
   }
   const list = ALL_PRODUCTS.filter(p =>
-    `${p.name} ${p.category} ${p.subcategory} ${p.tags}`.toLowerCase().includes(q) &&
+    `${p.name} ${p.nameHindi || ''} ${p.category} ${p.subcategory} ${p.tags}`.toLowerCase().includes(q) &&
     (!inStockOnly || !isOutOfStock(p))
   );
   searchPager.reset(list, `No results for "${escapeHtml(searchQuery)}"`);
@@ -268,6 +268,8 @@ function initUI(){
 
   updateCartBadge();
 }
+
+document.addEventListener('dsb:languagechange', () => { renderCategoryRail(); renderSubchipRow(); renderGrid(); if ($('#searchOverlay')?.classList.contains('open')) renderSearchResults(); renderHomeCarousels(); });
 
 document.addEventListener('DOMContentLoaded', () => {
   initUI();

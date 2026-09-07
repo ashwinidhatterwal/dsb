@@ -57,15 +57,15 @@ function renderProduct(p){
       <div class="pd-gallery">
         ${disc ? `<span class="discount">${disc}% OFF</span>` : ''}
         <div class="pd-gallery-track" id="pdGalleryTrack">
-          ${p.gallery.map((src, i) => `<div class="pd-slide"><img src="${escapeHtml(src)}" alt="${escapeHtml(p.name)}" decoding="async" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'}></div>`).join('')}
+          ${p.gallery.map((src, i) => `<div class="pd-slide"><img src="${escapeHtml(src)}" alt="${escapeHtml(customerProductName(p))}" decoding="async" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'}></div>`).join('')}
         </div>
         ${p.gallery.length > 1 ? `
         <div class="pd-dots" id="pdDots">
           ${p.gallery.map((_, i) => `<span class="pd-dot ${i===0?'active':''}"></span>`).join('')}
         </div>` : ''}
       </div>
-      <h1 class="pd-title">${escapeHtml(p.name)}</h1>
-      ${p.nameHindi ? `<div class="pd-title-hindi">${escapeHtml(p.nameHindi)}</div>` : ''}
+      <h1 class="pd-title">${escapeHtml(customerProductName(p))}</h1>
+      ${customerProductSecondaryName(p) ? `<div class="pd-title-hindi">${escapeHtml(customerProductSecondaryName(p))}</div>` : ''}
       <div class="pd-prices">
         <span class="price">${money(p.price)}</span>
         ${p.mrp > p.price ? `<span class="mrp">${money(p.mrp)}</span>` : ''}
@@ -174,12 +174,48 @@ function closeSizeGuide(){
 
 function bindGallerySwipe(){
   const track = $('#pdGalleryTrack');
+  const gallery = track?.closest('.pd-gallery');
+  const slides = track ? Array.from(track.querySelectorAll('.pd-slide')) : [];
   const dots = $$('.pd-dot');
-  if (!track || dots.length < 2) return;
-  track.addEventListener('scroll', () => {
-    const index = Math.round(track.scrollLeft / track.clientWidth);
-    dots.forEach((d, i) => d.classList.toggle('active', i === index));
-  }, { passive: true });
+  if (!track || !gallery || !slides.length) return;
+
+  let activeIndex = 0;
+
+  const setGalleryHeight = (index = activeIndex) => {
+    const slide = slides[index];
+    const img = slide?.querySelector('img');
+    if (!slide || !img) return;
+    const apply = () => {
+      const width = track.clientWidth || gallery.clientWidth;
+      if (!width || !img.naturalWidth || !img.naturalHeight) return;
+      gallery.style.height = `${Math.round(width * (img.naturalHeight / img.naturalWidth))}px`;
+    };
+    if (img.complete && img.naturalWidth) apply();
+    else img.addEventListener('load', apply, { once: true });
+  };
+
+  const updateActive = () => {
+    const width = track.clientWidth;
+    if (!width) return;
+    activeIndex = Math.max(0, Math.min(slides.length - 1, Math.round(track.scrollLeft / width)));
+    dots.forEach((d, i) => d.classList.toggle('active', i === activeIndex));
+    setGalleryHeight(activeIndex);
+  };
+
+  setGalleryHeight(0);
+  slides.forEach((slide, i) => {
+    const img = slide.querySelector('img');
+    if (img) img.addEventListener('load', () => { if (i === activeIndex) setGalleryHeight(i); });
+  });
+
+  if (slides.length > 1) {
+    let raf = 0;
+    track.addEventListener('scroll', () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(updateActive);
+    }, { passive: true });
+  }
+  window.addEventListener('resize', () => setGalleryHeight(activeIndex), { passive: true });
 }
 
 /* ---------------- SEO: per-product tags + structured data ---------------- */
@@ -424,6 +460,8 @@ function status_(el, msg, ok){
   el.textContent = msg;
   el.className = 'statusline ' + (ok ? 'ok' : 'err');
 }
+
+document.addEventListener('dsb:languagechange', () => { if (CURRENT_PRODUCT) { renderProduct(CURRENT_PRODUCT); renderRelated(CURRENT_PRODUCT); loadReviews(CURRENT_PRODUCT.id); } });
 
 document.addEventListener('DOMContentLoaded', () => {
   $('#searchTrigger').addEventListener('click', () => { location.href = 'index.html'; });

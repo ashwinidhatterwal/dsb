@@ -491,7 +491,7 @@ function renderOrderConfirmation(receipt){
   const orderId = receipt && receipt.orderId ? receipt.orderId : '';
   wrap.innerHTML = `
     <button class="closebtn" id="cartClose" aria-label="Close">✕</button>
-    <div class="order-confirm">
+    <div class="order-confirm" data-i18n-skip>
       <div class="confirm-icon">✓</div>
       <h2>Your order is confirmed</h2>
       ${orderId ? `<p class="confirm-id">Order ID: <strong>${escapeHtml(orderId)}</strong></p>` : ''}

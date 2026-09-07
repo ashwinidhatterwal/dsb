@@ -1,5 +1,5 @@
-const CACHE_VERSION = 'dsb-shell-v5';
-const SHELL = ['./','./index.html','./style.css?v=20260907c','./manifest.json','./icon-192.png','./icon-512.png'];
+const CACHE_VERSION = 'dsb-shell-v6';
+const SHELL = ['./','./index.html','./style.css?v=20260907c','./manifest.json','./icon-192.png','./icon-512.png','./i18n.js?v=20260907'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_VERSION).then(cache => cache.addAll(SHELL)).catch(()=>{}));
   self.skipWaiting();

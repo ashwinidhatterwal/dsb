@@ -707,10 +707,12 @@ a.name{ display:-webkit-box; cursor:pointer; }
   border-radius: var(--radius);
   overflow:hidden;
   margin-bottom:14px;
-  background: var(--cream-2);
+  background:transparent;
+  transition:height .22s ease;
 }
 .pd-gallery-track{
   display:flex;
+  align-items:flex-start;
   overflow-x:auto;
   scroll-snap-type:x mandatory;
   scrollbar-width:none;
@@ -719,16 +721,15 @@ a.name{ display:-webkit-box; cursor:pointer; }
 .pd-gallery-track::-webkit-scrollbar{ display:none; }
 .pd-slide{
   flex:0 0 100%;
-  aspect-ratio:3/4;
-  max-height:min(78vh,760px);
+  min-width:100%;
   scroll-snap-align:start;
-  display:grid;
-  place-items:center;
-  background:var(--cream-2);
+  display:block;
+  background:transparent;
 }
 .pd-slide img{
   width:100%;
-  height:100%;
+  height:auto;
+  max-height:none;
   object-fit:contain;
   object-position:center;
   display:block;
@@ -1348,3 +1349,13 @@ body.modal-open{
   .install-banner-copy span{ font-size:11.5px; }
   .install-btn{ padding:9px 11px; }
 }
+
+/* Customer language switch — deliberately compact so header layout stays unchanged. */
+.lang-toggle{height:38px;min-width:42px;padding:0 9px;border:1px solid rgba(32,27,61,.10);border-radius:12px;background:rgba(255,255,255,.72);color:var(--indigo);font:700 13px/1 var(--font-body);cursor:pointer;box-shadow:0 4px 15px rgba(32,27,61,.05);flex:0 0 auto;transition:transform .2s ease,background .2s ease}.lang-toggle:hover{transform:translateY(-1px);background:#fff}.lang-toggle:focus-visible{outline:2px solid var(--rani);outline-offset:2px}@media(max-width:520px){.lang-toggle{height:36px;min-width:38px;padding:0 7px;border-radius:11px;font-size:12px}}
+
+/* Hindi typography: preserve Devanagari matras and conjuncts without clipping. */
+html[lang="hi"] .hero-title{line-height:1.16;letter-spacing:-.012em;padding-block:.04em .08em}
+html[lang="hi"] .hero-title span{line-height:inherit}
+html[lang="hi"] .card .name{line-height:1.38}
+html[lang="hi"] .card .name-hindi{line-height:1.3}
+@media(max-width:640px){html[lang="hi"] .hero-title{font-size:clamp(32px,9.4vw,45px);line-height:1.18}}

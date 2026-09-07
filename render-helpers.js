@@ -3,6 +3,15 @@
    Tapping the image/name navigates to that product's own page;
    the Add/stepper/Buy Now controls act on the cart without navigating.
    ========================================================= */
+
+function customerProductName(p){
+  return (window.DSB_I18N && DSB_I18N.isHindi() && p.nameHindi) ? p.nameHindi : p.name;
+}
+function customerProductSecondaryName(p){
+  if (!p.nameHindi) return '';
+  return (window.DSB_I18N && DSB_I18N.isHindi()) ? p.name : p.nameHindi;
+}
+
 function discountPct(p){
   if (!p.mrp || p.mrp <= p.price) return 0;
   return Math.round(((p.mrp - p.price) / p.mrp) * 100);
@@ -41,14 +50,14 @@ function cardHtml(p){
     <a class="imgwrap" href="${href}">
       ${disc ? `<span class="discount">${disc}% OFF</span>` : ''}
       <span class="subtag">${escapeHtml(p.subcategory)}</span>
-      <img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}" loading="lazy" decoding="async">
+      <img src="${escapeHtml(p.image)}" alt="${escapeHtml(customerProductName(p))}" loading="lazy" decoding="async">
     </a>
     <button type="button" class="card-share" data-share="${escapeHtml(p.id)}" aria-label="Share ${escapeHtml(p.name)}">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>
     </button>
     <div class="body">
-      <a class="name" href="${href}">${escapeHtml(p.name)}</a>
-      ${p.nameHindi ? `<div class="name-hindi">${escapeHtml(p.nameHindi)}</div>` : ''}
+      <a class="name" href="${href}">${escapeHtml(customerProductName(p))}</a>
+      ${customerProductSecondaryName(p) ? `<div class="name-hindi">${escapeHtml(customerProductSecondaryName(p))}</div>` : ''}
       ${cardRatingHtml(p)}
       <div class="prices">
         <span class="price">${money(p.price)}</span>
