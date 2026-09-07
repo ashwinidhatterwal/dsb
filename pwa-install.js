@@ -37,8 +37,17 @@
     alert('Open your browser menu and choose “Install app” if that option is available.');
   }
 
+  function ensureInstallStyles(){
+    if (document.getElementById('dsb-install-styles')) return;
+    var style = document.createElement('style');
+    style.id = 'dsb-install-styles';
+    style.textContent = '.install-banner{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));z-index:1200;width:min(560px,calc(100% - 24px));display:flex;align-items:center;gap:12px;padding:12px 12px 12px 14px;border:1px solid rgba(255,255,255,.32);border-radius:18px;background:rgba(32,27,61,.94);color:#fff6e9;box-shadow:0 18px 45px rgba(32,27,61,.28);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);transform:translate(-50%,calc(100% + 36px));opacity:0;pointer-events:none;transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .25s ease;box-sizing:border-box}.install-banner.show{transform:translate(-50%,0);opacity:1;pointer-events:auto}.install-banner-mark{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:13px;overflow:hidden}.install-banner-mark img{width:100%;height:100%;display:block;object-fit:cover}.install-banner-copy{min-width:0;flex:1;display:flex;flex-direction:column;line-height:1.15}.install-banner-copy strong{font-family:inherit;font-size:15px}.install-banner-copy span{margin-top:3px;color:rgba(255,246,233,.76);font-size:12.5px}.install-banner-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto}.install-btn{border:0;border-radius:12px;padding:9px 13px;background:#fff6e9;color:#201b3d;font:700 13px/1 inherit;cursor:pointer}.install-dismiss{width:34px;height:34px;border:0;border-radius:10px;background:transparent;color:rgba(255,255,255,.8);font-size:24px;line-height:1;cursor:pointer}@media(max-width:520px){.install-banner{gap:9px;padding:10px}.install-banner-mark{width:38px;height:38px;flex-basis:38px}.install-banner-copy strong{font-size:13px}.install-banner-copy span{font-size:11px}.install-btn{padding:9px 10px}}@media(max-width:390px){.install-banner{width:calc(100% - 16px);bottom:max(10px,env(safe-area-inset-bottom));gap:7px}.install-banner-copy strong{font-size:12.5px}.install-banner-copy span{display:none}.install-btn{padding:8px 9px}.install-dismiss{width:30px;height:30px}}';
+    document.head.appendChild(style);
+  }
+
   function ensureBanner(mode){
     if (banner || dismissedRecently() || isStandalone) return;
+    ensureInstallStyles();
     var nativeReady = mode === 'native' && !!deferredPrompt;
     var manualIOS = mode === 'ios';
     banner = document.createElement('aside');

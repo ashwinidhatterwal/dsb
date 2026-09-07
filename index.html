@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#C81163">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="DSB Shop">
+<meta name="apple-mobile-web-app-title" content="Suhag Bhandar">
 <link rel="canonical" href="https://suhagbhandar.in/">
 
 <!-- Open Graph (WhatsApp / Facebook / Instagram link previews) -->
@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Hind:wght@400;500;600;700&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20260907b">
 <link rel="manifest" href="manifest.json">
 
 <!-- Local business structured data — fill in the marked fields with your
@@ -71,7 +71,7 @@
 
 <!-- ===== Slim sticky bar: search + cart ONLY ===== -->
 <div class="stickybar" id="stickyBar">
-  <div class="brandmark"><span class="glyph">D</span><span class="hide-sm">DSB</span></div>
+  <div class="brandmark"><img class="glyph" src="icon-192.png" alt="Suhag Bhandar"><span class="hide-sm">Suhag Bhandar</span></div>
   <button class="searchwrap" id="searchTrigger" style="text-align:left;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     <span style="color:#8a83a0; font-size:13px;">Search lipstick, notebook, shampoo…</span>
@@ -236,6 +236,6 @@
 </script>
 <div class="toast-v5" id="toastV5" role="status" aria-live="polite"></div>
 <script>document.addEventListener("click",function(e){const b=e.target.closest(".carousel-nav");if(b){const r=document.getElementById(b.dataset.rail);if(r)r.scrollBy({left:Number(b.dataset.dir)*Math.min(520,r.clientWidth*.85),behavior:"smooth"})}});</script>
-<script src="pwa-install.js" defer></script>
+<script src="pwa-install.js?v=20260907b" defer></script>
 </body>
 </html>

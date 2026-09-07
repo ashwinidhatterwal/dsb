@@ -568,17 +568,58 @@ function updateOrderStatus(orderId, statusValue) {
 // Returns the permanent item snapshot for an order. Stock restoration uses
 // product IDs + quantities only; prices/costs remain historical accounting.
 function getOrderItemQuantities_(orderId) {
-  let sheet;
-  try { sheet = getSheet_(ORDER_ITEMS_SHEET); } catch (err) { return []; }
-  const rows = rowsAsObjects_(sheet);
+  const wantedId = String(orderId || '').trim();
   const totals = {};
-  rows.forEach(item => {
-    if (String(item.orderid || '').trim() !== String(orderId).trim()) return;
-    const id = String(item.productid || '').trim();
-    const qty = Math.max(0, Math.floor(safeNumber_(item.qty, 0)));
-    if (id && qty) totals[id] = (totals[id] || 0) + qty;
-  });
-  return Object.keys(totals).map(id => ({ id: id, qty: totals[id] }));
+
+  // Preferred source: permanent OrderItems snapshots. These retain exact
+  // product IDs + quantities even if the product name/price changes later.
+  try {
+    const rows = rowsAsObjects_(getSheet_(ORDER_ITEMS_SHEET));
+    rows.forEach(item => {
+      if (String(item.orderid || '').trim() !== wantedId) return;
+      const id = String(item.productid || '').trim();
+      const qty = Math.max(0, Math.floor(safeNumber_(item.qty, 0)));
+      if (id && qty) totals[id] = (totals[id] || 0) + qty;
+    });
+  } catch (err) {
+    // OrderItems is optional; fall through to the order-row summary below.
+  }
+
+  const fromItems = Object.keys(totals).map(id => ({ id: id, qty: totals[id] }));
+  if (fromItems.length) return fromItems;
+
+  // Compatibility fallback for older installations/orders where OrderItems
+  // did not exist or failed to record. New orders store their summary as:
+  //   PRODUCT_ID Product name xQTY | PRODUCT_ID Product name xQTY
+  // Only use this fallback when there are no OrderItems rows, preventing any
+  // possibility of counting the same quantity twice.
+  try {
+    const sheet = getSheet_(ORDERS_SHEET);
+    if (sheet.getLastRow() < 2) return [];
+    const heads = headers_(sheet);
+    const idCol = heads.indexOf('orderid');
+    const itemsCol = heads.indexOf('items');
+    if (idCol === -1 || itemsCol === -1) return [];
+    const hit = sheet.getRange(2, idCol + 1, sheet.getLastRow() - 1, 1)
+      .createTextFinder(wantedId).matchEntireCell(true).findNext();
+    if (!hit) return [];
+    const summary = String(sheet.getRange(hit.getRow(), itemsCol + 1).getValue() || '');
+    const fallbackTotals = {};
+    summary.split('|').forEach(part => {
+      const text = String(part || '').trim();
+      // Product IDs generated/used by this site contain no whitespace. Match
+      // the first token as ID and the final "xN" as quantity; product names
+      // may contain arbitrary spaces in between.
+      const match = /^(\S+)\s+.+\s+x(\d+)$/i.exec(text);
+      if (!match) return;
+      const id = String(match[1] || '').trim();
+      const qty = Math.max(0, Math.floor(safeNumber_(match[2], 0)));
+      if (id && qty) fallbackTotals[id] = (fallbackTotals[id] || 0) + qty;
+    });
+    return Object.keys(fallbackTotals).map(id => ({ id: id, qty: fallbackTotals[id] }));
+  } catch (err) {
+    return [];
+  }
 }
 
 function restoreOrderStock_(orderId) {
