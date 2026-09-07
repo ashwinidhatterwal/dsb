@@ -1307,3 +1307,30 @@ body.modal-open{
 .hero:not(.hero-compact){min-height:340px;padding-top:56px;padding-bottom:24px}
 @media(min-width:900px){.hero:not(.hero-compact){min-height:360px;padding-top:62px;padding-bottom:26px}}
 @media(max-width:640px){.hero:not(.hero-compact){min-height:320px;padding-top:48px;padding-bottom:20px}}
+
+/* PWA install suggestion — intentionally compact and non-intrusive */
+.install-banner{
+  position:fixed; left:50%; bottom:max(18px,env(safe-area-inset-bottom)); z-index:1200;
+  width:min(560px,calc(100% - 24px)); display:flex; align-items:center; gap:12px;
+  padding:12px 12px 12px 14px; border:1px solid rgba(255,255,255,.32); border-radius:18px;
+  background:rgba(32,27,61,.94); color:var(--cream); box-shadow:0 18px 45px rgba(32,27,61,.28);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  transform:translate(-50%,calc(100% + 36px)); opacity:0; pointer-events:none;
+  transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .25s ease;
+}
+.install-banner.show{ transform:translate(-50%,0); opacity:1; pointer-events:auto; }
+.install-banner-mark{ width:42px; height:42px; flex:0 0 42px; display:grid; place-items:center; border-radius:13px; background:linear-gradient(135deg,var(--rani),var(--marigold)); color:white; font:800 24px/1 var(--font-display); }
+.install-banner-mark{overflow:hidden;padding:0}.install-banner-mark img{width:100%;height:100%;display:block;object-fit:cover}
+.install-banner-copy{ min-width:0; flex:1; display:flex; flex-direction:column; line-height:1.15; }
+.install-banner-copy strong{ font-family:var(--font-display); font-size:15px; }
+.install-banner-copy span{ margin-top:3px; color:rgba(255,246,233,.76); font-size:12.5px; }
+.install-banner-actions{ display:flex; align-items:center; gap:6px; }
+.install-btn{ border:0; border-radius:12px; padding:9px 13px; background:var(--cream); color:var(--indigo); font:700 13px/1 var(--font-utility); cursor:pointer; }
+.install-dismiss{ width:34px; height:34px; border:0; border-radius:10px; background:transparent; color:rgba(255,255,255,.8); font-size:24px; line-height:1; cursor:pointer; }
+@media (max-width:520px){
+  .install-banner{ gap:10px; padding:11px; }
+  .install-banner-mark{ width:38px; height:38px; flex-basis:38px; font-size:21px; }
+  .install-banner-copy strong{ font-size:14px; }
+  .install-banner-copy span{ font-size:11.5px; }
+  .install-btn{ padding:9px 11px; }
+}
