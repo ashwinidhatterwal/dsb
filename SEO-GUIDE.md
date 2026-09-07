@@ -106,3 +106,19 @@ Each product page now sets its canonical URL immediately from the `id` query par
 After deployment, submit `https://suhagbhandar.in/sitemap.xml` in Google Search Console and use URL Inspection on `/catalog.html` and two or three representative product URLs. Rich Results Test should report the rendered Product structured data for a valid product page.
 
 Do not create fake brands, GTINs, MPNs, ratings, shipping promises or stock values just to satisfy optional structured-data warnings. Accurate partial data is safer than inaccurate complete-looking data.
+
+## Automatic product sitemap
+
+This build includes `.github/workflows/update-product-sitemap.yml`.
+
+- Once per day, GitHub Actions reads the public Products API already used by the storefront.
+- It generates one sitemap URL for every current product: `product.html?id=...`.
+- It commits `sitemap.xml` only if the set of product IDs actually changed.
+- If the API is unavailable, malformed, or unexpectedly returns zero products after product URLs already exist, the workflow fails without overwriting the existing sitemap.
+- No admin key, Google account secret, Telegram token, order data, or customer data is used by this workflow.
+
+After uploading this build to the repository, open **GitHub → Actions → Update product sitemap → Run workflow** once to populate product URLs immediately. After that it runs automatically each day. If GitHub Actions are disabled for the repository, enable Actions for the repository first.
+
+Google Search Console only needs the main sitemap URL:
+
+`https://suhagbhandar.in/sitemap.xml`
