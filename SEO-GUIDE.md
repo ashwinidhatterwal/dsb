@@ -114,11 +114,15 @@ This build includes `.github/workflows/update-product-sitemap.yml`.
 - Once per day, GitHub Actions reads the public Products API already used by the storefront.
 - It generates one sitemap URL for every current product: `product.html?id=...`.
 - It commits `sitemap.xml` only if the set of product IDs actually changed.
+- It then explicitly uploads and deploys the public website, including the generated sitemap; it does not depend on a bot commit triggering a separate Pages build.
+- It also runs on pushes to the default branch.
 - If the API is unavailable, malformed, or unexpectedly returns zero products after product URLs already exist, the workflow fails without overwriting the existing sitemap.
 - No admin key, Google account secret, Telegram token, order data, or customer data is used by this workflow.
 
-After uploading this build to the repository, open **GitHub → Actions → Update product sitemap → Run workflow** once to populate product URLs immediately. After that it runs automatically each day. If GitHub Actions are disabled for the repository, enable Actions for the repository first.
+After uploading this build to the repository, open **GitHub → Settings → Pages → Source: GitHub Actions**, then **Actions → Update sitemap and deploy shop → Run workflow** once to populate product URLs immediately. After that it runs automatically each day. If GitHub Actions are disabled for the repository, enable Actions for the repository first.
 
 Google Search Console only needs the main sitemap URL:
 
 `https://suhagbhandar.in/sitemap.xml`
+
+Product content and structured data still load using JavaScript and the public API. The sitemap improves discovery; indexing and rich-result eligibility are not guaranteed. Check the published sitemap and representative product URLs in Search Console after deployment.

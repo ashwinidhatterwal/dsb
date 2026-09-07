@@ -90,7 +90,7 @@ async function loadOrders(){
     renderOrderList();
     if (LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
   } catch(err){
-    wrap.innerHTML = `<p class="hint">Could not load orders: ${err.message}</p>`;
+    wrap.innerHTML = `<p class="hint">Could not load orders: ${escapeHtml(err.message)}</p>`;
   }
 }
 
@@ -262,7 +262,8 @@ async function uploadFileToCloudinary(file){
     throw new Error('Image hosting isn\'t set up yet — see SETUP-GUIDE.md, or paste an image URL instead.');
   }
   const form = new FormData();
-  form.append('file', file);
+  const upload = await resizeUpload(file);
+  form.append('file', upload, file.name.replace(/\.[^.]+$/, '') + ({ 'image/png':'.png','image/webp':'.webp','image/jpeg':'.jpg' }[upload.type] || '.jpg'));
   form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
   const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
     method: 'POST',
@@ -371,7 +372,9 @@ async function saveProduct(){
     return;
   }
 
+  if(!Number.isFinite(product.price) || product.price<=0){status(statusEl,'Price must be a positive number.',false);return;}
   const isUpdate = !!editingProductId;
+  if(isUpdate){const original=PRODUCTS.find(p=>String(p.id)===String(editingProductId));product.expected_stockqty=original?.stockqty ?? '';product.expected_stock=original?.stock ?? '';}
 
   // Only relevant when adding a new product — editing an existing one keeps
   // its ID locked (the field is read-only during edit) so this situation
@@ -458,14 +461,15 @@ function recentOrders(){ return (ORDERS||[]).slice().sort((a,b)=>(orderDate(b.da
 function buildSevenDaySales(){
   const days=[]; const now=new Date(); now.setHours(0,0,0,0);
   for(let i=6;i>=0;i--){ const d=new Date(now); d.setDate(now.getDate()-i); days.push({key:d.toDateString(),label:d.toLocaleDateString('en-IN',{weekday:'short'}),total:0}); }
-  (ORDERS||[]).forEach(o=>{ if((o.status||'Pending')==='Cancelled') return; const d=orderDate(o.date); if(!d) return; const hit=days.find(x=>x.key===new Date(d.getFullYear(),d.getMonth(),d.getDate()).toDateString()); if(hit) hit.total+=Number(o.total)||0; });
+  (ORDERS||[]).forEach(o=>{ if(!['Delivered','Fulfilled'].includes(o.status)) return; const d=orderDate(o.date); if(!d) return; const hit=days.find(x=>x.key===new Date(d.getFullYear(),d.getMonth(),d.getDate()).toDateString()); if(hit) hit.total+=Number(o.total)||0; });
   return days;
 }
 function renderDashboard(d){
   const pending=(d.statusCounts&&d.statusCounts.Pending)||0, monthOrders=Number(d.monthOrders)||0;
   animateNumber($('#statTodayRevenue'),Math.round(d.todayRevenue||0),'₹'); $('#statTodayOrders').textContent=`${d.todayOrders||0} order${d.todayOrders===1?'':'s'} today`;
   animateNumber($('#statMonthRevenue'),Math.round(d.monthRevenue||0),'₹'); $('#statMonthOrders').textContent=`${monthOrders} order${monthOrders===1?'':'s'} this month`;
-  animateNumber($('#statMonthProfit'),Math.round(d.monthProfit||0),'₹');
+  if(d.accountingIncomplete) $('#statMonthProfit').textContent='Incomplete';
+  else animateNumber($('#statMonthProfit'),Math.round(d.monthProfit||0),'₹');
   const avg=monthOrders ? (Number(d.monthRevenue)||0)/monthOrders : 0; animateNumber($('#statAverageOrder'),Math.round(avg),'₹'); $('#statPending').textContent=`${pending} pending${pending===1?'':' orders'}`;
   $('#dashGreetingSub').textContent = pending ? `${pending} order${pending===1?'':'s'} need${pending===1?'s':''} your attention.` : 'Everything looks under control today.';
 
@@ -476,9 +480,9 @@ function renderDashboard(d){
   const top=d.topProducts||[], max=Math.max(1,...top.map(p=>Number(p.revenue)||0));
   $('#dashTopProducts').innerHTML=top.length?top.map((p,i)=>`<div class="dash-product-row"><span class="dash-rank">${i+1}</span><div class="dash-product-name"><strong>${escapeHtml(p.name||'(unknown)')}</strong><div class="dash-product-meta">${Number(p.qty)||0} sold</div></div><div class="dash-product-bar-track"><div class="dash-product-bar-fill" style="width:${Math.round((Number(p.revenue)||0)/max*100)}%"></div></div><div class="dash-product-value">${moneyShort(p.revenue)}</div></div>`).join(''):'<p class="hint">No sales recorded yet this month.</p>';
 
-  const sc=d.statusCounts||{}, total=(sc.Pending||0)+(sc.Fulfilled||0)+(sc.Cancelled||0);
+  const sc=d.statusCounts||{}, statuses=['Pending','Confirmed','Packed','Shipped','Delivered','Fulfilled','Cancelled'], total=statuses.reduce((n,s)=>n+(sc[s]||0),0);
   if(!total){$('#dashStatusBar').style.display='none';$('#dashStatusLegend').innerHTML='';$('#dashStatusEmpty').style.display='block';}
-  else { $('#dashStatusBar').style.display='flex';$('#dashStatusEmpty').style.display='none'; $('#dashStatusBar').innerHTML=['Pending','Fulfilled','Cancelled'].map(s=>{const c=sc[s]||0;if(!c)return '';return `<div class="dash-status-seg ${s.toLowerCase()}" style="width:${(c/total*100)}%">${c}</div>`;}).join(''); $('#dashStatusLegend').innerHTML=['Pending','Fulfilled','Cancelled'].map(s=>`<span class="dash-legend"><b>${sc[s]||0}</b> ${s}</span>`).join(''); }
+  else { $('#dashStatusBar').style.display='flex';$('#dashStatusEmpty').style.display='none'; $('#dashStatusBar').innerHTML=statuses.map(s=>{const c=sc[s]||0;if(!c)return '';return `<div class="dash-status-seg ${s.toLowerCase()}" style="width:${(c/total*100)}%">${c}</div>`;}).join(''); $('#dashStatusLegend').innerHTML=statuses.map(s=>`<span class="dash-legend"><b>${sc[s]||0}</b> ${s}</span>`).join(''); }
 
   const low=d.lowStock||[]; $('#dashLowStock').innerHTML=low.length?low.map(p=>`<div class="dash-lowstock-item"><div><div class="lowstock-name">${escapeHtml(p.name)}</div><div class="lowstock-state">${Number(p.qty)<=2?'Critical — restock soon':'Low stock'}</div></div><span class="qty">${p.qty} left</span></div>`).join(''):'<p class="hint">All tracked products have healthy stock.</p>';
 
@@ -524,3 +528,18 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#orderFilterInput').addEventListener('input', renderOrderList);
   $('#dashRefreshBtn').addEventListener('click', async () => { await Promise.all([loadOrders(), loadDashboard()]); showToast('Dashboard refreshed'); });
 });
+
+async function resizeUpload(file){
+  if(!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Please choose a JPEG, PNG or WebP image.');
+  if(file.size>15*1024*1024) throw new Error('Choose an image smaller than 15 MB.');
+  const bitmap=await createImageBitmap(file);
+  try {
+    const scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height));
+    const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+    canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);
+    const type=file.type==='image/png'?'image/png':'image/jpeg';
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,type,.85));
+    if(!blob) throw new Error('Could not prepare this image.');
+    return blob.size<file.size || scale<1 ? blob : file;
+  } finally {bitmap.close();}
+}

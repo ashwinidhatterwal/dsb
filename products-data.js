@@ -41,7 +41,7 @@ function normalizeRows(rows){
 // A product is unavailable if it's explicitly marked out of stock, OR if its
 // tracked quantity has hit zero.
 function isOutOfStock(p){
-  if (p.stock === 'out of stock') return true;
+  if (p.stock === 'out of stock' || !Number.isFinite(p.price) || p.price <= 0) return true;
   if (p.stockQty !== null && p.stockQty <= 0) return true;
   return false;
 }
@@ -55,47 +55,29 @@ function lowStockLabel(p){
   return '';
 }
 
-async function loadAllProducts(){
-  const normalizePayload = (payload) => {
-    // Current backend returns an array. Accept {products:[...]} too so a
-    // backend wrapper/change cannot silently break every product page.
-    if (Array.isArray(payload)) return payload;
-    if (payload && Array.isArray(payload.products)) return payload.products;
-    if (payload && payload.error) throw new Error(payload.error);
-    throw new Error('Unexpected products response');
-  };
-
-  const fetchJson = async (url) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 12000);
-    try{
-      const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    } finally {
-      clearTimeout(timer);
+const CATALOG_SESSION_KEY = 'dsb_catalog_v2';
+let catalogRequest = null;
+async function loadAllProducts(options = {}){
+  if (catalogRequest) return catalogRequest;
+  catalogRequest = (async () => {
+    const api = CONFIG.SHEET_API_URL;
+    if (!options.force && api) {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem(CATALOG_SESSION_KEY) || 'null');
+        if (cached && cached.api === api && Date.now() - cached.time < 60000 && Array.isArray(cached.rows)) {
+          ALL_PRODUCTS = normalizeRows(cached.rows); return ALL_PRODUCTS;
+        }
+      } catch (_) {}
     }
-  };
-
-  try{
-    let rows;
-    if (CONFIG.SHEET_API_URL){
-      rows = normalizePayload(await fetchJson(CONFIG.SHEET_API_URL + '?action=products'));
-    } else {
-      rows = normalizePayload(await fetchJson(CONFIG.FALLBACK_FILE));
-    }
+    // Sample data is available ONLY when deliberately configured for local demo mode.
+    const payload = await requestJson(api ? api + '?action=products' : CONFIG.FALLBACK_FILE);
+    const rows = Array.isArray(payload) ? payload : payload && payload.products;
+    if (!Array.isArray(rows)) throw new Error('Could not load the catalogue. Please try again.');
     ALL_PRODUCTS = normalizeRows(rows);
-  } catch(err){
-    console.error('Failed to load products, trying fallback file', err);
-    try{
-      const rows = normalizePayload(await fetchJson(CONFIG.FALLBACK_FILE));
-      ALL_PRODUCTS = normalizeRows(rows);
-    } catch(err2){
-      console.error('Fallback also failed', err2);
-      ALL_PRODUCTS = [];
-    }
-  }
-  return ALL_PRODUCTS;
+    if (api) { try { sessionStorage.setItem(CATALOG_SESSION_KEY,JSON.stringify({api:api,time:Date.now(),rows:rows})); } catch (_) {} }
+    return ALL_PRODUCTS;
+  })();
+  try { return await catalogRequest; } finally { catalogRequest = null; }
 }
 
 // One request for every review in the sheet, reduced down to a per-product
@@ -104,8 +86,7 @@ async function loadAllProducts(){
 async function loadReviewSummaries(){
   if (!CONFIG.SHEET_API_URL) return REVIEW_SUMMARY;
   try{
-    const res = await fetch(`${CONFIG.SHEET_API_URL}?action=reviews&summary=1`, { cache: 'no-store' });
-    const payload = await res.json();
+    const payload = await requestJson(`${CONFIG.SHEET_API_URL}?action=reviews&summary=1`);
 
     // The current Apps Script endpoint already returns the compact
     // { productId: { avg, count } } map. Use it directly instead of

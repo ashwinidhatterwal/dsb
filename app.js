@@ -27,7 +27,13 @@ async function loadProductsForShop(){
   // Products drive the whole page and shouldn't wait on reviews; review
   // summaries are fetched in parallel and just re-drawn in once they land.
   const reviewsPromise = loadReviewSummaries();
-  await loadAllProducts();
+  try { await loadAllProducts(); }
+  catch (err) {
+    $('#productGrid').innerHTML = '<div class="empty-state"><p>Could not load the catalogue. Please try again.</p><button type="button" class="ghost-btn" id="catalogRetry">Try again</button></div>';
+    $('#resultCount').textContent = '';
+    $('#catalogRetry').addEventListener('click',loadProductsForShop,{once:true});
+    return;
+  }
   buildCategoryMap();
   applyCategoryFromUrl();
   renderCategoryRail();
@@ -216,10 +222,11 @@ function renderGrid(){
 function openSearch(){
   $('#searchOverlay').classList.add('open');
   $('#searchInput2').value = searchQuery;
+  openDialogFocus($('#searchOverlay'),closeSearch);
   $('#searchInput2').focus();
   renderSearchResults();
 }
-function closeSearch(){ $('#searchOverlay').classList.remove('open'); }
+function closeSearch(){ $('#searchOverlay').classList.remove('open'); closeDialogFocus($('#searchOverlay')); }
 function renderSearchResults(){
   const q = searchQuery.trim().toLowerCase();
   if (!q){

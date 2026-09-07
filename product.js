@@ -46,6 +46,7 @@ async function init(){
     await loadAllProducts();
     const product = ALL_PRODUCTS.find(p => String(p.id).trim() === id);
     if (!product){
+      document.querySelector('meta[name="robots"]')?.setAttribute('content','noindex, follow');
       root.innerHTML = `
         <div class="empty-state" style="padding:60px 16px;">
           Couldn't find that product.<br>
@@ -87,7 +88,7 @@ function renderProduct(p){
       <div class="pd-gallery">
         ${disc ? `<span class="discount">${disc}% OFF</span>` : ''}
         <div class="pd-gallery-track" id="pdGalleryTrack">
-          ${p.gallery.map((src, i) => `<div class="pd-slide"><img src="${escapeHtml(src)}" alt="${escapeHtml(customerProductName(p))}" decoding="async" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'}></div>`).join('')}
+          ${p.gallery.map((src, i) => `<div class="pd-slide"><img src="${escapeHtml(productImageUrl(src,1200))}" alt="${escapeHtml(customerProductName(p))}" decoding="async" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'}></div>`).join('')}
         </div>
         ${p.gallery.length > 1 ? `
         <div class="pd-dots" id="pdDots">
@@ -139,7 +140,7 @@ function renderProduct(p){
           <textarea id="revComment" placeholder="How was the product?"></textarea>
         </div>
         <button class="primary-btn" id="submitReviewBtn" style="width:100%;">Submit feedback</button>
-        <div class="statusline" id="reviewStatus"></div>
+        <div class="checkout-honeypot" aria-hidden="true"><label>Website<input id="reviewWebsite" tabindex="-1" autocomplete="off"></label></div><div class="statusline" id="reviewStatus"></div>
       </div>
       <div id="reviewList"></div>
     </div>
@@ -174,6 +175,7 @@ function openSizeGuide(){
     overlay = document.createElement('div');
     overlay.className = 'overlay';
     overlay.id = 'sizeGuideOverlay';
+    overlay.setAttribute('aria-label','Size guide');
     overlay.innerHTML = `
       <div class="sheet">
         <button class="closebtn" id="sizeGuideClose" aria-label="Close">✕</button>
@@ -196,10 +198,11 @@ function openSizeGuide(){
     $('#sizeGuideClose', overlay).addEventListener('click', closeSizeGuide);
   }
   overlay.classList.add('open');
+  openDialogFocus(overlay,closeSizeGuide);
 }
 function closeSizeGuide(){
   const overlay = $('#sizeGuideOverlay');
-  if (overlay) overlay.classList.remove('open');
+  if (overlay) {overlay.classList.remove('open');closeDialogFocus(overlay);}
 }
 
 function bindGallerySwipe(){
@@ -400,7 +403,7 @@ function renderStarInput(){
   const box = $('#starInput');
   const draw = () => {
     box.innerHTML = [1,2,3,4,5].map(v =>
-      `<button type="button" class="star-btn ${v <= selectedRating ? 'filled' : ''}" data-v="${v}">★</button>`
+      `<button type="button" class="star-btn ${v <= selectedRating ? 'filled' : ''}" data-v="${v}" aria-label="${v} stars" aria-pressed="${v===selectedRating}">★</button>`
     ).join('');
     $$('.star-btn', box).forEach(btn => btn.addEventListener('click', () => {
       selectedRating = Number(btn.dataset.v);
@@ -462,8 +465,8 @@ async function submitReview(){
   const statusEl = $('#reviewStatus');
   const name = $('#revName').value.trim();
   const comment = $('#revComment').value.trim();
-  if (!name){
-    status_(statusEl, 'Please enter your name.', false);
+  if (!name || comment.length<2 || comment.length>600){
+    status_(statusEl, 'Please enter your name and feedback of 2–600 characters.', false);
     return;
   }
   if (!CONFIG.SHEET_API_URL){
@@ -479,7 +482,7 @@ async function submitReview(){
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'addReview',
-        review: { productId: CURRENT_PRODUCT.id, name, rating: selectedRating, comment }
+        review: { productId: CURRENT_PRODUCT.id, name, rating: selectedRating, comment,clientId:reviewClientId(),website:$('#reviewWebsite')?.value || '' }
       })
     });
     const data = await res.json();
@@ -515,3 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initWhatsAppFloat();
   init();
 });
+
+function reviewClientId(){
+  try{let id=localStorage.getItem('dsb_review_client');if(!id){id=newCheckoutId();localStorage.setItem('dsb_review_client',id);}return id;}catch(_){return 'storage-unavailable';}
+}

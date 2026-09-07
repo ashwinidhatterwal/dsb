@@ -109,7 +109,7 @@
       <select id="orderStatusFilter">
         <option value="all">All statuses</option>
         <option value="Pending">Pending</option>
-        <option value="Fulfilled">Fulfilled</option>
+        <option value="Confirmed">Confirmed</option><option value="Packed">Packed</option><option value="Shipped">Shipped</option><option value="Delivered">Delivered</option><option value="Fulfilled">Fulfilled</option>
         <option value="Cancelled">Cancelled</option>
       </select>
     </div>
@@ -126,11 +126,11 @@
 
     <div id="dashAttention" class="dash-attention"></div>
 
-    <div class="dash-grid dash-grid-main">
-      <div class="dash-stat"><div class="dash-stat-label">TODAY'S REVENUE</div><div class="dash-stat-value" id="statTodayRevenue">₹0</div><div class="dash-stat-sub" id="statTodayOrders">0 orders today</div></div>
-      <div class="dash-stat"><div class="dash-stat-label">MONTHLY REVENUE</div><div class="dash-stat-value" id="statMonthRevenue">₹0</div><div class="dash-stat-sub" id="statMonthOrders">0 orders this month</div></div>
-      <div class="dash-stat accent"><div class="dash-stat-label">MONTHLY PROFIT</div><div class="dash-stat-value" id="statMonthProfit">₹0</div><div class="dash-stat-sub">after cost price</div></div>
-      <div class="dash-stat"><div class="dash-stat-label">AVERAGE ORDER</div><div class="dash-stat-value" id="statAverageOrder">₹0</div><div class="dash-stat-sub" id="statPending">0 pending orders</div></div>
+    <p class="hint">Delivered and Fulfilled orders, grouped by order date. Order value includes delivery/COD fees. Merchandise profit excludes those fees and delivery/operating expenses; it is not net profit or payment verification.</p><div class="dash-grid dash-grid-main">
+      <div class="dash-stat"><div class="dash-stat-label">COMPLETED ORDER VALUE TODAY</div><div class="dash-stat-value" id="statTodayRevenue">₹0</div><div class="dash-stat-sub" id="statTodayOrders">0 orders today</div></div>
+      <div class="dash-stat"><div class="dash-stat-label">COMPLETED ORDER VALUE THIS MONTH</div><div class="dash-stat-value" id="statMonthRevenue">₹0</div><div class="dash-stat-sub" id="statMonthOrders">0 orders this month</div></div>
+      <div class="dash-stat accent"><div class="dash-stat-label">MERCHANDISE PROFIT</div><div class="dash-stat-value" id="statMonthProfit">₹0</div><div class="dash-stat-sub">Completed orders, after costs &amp; discounts</div></div>
+      <div class="dash-stat"><div class="dash-stat-label">AVERAGE COMPLETED ORDER</div><div class="dash-stat-value" id="statAverageOrder">₹0</div><div class="dash-stat-sub" id="statPending">0 pending orders</div></div>
     </div>
 
     <div class="dash-layout">
@@ -172,4 +172,4 @@
     </div>
   </div>
 
-<nav class="admin-tabbar"><button type="button" class="active" data-tab="dashboard"><span class="tab-icon">⌂</span>Home</button><button type="button" data-tab="orders"><span class="tab-icon">🛒</span>Orders</button><button type="button" data-tab="products"><span class="tab-icon">◈</span>Products</button><button type="button" data-tab="add"><span class="tab-icon">＋</span>Add</button></nav></main></div><div class="toast" id="toast"></div><script src="admin.js"></script></body></html>
+<nav class="admin-tabbar"><button type="button" class="active" data-tab="dashboard"><span class="tab-icon">⌂</span>Home</button><button type="button" data-tab="orders"><span class="tab-icon">🛒</span>Orders</button><button type="button" data-tab="products"><span class="tab-icon">◈</span>Products</button><button type="button" data-tab="add"><span class="tab-icon">＋</span>Add</button></nav></main></div><div class="toast" id="toast"></div><script src="admin.js?v=20260907safe2"></script></body></html>

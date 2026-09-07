@@ -92,3 +92,68 @@ function initScrollReveal(root){
   }, { rootMargin: '0px 0px -60px 0px', threshold: 0.1 });
   items.forEach(el => observer.observe(el));
 }
+
+
+async function requestJson(url, options = {}, timeoutMs = 15000){
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(),timeoutMs);
+  try {
+    const res = await fetch(url,{cache:'no-store',...options,signal:controller.signal});
+    if (!res.ok) throw new Error('The shop could not be reached. Please try again.');
+    const data = await res.json();
+    return data;
+  } catch(err) {
+    if (err.name === 'AbortError') throw new Error('The request timed out. Please try again.');
+    throw err;
+  } finally { clearTimeout(timer); }
+}
+function newCheckoutId(){
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6]=(bytes[6]&15)|64; bytes[8]=(bytes[8]&63)|128;
+  const h=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+function productImageUrl(src,width){
+  try {
+    const url = new URL(src,location.href);
+    if (url.hostname === 'res.cloudinary.com' && /\/image\/upload\/(?:v\d+\/|[^/,]+$)/.test(url.pathname)) {
+      url.pathname = url.pathname.replace('/image/upload/',`/image/upload/f_auto,q_auto,c_limit,w_${width}/`);
+      return url.href;
+    }
+  } catch (_) {}
+  return src;
+}
+const dialogStack = [];
+function openDialogFocus(root,onClose){
+  if (!root || dialogStack.some(x=>x.root===root)) return;
+  root.setAttribute('role','dialog'); root.setAttribute('aria-modal','true'); root.tabIndex=-1;
+  const entry={root,onClose,previous:document.activeElement,siblings:[]};
+  for(let node=root;node&&node!==document.body;node=node.parentElement){
+    if(!node.parentElement) break;
+    Array.from(node.parentElement.children).forEach(sibling=>{
+      if(sibling===node || /^(SCRIPT|STYLE|LINK)$/.test(sibling.tagName)) return;
+      entry.siblings.push([sibling,sibling.inert]); sibling.inert=true;
+    });
+  }
+  dialogStack.push(entry);
+  (root.querySelector('button:not([disabled]),input,select,textarea,a[href]') || root).focus();
+}
+function closeDialogFocus(root){
+  const index=dialogStack.findIndex(x=>x.root===root); if(index<0) return;
+  // Close any nested dialog first so its saved inert state cannot leak.
+  while(dialogStack.length>index){
+    const entry=dialogStack.pop(); entry.siblings.forEach(([el,state])=>el.inert=state);
+    entry.root.removeAttribute('aria-modal');
+    if(entry.previous && entry.previous.isConnected) entry.previous.focus();
+  }
+}
+document.addEventListener('keydown',e=>{
+  const entry=dialogStack[dialogStack.length-1]; if(!entry) return;
+  if(e.key==='Escape'){ e.preventDefault(); e.stopImmediatePropagation(); entry.onClose(); return; }
+  if(e.key!=='Tab') return;
+  const focusable=Array.from(entry.root.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]')).filter(el=>el.getClientRects().length && !el.closest('[inert]'));
+  const first=focusable[0],last=focusable[focusable.length-1];
+  if(!first){e.preventDefault();entry.root.focus();}
+  else if(e.shiftKey && (document.activeElement===first || !entry.root.contains(document.activeElement))){e.preventDefault();last.focus();}
+  else if(!e.shiftKey && (document.activeElement===last || !entry.root.contains(document.activeElement))){e.preventDefault();first.focus();}
+},true);

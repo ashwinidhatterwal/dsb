@@ -1,3 +1,5 @@
+> Updating an existing shop? Follow **UPDATE-INSTRUCTIONS.md** first. This version changes checkout and Pages deployment.
+
 # Dhatterwal Suhag Bhandar — Setup Guide
 
 ## What you have
@@ -46,187 +48,7 @@ In the same spreadsheet, create five tabs named exactly:
    `reviews-template-for-google-sheets.csv` for the header row. Columns:
    `id, productId, name, rating, comment, date`. Leave it empty otherwise — the
    site fills it in as customers leave feedback.
-3. **Orders** — new blank sheet tab, renamed to `Orders`. Import
-   `orders-template-for-google-sheets.csv` for the header row. Columns:
-   `orderId, date, customerName, phone, address, paymentMethod, promoCode,
-   discount, items, total, status`. Also stays empty until customers start
-   ordering.
-4. **Promos** — new blank sheet tab, renamed to `Promos`. Import
-   `promos-template-for-google-sheets.csv` for the header row and two example
-   rows. Columns: `code, type, value, active, maxUses, onePerCustomer`.
-   - `type` is either `percent` (e.g. 10 = 10% off) or `flat` (e.g. 50 = ₹50 off).
-   - `active` must be exactly `yes` or `no` — only `yes` rows are ever sent to
-     the site, so setting a code to `no` retires it instantly without deleting
-     the row (handy for re-using a seasonal code later).
-   - `maxUses` is optional — leave blank for unlimited total redemptions, or
-     set a number to cap how many times that code can be used across all
-     customers combined.
-   - `onePerCustomer` is `yes` or `no` — `yes` means each phone number can use
-     that code once, ever, checked automatically against your Orders history.
-   - Both limits are checked on the server when an order comes in, never
-     trusted from the browser — even if someone tampers with the page, an
-     already-used or maxed-out code just gets silently dropped and the order
-     is saved at full price instead.
-   - This tab is optional — if you never create it, the promo code box on the
-     site simply won't find any valid codes; nothing breaks.
-5. **OrderItems** — new blank sheet tab, renamed to `OrderItems`. Import
-   `order-items-template-for-google-sheets.csv` for the header row and leave
-   it empty. Columns: `orderId, date, productId, productName, category,
-   subcategory, qty, unitPrice, costPrice, lineRevenue, lineCost, lineProfit`.
-   - You never fill this in yourself — one row per product gets written here
-     automatically every time an order is placed, snapshotting that product's
-     price and cost **at that exact moment**. If you change a price next
-     month, past rows here still reflect what was actually charged, so your
-     profit history never silently rewrites itself.
-   - This is what the Dashboard tab's "top products" and "month profit"
-     figures are calculated from. It's also optional — skip this tab and
-     everything else keeps working, you just won't get profit/top-product
-     numbers on the Dashboard.
-
-Tab names are case-sensitive and must match exactly, or the API will error on
-that section.
-
-**If you already had a Products, Orders, or Promos tab from before this
-update:** you don't need to recreate them — just add the new columns as
-headers in whatever empty cells come after your existing ones (`nameHindi`,
-`costPrice`, `images` on Products; `address, paymentMethod, promoCode, discount`
-on Orders; `maxUses, onePerCustomer` on Promos). The column order doesn't
-matter, only that the header text matches. If you skip this, nothing
-breaks — the site just won't have anywhere to save that particular piece of
-information.
-
-## Step 2 — Turn the sheet into an API (Apps Script)
-
-1. In your Google Sheet: Extensions → Apps Script.
-2. Delete anything in the editor and paste the full contents of `code.gs`.
-3. Near the top, set your own secret password:
-   ```
-   const ADMIN_KEY = 'change-this-secret-key';
-   ```
-   This is the password the admin page uses to edit products and manage
-   orders — anyone with it can do both, so keep it private and change it from
-   the default before you go live.
-4. Click **Deploy → New deployment** → gear icon → **Web app**.
-   - Execute as: **Me**
-   - Who has access: **Anyone**
-5. Click Deploy, authorize the permissions Google asks for, and copy the
-   **Web app URL** (starts with `https://script.google.com/macros/s/...`).
-
-**If you're updating an existing deployment** (you already have a URL from
-before and just changed the code): use **Deploy → Manage deployments** →
-pencil/edit icon → set Version to "New version" → Deploy. This keeps your
-existing URL working, so you don't need to update `config.js` or `admin.js`
-again. Only use "New deployment" the first time, or your URL will change.
-
-## Step 2b — Silent Telegram order alerts (optional)
-
-Get a message in Telegram the instant an order is placed, without the
-customer seeing anything different. Takes about two minutes:
-
-1. In Telegram, message **@BotFather** → `/newbot` → follow the prompts. It
-   gives you a **bot token** that looks like `123456789:AAExample...`.
-2. Start a chat with your new bot (search its username, tap Start), or add
-   it to a group/channel you own.
-3. Get your **chat ID**:
-   - Send any message to the bot (or in the group), then open
-     `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser and
-     look for `"chat":{"id": ...}` in the response.
-4. Back in `code.gs`, near the top, fill in:
-   ```
-   const TELEGRAM_BOT_TOKEN = '123456789:AAExample...';
-   const TELEGRAM_CHAT_ID = '987654321'; // or '@yourchannel'
-   ```
-5. Redeploy (**Deploy → Manage deployments** → edit → New version → Deploy)
-   so the change takes effect.
-
-That's it — every order placed from the site now also pings that chat, in
-addition to saving to the Orders sheet as before. Leaving both values blank
-keeps this off entirely; nothing about checkout or the WhatsApp order
-message changes either way, and a Telegram outage never blocks an order
-from saving.
-
-## Step 3 — Point the site at your sheet
-
-Open `config.js` and set:
-```js
-SHEET_API_URL: 'https://script.google.com/macros/s/AKfycb.../exec',
-WHATSAPP_NUMBER: '918000519440', // country code + number, no + or spaces
-UPI_ID: '', // e.g. 'yourname@okicici' — leave blank to hide the UPI option
-UPI_PAYEE_NAME: 'Dhatterwal Suhag Bhandar'
-```
-This one file feeds the homepage, product pages, and (for the URL) the admin
-page's pre-filled field. If the URL is ever wrong or unreachable, the site
-automatically falls back to sample products so it never shows a broken page.
-
-Leaving `UPI_ID` blank hides the "Pay via UPI" checkout option entirely and
-only offers Cash on Delivery — nothing breaks either way, it's purely opt-in.
-
-## Step 4 — Use the admin page
-
-1. Open `admin.html` (also linked from every page's footer).
-2. The Apps Script URL is pre-filled from `config.js` — enter your admin key
-   and click **Connect & load products**. This also loads the Orders panel.
-3. **Products panel** — fill the form and click Save (leave Product ID blank
-   to auto-generate one), or click Edit/Delete on an existing row.
-4. **Orders panel** — every order placed on the site appears here automatically
-   with the customer's name, phone, delivery address, payment method, items,
-   any promo code used, and total. Change the status dropdown
-   (Pending / Fulfilled / Cancelled) and click Update to save it back
-   to the sheet. Sort by newest, oldest, or customer name, or search by name/
-   phone/order ID.
-5. The URL and admin key are only kept in that browser tab — you'll re-enter
-   the key each time you reopen `admin.html`. Don't share this page's key with
-   customers.
-
-## Step 5 — Upload real photos straight from the admin page (optional)
-
-The admin page can upload a photo directly via Cloudinary's free "unsigned
-upload" — no server needed:
-
-1. Go to cloudinary.com → sign up free → note your **Cloud name**.
-2. Settings (gear icon) → Upload → Upload presets → **Add upload preset** →
-   Signing Mode: **Unsigned** → Save, and note the preset name.
-3. In `admin.js`, fill in:
-   ```js
-   const CLOUDINARY_CLOUD_NAME = '';
-   const CLOUDINARY_UPLOAD_PRESET = '';
-   ```
-4. Reload `admin.html` — the "Upload photo" button now works.
-
-If you skip this, the "Image URL" field still works by pasting a link
-directly (e.g. from Google Drive set to "Anyone with the link", Imgur, etc.).
-
-## Step 6 — Put it online
-
-Any static hosting works since there's no server to run:
-
-- **GitHub Pages** — create a repo, upload every file except `code.gs`
-  (that one lives only in Apps Script), enable Pages in repo settings.
-- **Netlify Drop** (netlify.com/drop) — drag the folder in, get a live link
-  in seconds, no account required.
-
-Product links look like `yoursite.com/product.html?id=DSB-0001` — these work
-automatically once the site is hosted; no extra setup needed.
-
-## How the new features work
-
-**Product pages** — every product card's image/name links to its own page
-(`product.html?id=...`) with the full description, a "You may also like"
-row of related products (same category first, backfilled from others if
-there aren't enough), and the reviews section below.
-
-**Reviews** — anyone can leave a name, star rating, and comment on a
-product's page. They appear immediately (no approval step). They're stored
-in the **Reviews** tab of your sheet.
-
-**Orders** — when a customer checks out, they enter their name, phone, and
-delivery address in the cart drawer, and choose Cash on Delivery or (if
-you've set a UPI ID) Pay via UPI. The order (items, total, discount if a
-promo was used, timestamp) is saved to the **Orders** tab with status
-"Pending" *before* WhatsApp opens, so it's logged even if they don't end up
-sending the WhatsApp message. After it saves, the site shows an on-screen
-"Order placed!" confirmation with the Order ID, and the same ID is included
-in the WhatsApp message so you can match the two up.
+3. **Orders** — customers enter delivery details, choose COD or UPI, review the server-verified total, then confirm. Orders save with status Pending and show an English confirmation slip. UPI links and QR codes appear only after the order is accepted, for the accepted amount. UPI receipt is manually verified by the shop. The website does not automatically send a WhatsApp confirmation; the shop follows up. Retry records prevent duplicate orders after an interrupted connection.
 
 **Stock quantities** — leave a product's `stockQty` cell blank to ignore
 this entirely. Fill in a number and the site starts showing "Only X left"
@@ -241,8 +63,8 @@ to turn one on. Customers type it into a box in the cart drawer; valid codes
 apply the discount to the total immediately and get logged with the order.
 If you've set `maxUses` or `onePerCustomer`, the site re-checks eligibility
 one more time on the server when the order is actually placed — if a code
-has since been used up, the order still goes through, just at full price,
-and the customer sees a note that the code no longer applied.
+has since been used up, checkout stops. The customer must remove or change
+the code and review the new total before confirming.
 
 **Multiple photos** — add extra photo URLs to a product's `images` cell
 (comma-separated), or use the "Additional photos" section in the admin page

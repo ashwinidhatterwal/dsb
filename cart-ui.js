@@ -131,11 +131,12 @@ function openTrackOrder(){
   $('#trackForm').style.display = 'block';
   $('#trackResult').style.display = 'none';
   $('#trackError').style.display = 'none';
+  openDialogFocus(overlay,closeTrackOrder);
   $('#trackOrderId').focus();
 }
 function closeTrackOrder(){
   const overlay = $('#trackOverlay');
-  if (overlay) overlay.classList.remove('open');
+  if (overlay) { overlay.classList.remove('open'); closeDialogFocus(overlay); }
 }
 
 function showTrackError(msg){
@@ -271,13 +272,15 @@ function openCart(){
   renderCartDrawer();
   lockPageForCart();
   $('#cartOverlay').classList.add('open');
+  openDialogFocus($('#cartContent'),closeCart);
   fetchPromosIfNeeded();
   fetchCheckoutConfigIfNeeded().then(() => {
-    if ($('#cartOverlay') && $('#cartOverlay').classList.contains('open')) renderCartDrawer();
+    if ($('#cartOverlay')?.classList.contains('open') && !checkoutBusy && !checkoutQuote && !pendingCheckout && !$('#downloadReceiptBtn')) renderCartDrawer();
   });
 }
 function closeCart(){
   $('#cartOverlay').classList.remove('open');
+  closeDialogFocus($('#cartContent'));
   unlockPageFromCart();
 }
 
@@ -328,17 +331,13 @@ function computeDiscount(subtotal){
 
 async function fetchCheckoutConfigIfNeeded(){
   if (checkoutState.feeConfig !== null) return checkoutState.feeConfig;
-  const fallback = { deliveryFreeAbove: 0, deliveryCharge: 0, codCharge: 0 };
-  if (!CONFIG.SHEET_API_URL){ checkoutState.feeConfig = fallback; return fallback; }
-  try{
-    const res = await fetch(`${CONFIG.SHEET_API_URL}?action=checkoutConfig`, { cache: 'no-store' });
-    const data = await res.json();
-    checkoutState.feeConfig = {
-      deliveryFreeAbove: Math.max(0, Number(data.deliveryFreeAbove) || 0),
-      deliveryCharge: Math.max(0, Number(data.deliveryCharge) || 0),
-      codCharge: Math.max(0, Number(data.codCharge) || 0)
-    };
-  } catch(err){ checkoutState.feeConfig = fallback; }
+  if (!CONFIG.SHEET_API_URL) return null;
+  try {
+    const data = await requestJson(`${CONFIG.SHEET_API_URL}?action=checkoutConfig`);
+    if (data.checkoutVersion !== 2) throw new Error('Checkout update required.');
+    if (!['deliveryFreeAbove','deliveryCharge','codCharge'].every(k=>Number.isFinite(Number(data[k])) && Number(data[k])>=0)) throw new Error('Invalid checkout settings.');
+    checkoutState.feeConfig = data;
+  } catch(err) { /* Keep fees unknown, never silently treat a failed request as free delivery. */ }
   return checkoutState.feeConfig;
 }
 
@@ -352,13 +351,14 @@ function computeCheckoutTotals(subtotal){
 }
 
 /* ---------------- UPI ---------------- */
-function buildUpiLink(amount){
+function buildUpiLink(amount, orderId){
   const params = new URLSearchParams({
     pa: CONFIG.UPI_ID,
     pn: CONFIG.UPI_PAYEE_NAME || CONFIG.SHOP_NAME,
     am: amount.toFixed(2),
     cu: 'INR',
-    tn: `Order at ${CONFIG.SHOP_NAME}`
+    tn: orderId ? `Order ${orderId}` : `Order at ${CONFIG.SHOP_NAME}`,
+    ...(orderId ? {tr:orderId} : {})
   });
   return `upi://pay?${params.toString()}`;
 }
@@ -366,9 +366,13 @@ function buildUpiLink(amount){
 /* ---------------- Cart drawer ---------------- */
 function renderCartDrawer(){
   const wrap = $('#cartContent');
+  if (pendingCheckout) { renderPendingCheckout(); return; }
+  if (checkoutQuote) { renderCheckoutReview(); return; }
+  const focusId = wrap.contains(document.activeElement) ? document.activeElement.id : '';
   const previousScroll = $('#cartMain') ? $('#cartMain').scrollTop : 0;
   const cart = CartStore.getAll();
   const items = Object.values(cart);
+  try { if(!lastReceipt) lastReceipt=JSON.parse(localStorage.getItem('dsb_last_receipt_v2') || 'null'); } catch(_){}
 
   if (!items.length){
     wrap.innerHTML = `
@@ -380,6 +384,7 @@ function renderCartDrawer(){
         <div class="cart-empty"><div class="cart-empty-icon">🛍️</div><strong>Your cart is empty</strong><br><span>Add a few things from the shop and they will appear here.</span></div>
       </div>`;
     $('#cartClose').addEventListener('click', closeCart);
+    if(lastReceipt){const b=document.createElement('button');b.type='button';b.className='ghost-btn';b.textContent='View last order';b.onclick=()=>renderOrderConfirmation(lastReceipt);wrap.appendChild(b);}
     return;
   }
 
@@ -442,7 +447,7 @@ function renderCartDrawer(){
             <label class="pay-option"><input type="radio" name="payMethod" value="COD" ${checkoutState.paymentMethod === 'COD' ? 'checked' : ''}> <span>Cash on Delivery</span></label>
             ${showUpi ? `<label class="pay-option"><input type="radio" name="payMethod" value="UPI" ${checkoutState.paymentMethod === 'UPI' ? 'checked' : ''}> <span>Pay via UPI</span></label>` : ''}
           </div>
-          ${(showUpi && checkoutState.paymentMethod === 'UPI') ? `<div class="upi-box"><img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(buildUpiLink(grandTotal))}" alt="UPI QR code" width="140" height="140"><a class="ghost-btn" href="${buildUpiLink(grandTotal)}">Open UPI app</a><p class="hint">Scan or tap, then send your order below.</p></div>` : ''}
+          ${(showUpi && checkoutState.paymentMethod === 'UPI') ? '<p class="hint">UPI payment opens after your order is saved with the confirmed total.</p>' : ''}
         </div>
         <div class="cart-total-box">
           <div class="row"><span>Items</span><span>${CartStore.count()}</span></div>
@@ -451,10 +456,10 @@ function renderCartDrawer(){
           ${deliveryCharge > 0 ? `<div class="row"><span>Delivery</span><span>${money(deliveryCharge)}</span></div>` : ''}
           ${codCharge > 0 ? `<div class="row"><span>Cash on Delivery fee</span><span>${money(codCharge)}</span></div>` : ''}
           ${(checkoutState.feeConfig && checkoutState.feeConfig.deliveryCharge > 0 && deliveryCharge === 0) ? `<div class="row fee-free"><span>Delivery</span><span>FREE</span></div>` : ''}
-          <div class="row total"><span>Total</span><span>${money(grandTotal)}</span></div>
+          <div class="row total"><span>${checkoutState.feeConfig ? 'Estimated total' : 'Subtotal — fees checked next'}</span><span>${money(grandTotal)}</span></div>
         </div>
         ${checkoutState.feeConfig && checkoutState.feeConfig.deliveryCharge > 0 ? `<p class="checkout-fee-note">Free delivery on orders of ${money(checkoutState.feeConfig.deliveryFreeAbove)} or more.</p>` : ''}
-        <button class="primary-btn" id="orderWaBtn" type="button">Place order</button>
+        <p class="hint">Review the final total before confirming your order.</p><div class="checkout-honeypot" aria-hidden="true"><label>Website<input id="orderWebsite" tabindex="-1" autocomplete="off"></label></div><button class="primary-btn" id="orderWaBtn" type="button">Review order</button>
         <button class="ghost-btn cart-clear" id="clearCartBtn" type="button">Clear cart</button>
       </div>
     </div>`;
@@ -483,7 +488,7 @@ function renderCartDrawer(){
   $$('input[name="payMethod"]', wrap).forEach(radio => radio.addEventListener('change', e => { checkoutState.paymentMethod = e.target.value; saveCheckoutInfo(); renderCartDrawer(); }));
   $('#orderWaBtn').addEventListener('click', submitOrder);
   $('#clearCartBtn').addEventListener('click', () => { if (confirm('Clear all items from your cart?')) { CartStore.clear(); updateCartBadge(); renderCartDrawer(); } });
-  requestAnimationFrame(() => { const main = $('#cartMain'); if (main) main.scrollTop = Math.min(previousScroll, main.scrollHeight); });
+  requestAnimationFrame(() => { const main = $('#cartMain'); if (main) main.scrollTop = Math.min(previousScroll, main.scrollHeight); if (focusId) document.getElementById(focusId)?.focus({preventScroll:true}); });
 }
 
 function renderOrderConfirmation(receipt){
@@ -496,6 +501,8 @@ function renderOrderConfirmation(receipt){
       <h2>Your order is confirmed</h2>
       ${orderId ? `<p class="confirm-id">Order ID: <strong>${escapeHtml(orderId)}</strong></p>` : ''}
       <p class="confirm-message">Your order has been received successfully. You will get a confirmation message on WhatsApp shortly.</p>
+      <p><strong>Order total: ${money(receipt.total)}</strong></p>
+      ${receipt.paymentMethod === 'UPI' && CONFIG.UPI_ID ? `<div class="upi-box"><p>Payment is not yet verified. Pay ${money(receipt.total)} using the link below. If you have already paid for this order, do not pay again.</p><img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&amp;data=${encodeURIComponent(buildUpiLink(receipt.total,orderId))}" alt="UPI payment QR code" width="140" height="140"><a class="primary-btn" href="${escapeHtml(buildUpiLink(receipt.total,orderId))}">Open UPI app</a><p>UPI ID: ${escapeHtml(CONFIG.UPI_ID)} · Reference: ${escapeHtml(orderId)}</p></div>` : ''}
       <div class="confirm-actions">
         <button class="primary-btn" id="downloadReceiptBtn" type="button">⬇ Download order slip</button>
         <button class="ghost-btn" id="confirmCloseBtn" type="button">Continue shopping</button>
@@ -505,6 +512,7 @@ function renderOrderConfirmation(receipt){
   $('#cartClose').addEventListener('click', close);
   $('#confirmCloseBtn').addEventListener('click', close);
   $('#downloadReceiptBtn').addEventListener('click', () => downloadReceipt(receipt));
+  $('#downloadReceiptBtn').focus();
 }
 
 function downloadReceipt(receipt){
@@ -528,108 +536,114 @@ function downloadReceipt(receipt){
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+const PENDING_CHECKOUT_KEY = 'dsb_pending_checkout_v2';
+let checkoutBusy = false, checkoutQuote = null, pendingCheckout = null;
+try { pendingCheckout = JSON.parse(localStorage.getItem(PENDING_CHECKOUT_KEY) || 'null'); } catch (_) {}
+if (pendingCheckout && (!pendingCheckout.order || !pendingCheckout.requestId)) pendingCheckout = null;
+async function postCheckout(action,body){
+  if (!CONFIG.SHEET_API_URL) throw new Error('Checkout is unavailable in demo mode.');
+  return requestJson(CONFIG.SHEET_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,...body})},30000);
+}
+function checkoutOrderFromForm(){
+  return {customerName:checkoutState.name.trim(),phone:checkoutState.phone.trim(),address:checkoutState.address.trim(),paymentMethod:checkoutState.paymentMethod==='UPI'?'UPI':'Cash on Delivery',promoCode:checkoutState.appliedPromo?.code || '',itemsDetail:Object.values(CartStore.getAll()).map(({product,qty})=>({id:product.id,qty})),website:$('#orderWebsite')?.value || ''};
+}
 async function submitOrder(){
-  const items = Object.values(CartStore.getAll());
-  if (!items.length) return;
-
-  const name = checkoutState.name.trim();
-  const phone = checkoutState.phone.trim();
-  const address = checkoutState.address.trim();
-  if (!name || !phone || !address){
-    showToast('Please fill in your name, phone, and delivery address');
-    return;
-  }
-
-  const btn = $('#orderWaBtn');
-  if (btn){ btn.disabled = true; btn.textContent = 'Checking stock…'; }
-
-  const localSubtotal = CartStore.total();
-  const paymentMethod = checkoutState.paymentMethod === 'UPI' ? 'UPI' : 'Cash on Delivery';
-  const promoCode = checkoutState.appliedPromo ? checkoutState.appliedPromo.code : '';
-  const itemsDetail = items.map(({product, qty}) => ({ id: product.id, qty }));
-  let data = null;
-
-  if (CONFIG.SHEET_API_URL){
-    try{
-      const res = await fetch(CONFIG.SHEET_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'addOrder',
-          order: {
-            customerName: name,
-            phone,
-            address,
-            paymentMethod,
-            promoCode,
-            // These are display hints only. The server ignores them for money
-            // calculations and rebuilds price/stock from the Products sheet.
-            subtotal: localSubtotal,
-            itemsDetail
-          }
-        })
-      });
-      data = await res.json();
-      if (!data || data.success !== true || !data.orderId){
-        throw new Error((data && data.error) || 'The order could not be accepted.');
-      }
-    } catch(err){
-      console.error('Could not save order to sheet', err);
-      if (btn){ btn.disabled = false; btn.textContent = 'Place order'; }
-      const msg = String(err && err.message || err);
-      showToast(msg.length > 90 ? 'Could not place order. Please try again.' : msg);
-      // Refresh the catalog after a server-side stock rejection so the cart
-      // immediately reflects the authoritative quantity.
-      if (typeof loadAllProducts === 'function'){
-        try{
-          await loadAllProducts();
-          if (typeof CartStore.syncWithCatalog === 'function') CartStore.syncWithCatalog(ALL_PRODUCTS || []);
-          renderCartDrawer();
-        } catch (_) {}
-      }
-      return;
+  if (checkoutBusy) return;
+  const order = checkoutOrderFromForm();
+  if (!order.itemsDetail.length) return;
+  if (order.customerName.length<2 || !/^\+?[\d\s()-]{10,20}$/.test(order.phone) || order.address.length<5){showToast('Please fill in a valid name, phone number and delivery address.');return;}
+  checkoutBusy=true;
+  const btn=$('#orderWaBtn'); if(btn){btn.disabled=true;btn.textContent='Checking stock…';}
+  try {
+    const data=await postCheckout('quoteOrder',{order});
+    if(data.success!==true || !data.quoteToken) throw new Error(data.error || 'Checkout needs an update. Please contact the shop.');
+    checkoutQuote={order,quote:data}; renderCheckoutReview();
+  } catch(err){showCheckoutError(err.message);}
+  finally{checkoutBusy=false;if(btn?.isConnected){btn.disabled=false;btn.textContent='Review order';}}
+}
+function showCheckoutError(message){
+  let el=$('#checkoutError');
+  if(!el){el=document.createElement('p');el.id='checkoutError';el.className='statusline err';el.setAttribute('role','alert');$('#cartContent').appendChild(el);}
+  el.textContent=message;el.scrollIntoView({block:'nearest'});
+}
+function renderCheckoutReview(message=''){
+  if(!checkoutQuote) return;
+  const {order,quote:q}=checkoutQuote;
+  $('#cartContent').innerHTML=`<button class="closebtn" id="cartClose" aria-label="Close cart">✕</button><section class="checkout-review"><h2>Review your order</h2>${message?`<p role="alert">${escapeHtml(message)}</p>`:''}<p>${escapeHtml(order.customerName)} · ${escapeHtml(order.phone)}</p><p>${escapeHtml(order.address)}</p><ul>${q.items.map(x=>`<li>${escapeHtml(x.name)} × ${x.qty} — ${money(x.lineTotal)}</li>`).join('')}</ul><div class="cart-total-box"><div class="row"><span>Subtotal</span><span>${money(q.subtotal)}</span></div><div class="row"><span>Discount</span><span>−${money(q.discount)}</span></div><div class="row"><span>Delivery</span><span>${money(q.deliveryCharge)}</span></div><div class="row"><span>Cash on Delivery fee</span><span>${money(q.codCharge)}</span></div><div class="row total"><span>Total</span><span>${money(q.correctedTotal)}</span></div></div><p>${order.paymentMethod==='UPI'?'UPI payment opens after your order is saved with the confirmed total.':'Payment is due at delivery.'}</p><button class="primary-btn" id="confirmOrderBtn">Confirm order</button><button class="ghost-btn" id="editCheckoutBtn">Edit details</button></section>`;
+  $('#cartClose').onclick=closeCart;
+  $('#editCheckoutBtn').onclick=()=>{if(checkoutBusy)return;checkoutQuote=null;renderCartDrawer();$('#custName')?.focus();};
+  $('#confirmOrderBtn').onclick=confirmCheckout;
+  $('#confirmOrderBtn').focus();
+}
+async function confirmCheckout(){
+  if(navigator.locks?.request) return navigator.locks.request('dsb-checkout',confirmCheckoutUnlocked);
+  return confirmCheckoutUnlocked();
+}
+async function confirmCheckoutUnlocked(){
+  if(checkoutBusy || !checkoutQuote)return;
+  // An uncertain previous attempt must be checked before any new request ID is created.
+  try { pendingCheckout=JSON.parse(localStorage.getItem(PENDING_CHECKOUT_KEY) || 'null'); } catch(_){}
+  if(pendingCheckout){renderPendingCheckout();return;}
+  const cart=CartStore.getAll();
+  if(checkoutQuote.order.itemsDetail.some(x=>!cart[x.id] || cart[x.id].qty<x.qty)){checkoutQuote=null;renderCartDrawer();showCheckoutError('Your cart changed in another tab. Please review it again.');return;}
+  pendingCheckout={requestId:newCheckoutId(),order:checkoutQuote.order,quoteToken:checkoutQuote.quote.quoteToken};
+  try {localStorage.setItem(PENDING_CHECKOUT_KEY,JSON.stringify(pendingCheckout));}
+  catch(_){pendingCheckout=null;showCheckoutError('Allow browser storage to place an order safely, or contact the shop.');return;}
+  await sendPendingCheckout();
+}
+async function sendPendingCheckout(){
+  if(checkoutBusy || !pendingCheckout)return;
+  checkoutBusy=true;renderPendingCheckout();
+  try{
+    const p=pendingCheckout;
+    const data=await postCheckout('addOrder',{order:{...p.order,requestId:p.requestId,quoteToken:p.quoteToken}});
+    if(data.success===true && data.orderId){completeCheckout(data,p.order);return;}
+    if(data.code==='quote_changed' && data.quote){
+      clearPendingCheckout();checkoutQuote={order:p.order,quote:data.quote};renderCheckoutReview(data.error);return;
     }
-  } else {
-    // Local/demo mode is only for local UI testing. Production configuration should always
-    // have SHEET_API_URL set, so real orders cannot bypass server validation.
-    data = {
-      success: true,
-      orderId: '',
-      subtotal: localSubtotal,
-      discount: computeCheckoutTotals(localSubtotal).discount,
-      deliveryCharge: computeCheckoutTotals(localSubtotal).deliveryCharge,
-      codCharge: computeCheckoutTotals(localSubtotal).codCharge,
-      correctedTotal: computeCheckoutTotals(localSubtotal).grandTotal,
-      items: items.map(({product, qty}) => ({ id: product.id, name: product.name, qty, unitPrice: Number(product.price) || 0, lineTotal: (Number(product.price) || 0) * qty }))
-    };
-  }
-
-  const verifiedItems = Array.isArray(data.items) ? data.items : [];
-  const finalDiscount = Number(data.discount) || 0;
-  const finalDeliveryCharge = Number(data.deliveryCharge) || 0;
-  const finalCodCharge = Number(data.codCharge) || 0;
-  const finalTotal = Number(data.correctedTotal) || 0;
-
-  if (data.promoRejected) showToast('That promo code no longer applies — order placed at full price');
-
-  lastReceipt = {
-    orderId: data.orderId || '',
-    orderDate: data.orderDate || new Date().toISOString(),
-    name, phone, address, paymentMethod, promoCode,
-    subtotal: Number(data.subtotal) || localSubtotal,
-    discount: finalDiscount,
-    deliveryCharge: finalDeliveryCharge,
-    codCharge: finalCodCharge,
-    total: finalTotal,
-    items: verifiedItems
-  };
-
-  CartStore.clear();
-  updateCartBadge();
-  checkoutState.promoInput = '';
-  checkoutState.appliedPromo = null;
-  checkoutState.promoStatus = '';
-  renderOrderConfirmation(lastReceipt);
-  if (typeof renderGrid === 'function') renderGrid();
-  if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard();
+    // Only explicit pre-commit validation failures let the shopper edit immediately.
+    if(['invalid_promo','insufficient_stock','upgrade_required','validation_failed'].includes(data.code)){
+      clearPendingCheckout();checkoutQuote=null;renderCartDrawer();showCheckoutError(data.error);return;
+    }
+    renderPendingCheckout(data.error || 'Please check this order before trying again.');
+  }catch(err){renderPendingCheckout('The connection was interrupted. Check this order before placing another one.');}
+  finally{checkoutBusy=false;$('#retryCheckoutBtn')?.removeAttribute('disabled');}
+}
+function renderPendingCheckout(message=''){
+  $('#cartContent').innerHTML=`<button class="closebtn" id="cartClose" aria-label="Close cart">✕</button><section class="checkout-review"><h2>Checking your order</h2><p role="status">${escapeHtml(message || (checkoutBusy?'Saving your order…':'A previous order attempt needs to be checked.'))}</p><p>Checking again will not create a duplicate order.</p><button class="primary-btn" id="retryCheckoutBtn" ${checkoutBusy?'disabled':''}>Check order status</button></section>`;
+  $('#cartClose').onclick=closeCart;$('#retryCheckoutBtn').onclick=checkPendingCheckout;
+  if(!checkoutBusy)$('#retryCheckoutBtn').focus();
+}
+async function checkPendingCheckout(){
+  if(checkoutBusy || !pendingCheckout)return;
+  checkoutBusy=true;renderPendingCheckout();
+  try{
+    const p=pendingCheckout,data=await postCheckout('orderResult',{requestId:p.requestId,phone:p.order.phone});
+    if(data.success && data.orderId){completeCheckout(data,p.order);return;}
+    if(data.code==='not_found'){
+      renderPendingCheckout('No saved order was found yet. Retry this same order safely.');
+      $('#retryCheckoutBtn').textContent='Retry same order';
+      $('#retryCheckoutBtn').onclick=sendPendingCheckout;
+    }else renderPendingCheckout(data.error || 'Still checking. Please try again shortly.');
+  }catch(err){renderPendingCheckout('Could not check your order yet. Please try again shortly.');}
+  finally{checkoutBusy=false;$('#retryCheckoutBtn')?.removeAttribute('disabled');}
+}
+function clearPendingCheckout(){pendingCheckout=null;try{localStorage.removeItem(PENDING_CHECKOUT_KEY);}catch(_){}}
+function completeCheckout(data,order){
+  lastReceipt={orderId:data.orderId,orderDate:data.orderDate,name:order.customerName,phone:order.phone,address:order.address,paymentMethod:order.paymentMethod,promoCode:data.promoCode || '',subtotal:data.subtotal,discount:data.discount,deliveryCharge:data.deliveryCharge,codCharge:data.codCharge,total:data.correctedTotal,items:data.items};
+  try { localStorage.setItem('dsb_last_receipt_v2',JSON.stringify(lastReceipt)); } catch(_){}
+  // Clear only quantities actually ordered. Items added in another tab are preserved.
+  const current=CartStore.getAll();
+  order.itemsDetail.forEach(item=>{const entry=current[item.id];if(entry)CartStore.add(entry.product,-Math.min(entry.qty,item.qty));});
+  clearPendingCheckout();checkoutQuote=null;checkoutState.promoInput='';checkoutState.appliedPromo=null;checkoutState.promoStatus='';
+  try{sessionStorage.removeItem(CATALOG_SESSION_KEY);}catch(_){}
+  updateCartBadge();renderOrderConfirmation(lastReceipt);
+  if(typeof renderGrid==='function')renderGrid();
+  if(typeof refreshCurrentProductCard==='function')refreshCurrentProductCard();
+  if(typeof loadAllProducts==='function') loadAllProducts({force:true}).then(()=>{
+    if(typeof CURRENT_PRODUCT!=='undefined' && CURRENT_PRODUCT) CURRENT_PRODUCT=ALL_PRODUCTS.find(p=>p.id===CURRENT_PRODUCT.id) || null;
+    if(typeof renderGrid==='function')renderGrid();
+    if(typeof renderHomeCarousels==='function')renderHomeCarousels();
+    if(typeof refreshCurrentProductCard==='function')refreshCurrentProductCard();
+  }).catch(()=>{});
 }

@@ -3,11 +3,25 @@
 (function(){
   'use strict';
   const KEY='dsb_customer_lang';
-  let lang = localStorage.getItem(KEY) === 'hi' ? 'hi' : 'en';
+  let lang='en';try{lang=localStorage.getItem(KEY)==='hi'?'hi':'en';}catch(_){}
   const originalText = new WeakMap();
   const originalAttrs = new WeakMap();
 
   const HI = {
+    'Review order':'ऑर्डर देखें','Review your order':'अपना ऑर्डर देखें','Confirm order':'ऑर्डर की पुष्टि करें','Edit details':'जानकारी बदलें',
+    'Estimated total':'अनुमानित कुल','Subtotal — fees checked next':'उप-कुल — शुल्क अगले चरण में',
+    'Review the final total before confirming your order.':'ऑर्डर की पुष्टि से पहले अंतिम कुल राशि देखें।',
+    'UPI payment opens after your order is saved with the confirmed total.':'ऑर्डर अंतिम राशि के साथ दर्ज होने के बाद UPI भुगतान खुलेगा।',
+    'Payment is due at delivery.':'भुगतान डिलीवरी के समय करना है।',
+    'Could not load the catalogue. Please try again.':'उत्पाद सूची लोड नहीं हो सकी। कृपया फिर से कोशिश करें।',
+    'Checking your order':'आपका ऑर्डर जाँचा जा रहा है','Check order status':'ऑर्डर की स्थिति जाँचें','Retry same order':'इसी ऑर्डर के लिए फिर कोशिश करें',
+    'Saving your order…':'आपका ऑर्डर दर्ज हो रहा है…','View last order':'पिछला ऑर्डर देखें',
+    'Checking again will not create a duplicate order.':'दोबारा जाँचने से दूसरा ऑर्डर नहीं बनेगा।',
+    'A previous order attempt needs to be checked.':'पिछले ऑर्डर प्रयास की स्थिति जाँचना जरूरी है।',
+    'The connection was interrupted. Check this order before placing another one.':'कनेक्शन टूट गया था। नया ऑर्डर देने से पहले इस ऑर्डर की जाँच करें।',
+    'No saved order was found yet. Retry this same order safely.':'अभी दर्ज ऑर्डर नहीं मिला। इसी ऑर्डर के लिए दोबारा कोशिश करें।',
+    'Could not check your order yet. Please try again shortly.':'ऑर्डर की जाँच नहीं हो सकी। थोड़ी देर बाद फिर कोशिश करें।',
+
     'Suhag Bhandar':'सुहाग भंडार',
     'Search lipstick, notebook, shampoo…':'लिपस्टिक, नोटबुक, शैम्पू खोजें…',
     'Search the shop…':'दुकान में खोजें…','Search products…':'उत्पाद खोजें…',
@@ -146,10 +160,10 @@
     let n; while((n=tw.nextNode())) n.nodeType===Node.TEXT_NODE?translateTextNode(n):translateElement(n);
     document.documentElement.lang=lang==='hi'?'hi':'en';
     const page=(location.pathname.split('/').pop()||'index.html'); if(page!=='product.html') document.title=lang==='hi'?(TITLES_HI[page]||ORIGINAL_TITLE):ORIGINAL_TITLE;
-    document.querySelectorAll('.lang-toggle').forEach(b=>{b.textContent=lang==='hi'?'EN':'हिं'; b.setAttribute('aria-label',lang==='hi'?'Switch to English':'हिंदी में देखें');});
+    document.querySelectorAll('.lang-toggle').forEach(b=>{const label=lang==='hi'?'EN':'हिं';if(b.textContent!==label)b.textContent=label; b.setAttribute('aria-label',lang==='hi'?'Switch to English':'हिंदी में देखें');});
   }
   function setLang(next){
-    lang=next==='hi'?'hi':'en'; localStorage.setItem(KEY,lang); translateTree(document.body);
+    lang=next==='hi'?'hi':'en'; try{localStorage.setItem(KEY,lang);}catch(_){} translateTree(document.body);
     document.dispatchEvent(new CustomEvent('dsb:languagechange',{detail:{lang}}));
   }
   function init(){
