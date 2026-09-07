@@ -91,3 +91,18 @@ credible. Update the `og:image` / `twitter:image` lines in `index.html`'s
 None of this produces results overnight — search engines re-crawl on their
 own schedule, typically days to a couple of weeks for a small site. Google
 Search Console is how you'll actually see it taking effect.
+## Search favicon
+
+The site now declares `/favicon-48.png` (48×48), `/favicon-96.png`, `/favicon.ico`, and `/apple-touch-icon.png` on every customer-facing page. These use the same cart-style app logo. Google may take time to recrawl and replace the generic globe icon in Search results.
+
+
+
+## Product discovery patch (2026-09)
+
+This build adds a lightweight `/catalog.html` discovery page linked from customer pages and listed in the sitemap. It loads the same live product source as the storefront and emits normal crawlable `<a href="product.html?id=...">` links plus an `ItemList` JSON-LD block.
+
+Each product page now sets its canonical URL immediately from the `id` query parameter, then injects accurate `Product` + `Offer` JSON-LD from the live product record. Availability, price and reviews are never invented. Invalid product URLs are not intended for indexing.
+
+After deployment, submit `https://suhagbhandar.in/sitemap.xml` in Google Search Console and use URL Inspection on `/catalog.html` and two or three representative product URLs. Rich Results Test should report the rendered Product structured data for a valid product page.
+
+Do not create fake brands, GTINs, MPNs, ratings, shipping promises or stock values just to satisfy optional structured-data warnings. Accurate partial data is safer than inaccurate complete-looking data.

@@ -56,21 +56,40 @@ function lowStockLabel(p){
 }
 
 async function loadAllProducts(){
+  const normalizePayload = (payload) => {
+    // Current backend returns an array. Accept {products:[...]} too so a
+    // backend wrapper/change cannot silently break every product page.
+    if (Array.isArray(payload)) return payload;
+    if (payload && Array.isArray(payload.products)) return payload.products;
+    if (payload && payload.error) throw new Error(payload.error);
+    throw new Error('Unexpected products response');
+  };
+
+  const fetchJson = async (url) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try{
+      const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   try{
     let rows;
     if (CONFIG.SHEET_API_URL){
-      const res = await fetch(CONFIG.SHEET_API_URL + '?action=products', { cache: 'no-store' });
-      rows = await res.json();
+      rows = normalizePayload(await fetchJson(CONFIG.SHEET_API_URL + '?action=products'));
     } else {
-      const res = await fetch(CONFIG.FALLBACK_FILE, { cache: 'no-store' });
-      rows = await res.json();
+      rows = normalizePayload(await fetchJson(CONFIG.FALLBACK_FILE));
     }
     ALL_PRODUCTS = normalizeRows(rows);
   } catch(err){
     console.error('Failed to load products, trying fallback file', err);
     try{
-      const res = await fetch(CONFIG.FALLBACK_FILE, { cache: 'no-store' });
-      ALL_PRODUCTS = normalizeRows(await res.json());
+      const rows = normalizePayload(await fetchJson(CONFIG.FALLBACK_FILE));
+      ALL_PRODUCTS = normalizeRows(rows);
     } catch(err2){
       console.error('Fallback also failed', err2);
       ALL_PRODUCTS = [];

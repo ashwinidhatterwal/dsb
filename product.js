@@ -23,24 +23,54 @@ function renderProductSkeleton(){
 }
 
 async function init(){
-  const id = getProductIdFromUrl();
+  const root = $('#pdRoot');
+  const id = getProductIdFromUrl().trim();
   renderProductSkeleton();
-  const reviewsPromise = loadReviewSummaries(); // powers the rating shown on "You may also like" cards
-  await loadAllProducts();
-  const product = ALL_PRODUCTS.find(p => p.id === id);
-  if (!product){
-    $('#pdRoot').innerHTML = `
+
+  if (!id){
+    root.innerHTML = `
       <div class="empty-state" style="padding:60px 16px;">
-        Couldn't find that product.<br>
+        This product link is incomplete.<br>
         <a href="index.html" class="ghost-btn" style="display:inline-block; margin-top:12px; text-decoration:none;">← Back to shop</a>
       </div>`;
     return;
   }
-  CURRENT_PRODUCT = product;
-  renderProduct(product);
-  renderRelated(product);
-  loadReviews(product.id);
-  reviewsPromise.then(() => renderRelated(product)); // re-draw once ratings land, so stars aren't missing on first paint
+
+  try{
+    // Ratings are optional decoration; they must never prevent the actual
+    // product from loading if an older cached shared script is present.
+    const reviewsPromise = (typeof loadReviewSummaries === 'function')
+      ? loadReviewSummaries().catch(() => ({}))
+      : Promise.resolve({});
+
+    await loadAllProducts();
+    const product = ALL_PRODUCTS.find(p => String(p.id).trim() === id);
+    if (!product){
+      root.innerHTML = `
+        <div class="empty-state" style="padding:60px 16px;">
+          Couldn't find that product.<br>
+          <a href="index.html" class="ghost-btn" style="display:inline-block; margin-top:12px; text-decoration:none;">← Back to shop</a>
+        </div>`;
+      return;
+    }
+
+    CURRENT_PRODUCT = product;
+    renderProduct(product);
+    renderRelated(product);
+    loadReviews(product.id);
+    reviewsPromise.then(() => {
+      if (CURRENT_PRODUCT && CURRENT_PRODUCT.id === product.id) renderRelated(product);
+    });
+  } catch(err){
+    console.error('Product page failed to initialise', err);
+    root.innerHTML = `
+      <div class="empty-state" style="padding:60px 16px;">
+        Couldn't load this product right now.<br>
+        <button type="button" class="ghost-btn" id="pdRetryBtn" style="margin-top:12px;">Try again</button>
+        <a href="index.html" class="ghost-btn" style="display:inline-block; margin-top:12px; text-decoration:none;">← Back to shop</a>
+      </div>`;
+    $('#pdRetryBtn')?.addEventListener('click', init, { once:true });
+  }
 }
 
 function renderProduct(p){
@@ -221,6 +251,7 @@ function bindGallerySwipe(){
 /* ---------------- SEO: per-product tags + structured data ---------------- */
 function updateSeoTags(p){
   const url = `${CONFIG.SITE_URL}/product.html?id=${encodeURIComponent(p.id)}`;
+  const imageUrl = (() => { try { return new URL(p.image, CONFIG.SITE_URL + '/').href; } catch (_) { return p.image; } })();
   const title = `${p.name} — ${CONFIG.SHOP_NAME}`;
   const desc = (p.description && p.description.trim())
     ? p.description.trim().slice(0, 155)
@@ -230,15 +261,17 @@ function updateSeoTags(p){
   const setMeta = (id, attr, value) => { const el = document.getElementById(id); if (el) el.setAttribute(attr, value); };
   const descTag = document.querySelector('meta[name="description"]');
   if (descTag) descTag.setAttribute('content', desc);
+  const robotsTag = document.querySelector('meta[name="robots"]');
+  if (robotsTag) robotsTag.setAttribute('content', 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1');
 
   setMeta('canonicalLink', 'href', url);
   setMeta('ogTitle', 'content', title);
   setMeta('ogDescription', 'content', desc);
   setMeta('ogUrl', 'content', url);
-  setMeta('ogImage', 'content', p.image);
+  setMeta('ogImage', 'content', imageUrl);
   setMeta('twitterTitle', 'content', title);
   setMeta('twitterDescription', 'content', desc);
-  setMeta('twitterImage', 'content', p.image);
+  setMeta('twitterImage', 'content', imageUrl);
 }
 
 // Injects Product + BreadcrumbList JSON-LD, adding AggregateRating once real
@@ -246,11 +279,14 @@ function updateSeoTags(p){
 // one genuine review, since Google disallows rating markup with no basis).
 function updateStructuredData(p, reviews){
   const url = `${CONFIG.SITE_URL}/product.html?id=${encodeURIComponent(p.id)}`;
+  const images = (p.gallery && p.gallery.length ? p.gallery : [p.image]).map(src => {
+    try { return new URL(src, CONFIG.SITE_URL + '/').href; } catch (_) { return src; }
+  });
   const productLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
     'name': p.name,
-    'image': p.gallery.length > 1 ? p.gallery : p.image,
+    'image': images,
     'description': p.description || `${p.name} — available at ${CONFIG.SHOP_NAME}`,
     'sku': p.id,
     'category': `${p.category} > ${p.subcategory}`,
@@ -259,8 +295,14 @@ function updateStructuredData(p, reviews){
       '@type': 'Offer',
       'url': url,
       'priceCurrency': 'INR',
-      'price': p.price,
-      'availability': isOutOfStock(p) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock'
+      'price': Number(p.price).toFixed(2),
+      'availability': isOutOfStock(p) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
+      'itemCondition': 'https://schema.org/NewCondition',
+      'seller': {
+        '@type': 'Organization',
+        'name': CONFIG.SHOP_NAME,
+        'url': CONFIG.SITE_URL
+      }
     }
   };
   if (reviews && reviews.length){
