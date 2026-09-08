@@ -1435,7 +1435,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important;}
 }
-/* Keep compact carousel cards within their available action-row width. */
-.card .stepper{flex:1 1 0;min-width:0;}
+/* Preserve the complete control; wrap actions when a card is too narrow. */
+.card .card-actions{flex-wrap:wrap;}
+.card .card-actions > .stepper{flex:1 0 88px;min-width:88px;}
 .card .stepper button{width:26px;flex-basis:26px;}
-.card .stepper span{min-width:18px;padding:0 2px;}
+.card .stepper span{min-width:24px;padding:0 2px;box-sizing:border-box;}
+.card .card-actions > .buynowbtn{min-width:64px;overflow-wrap:anywhere;}
