@@ -1338,11 +1338,106 @@ body.modal-open{
 .install-banner-mark{overflow:hidden;padding:0}.install-banner-mark img{width:100%;height:100%;display:block;object-fit:cover}
 .install-banner-copy{ min-width:0; flex:1; display:flex; flex-direction:column; line-height:1.15; }
 .install-banner-copy strong{ font-family:var(--font-display); font-size:15px; }
-.install-banner-copy span{ margin-top:3px; color:rgba(255,
-/* Keep checkout movement short and avoid costly blur while scrolling. */
-.cart-drawer{backdrop-filter:none;-webkit-backdrop-filter:none;transition:transform .22s cubic-bezier(.2,.7,.3,1),opacity .18s ease;}
-.cart-header{backdrop-filter:none;-webkit-backdrop-filter:none;}
-.checkout-review,.order-confirm{animation:checkoutEnter .18s ease-out;}
-@keyframes checkoutEnter{from{opacity:.65;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-#orderWaBtn:disabled,#confirmOrderBtn:disabled{cursor:progress;opacity:.8;}
-@media(prefers-reduced-motion:reduce){.cart-drawer{transition:none}.checkout-review,.order-confirm{animation:none}}
+.install-banner-copy span{ margin-top:3px; color:rgba(255,246,233,.76); font-size:12.5px; }
+.install-banner-actions{ display:flex; align-items:center; gap:6px; }
+.install-btn{ border:0; border-radius:12px; padding:9px 13px; background:var(--cream); color:var(--indigo); font:700 13px/1 var(--font-utility); cursor:pointer; }
+.install-dismiss{ width:34px; height:34px; border:0; border-radius:10px; background:transparent; color:rgba(255,255,255,.8); font-size:24px; line-height:1; cursor:pointer; }
+@media (max-width:520px){
+  .install-banner{ gap:10px; padding:11px; }
+  .install-banner-mark{ width:38px; height:38px; flex-basis:38px; font-size:21px; }
+  .install-banner-copy strong{ font-size:14px; }
+  .install-banner-copy span{ font-size:11.5px; }
+  .install-btn{ padding:9px 11px; }
+}
+
+/* Customer language switch — deliberately compact so header layout stays unchanged. */
+.lang-toggle{height:38px;min-width:42px;padding:0 9px;border:1px solid rgba(32,27,61,.10);border-radius:12px;background:rgba(255,255,255,.72);color:var(--indigo);font:700 13px/1 var(--font-body);cursor:pointer;box-shadow:0 4px 15px rgba(32,27,61,.05);flex:0 0 auto;transition:transform .2s ease,background .2s ease}.lang-toggle:hover{transform:translateY(-1px);background:#fff}.lang-toggle:focus-visible{outline:2px solid var(--rani);outline-offset:2px}@media(max-width:520px){.lang-toggle{height:36px;min-width:38px;padding:0 7px;border-radius:11px;font-size:12px}}
+
+/* Hindi typography: preserve Devanagari matras and conjuncts without clipping. */
+html[lang="hi"] .hero-title{line-height:1.16;letter-spacing:-.012em;padding-block:.04em .08em}
+html[lang="hi"] .hero-title span{line-height:inherit}
+html[lang="hi"] .card .name{line-height:1.38}
+html[lang="hi"] .card .name-hindi{line-height:1.3}
+@media(max-width:640px){html[lang="hi"] .hero-title{font-size:clamp(32px,9.4vw,45px);line-height:1.18}}
+
+/* Checkout review and accessible controls */
+.checkout-review {padding:56px 22px 28px;overflow-y:auto;max-height:100dvh;box-sizing:border-box;}
+.checkout-review h2 {line-height:1.5;}
+.checkout-review p {overflow-wrap:anywhere;line-height:1.6;}
+.checkout-review ul {padding-left:20px;line-height:1.8;}
+.checkout-review .primary-btn,.checkout-review .ghost-btn {display:block;width:100%;margin-top:14px;}
+.checkout-honeypot {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);}
+#checkoutError {padding:12px 20px;}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible {outline:3px solid #89235c;outline-offset:3px;}
+.dash-status-seg.confirmed,.dash-status-seg.packed {background:#6d58a8;}
+.dash-status-seg.shipped {background:#357cad;}
+.dash-status-seg.delivered {background:#26875a;}
+.cart-drawer > .checkout-review,.cart-drawer > .order-confirm {flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:60px 22px calc(28px + env(safe-area-inset-bottom));box-sizing:border-box;}
+.cart-drawer .upi-box {overflow-wrap:anywhere;}
+
+.product-sizes {border:0;padding:0;margin:18px 0;min-width:0;}
+.product-sizes legend {font-weight:700;margin-bottom:10px;}
+.size-options {display:flex;flex-wrap:wrap;gap:10px;}
+.size-option {min-width:48px;min-height:44px;padding:9px 14px;border:1px solid #b691a5;border-radius:12px;background:#fff;color:#302439;font:inherit;overflow-wrap:anywhere;max-width:100%;}
+.size-option[aria-pressed="true"] {background:#c60060;color:white;border:2px solid #880044;}
+.size-select-link {display:flex;align-items:center;justify-content:center;text-decoration:none;min-height:40px;flex:1;}
+
+/* Unified quantity controls: product page, cards and cart. */
+.stepper,.card .stepper,.cart-item .stepper,.pd-actions .stepper{
+  display:inline-flex;align-items:center;justify-content:space-between;gap:0;
+  flex:0 0 auto;width:auto;min-width:112px;height:44px;box-sizing:border-box;
+  padding:3px;border:1px solid rgba(48,36,57,.14);border-radius:14px;
+  background:rgba(255,255,255,.94);box-shadow:0 3px 10px rgba(48,36,57,.045);overflow:hidden;
+}
+.stepper button,.card .stepper button,.cart-item .stepper button,.pd-actions .stepper button{
+  appearance:none;display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;
+  padding:0;margin:0;border:0;border-radius:10px;background:transparent;color:var(--indigo);
+  font:600 20px/1 var(--font-body);cursor:pointer;touch-action:manipulation;
+  transition:background-color .18s ease,transform .18s ease,color .18s ease;
+}
+.stepper span,.card .stepper span,.cart-item .stepper span{
+  min-width:30px;text-align:center;padding:0 4px;color:var(--indigo);
+  font:700 15px/1 var(--font-body);font-variant-numeric:tabular-nums;
+}
+.stepper button:active:not(:disabled){background:#f3e9ef;transform:scale(.94);}
+.stepper button:disabled{opacity:.32;cursor:default;}
+.stepper button:focus-visible{outline:2px solid #665778;outline-offset:-2px;}
+.pd-actions{gap:12px;align-items:center;}
+.pd-actions .stepper{min-width:124px;}
+.card .stepper{min-width:94px;height:36px;padding:2px;}
+.card .stepper button{width:28px;height:30px;flex-basis:28px;font-size:18px;}
+.card .stepper span{min-width:24px;font-size:13px;}
+.cart-item .stepper{min-width:112px;height:44px;}
+
+/* Focus belongs to the rounded search container, not a red inner rectangle. */
+.searchwrap input:focus,.searchwrap input:focus-visible,
+#searchInput2:focus,#searchInput2:focus-visible{outline:none;box-shadow:none;border-color:transparent;}
+.searchwrap:focus-within{border-color:rgba(81,77,99,.38);box-shadow:0 0 0 3px rgba(81,77,99,.08);}
+#searchTrigger:focus-visible{outline:2px solid #8a8495;outline-offset:2px;}
+
+/* Short, continuous easing and quieter feedback on touch devices. */
+.primary-btn,.ghost-btn,.iconbtn,.chip,.subchip,.card .addbtn,.card .buynowbtn{
+  transition:transform .2s cubic-bezier(.2,.7,.3,1),background-color .2s ease,box-shadow .2s ease;
+}
+.primary-btn:active,.ghost-btn:active,.iconbtn:active,.chip:active,.subchip:active,
+.card .addbtn:active,.card .buynowbtn:active{transform:scale(.98);}
+.card-actions > *,.pd-actions > *{animation:none;}
+.search-overlay{transition:opacity .22s ease,transform .28s cubic-bezier(.2,.7,.3,1),visibility 0s linear .28s;}
+.search-overlay.open{transition:opacity .22s ease,transform .28s cubic-bezier(.2,.7,.3,1),visibility 0s;}
+@keyframes cartHit{0%,100%{transform:scale(1)}45%{transform:scale(1.1)}}
+@keyframes badgeBump{0%,100%{transform:scale(1)}45%{transform:scale(1.15)}}
+.iconbtn.cart-hit{animation:cartHit .3s ease;}
+.badge.bump{animation:badgeBump .25s ease;}
+@media(hover:none){
+  .card:hover,.card:hover img,.chip:hover,.subchip:hover,.iconbtn:hover,.addbtn:hover,.hero-tile:hover{transform:none;}
+  .wa-float{animation:none;}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important;}
+}
+/* Preserve the complete control; wrap actions when a card is too narrow. */
+.card .card-actions{flex-wrap:wrap;}
+.card .card-actions > .stepper{flex:1 0 88px;min-width:88px;}
+.card .stepper button{width:26px;flex-basis:26px;}
+.card .stepper span{min-width:24px;padding:0 2px;box-sizing:border-box;}
+.card .card-actions > .buynowbtn{min-width:64px;overflow-wrap:anywhere;}
