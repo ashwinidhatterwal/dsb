@@ -8,6 +8,7 @@
   const originalAttrs = new WeakMap();
 
   const HI = {
+    'Choose size':'साइज़ चुनें','Choose a size first':'पहले साइज़ चुनें','Select a size before adding to cart.':'कार्ट में जोड़ने से पहले साइज़ चुनें।',
     'Review order':'ऑर्डर देखें','Review your order':'अपना ऑर्डर देखें','Confirm order':'ऑर्डर की पुष्टि करें','Edit details':'जानकारी बदलें',
     'Estimated total':'अनुमानित कुल','Subtotal — fees checked next':'उप-कुल — शुल्क अगले चरण में',
     'Review the final total before confirming your order.':'ऑर्डर की पुष्टि से पहले अंतिम कुल राशि देखें।',
@@ -114,6 +115,7 @@
   const normalize=s=>String(s||'').replace(/\s+/g,' ').trim();
   function dynamicHi(s){
     let m;
+    if ((m=s.match(/^Size: (.+)$/))) return `साइज़: ${m[1]}`;
     const emojiLead=s.match(/^([\p{Extended_Pictographic}\uFE0F\s]+)(.+)$/u);
     if(emojiLead && HI[emojiLead[2]]) return emojiLead[1]+HI[emojiLead[2]];
     if ((m=s.match(/^(\d+) items?$/))) return `${m[1]} उत्पाद`;

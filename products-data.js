@@ -19,6 +19,7 @@ function normalizeRows(rows){
       return {
         id: String(r.id ?? r.ID ?? '').trim(),
         name: String(r.name ?? r.Name ?? '').trim(),
+        sizes: [...new Set(String(r.sizes ?? r.Sizes ?? '').split(/[,\n]/).map(x=>x.trim()).filter(Boolean))],
         nameHindi: String(r.namehindi ?? r.nameHindi ?? '').trim(),
         category: String(r.category ?? r.Category ?? 'Other').trim() || 'Other',
         subcategory: String(r.subcategory ?? r.Subcategory ?? 'General').trim() || 'General',

@@ -3,6 +3,7 @@
    ========================================================= */
 let CURRENT_PRODUCT = null;
 let selectedRating = 5;
+let selectedSize = '';
 
 function getProductIdFromUrl(){
   return new URLSearchParams(location.search).get('id') || '';
@@ -116,6 +117,7 @@ function renderProduct(p){
       </div>
       <p class="pd-desc">${escapeHtml(p.description || 'No description added yet.')}</p>
       <div class="pd-id">Product ID: ${escapeHtml(p.id)}</div>
+      ${p.sizes?.length ? `<fieldset class="product-sizes"><legend>Choose size</legend><div class="size-options">${p.sizes.map(size=>`<button type="button" class="size-option" data-size="${escapeHtml(size)}" aria-pressed="${selectedSize===size}">${escapeHtml(size)}</button>`).join('')}</div><p class="hint" id="sizeHelp">Select a size before adding to cart.</p></fieldset>` : ''}
       <div class="pd-actions" id="pdActions"></div>
     </div>
     <div class="related-section" id="relatedSection" style="display:none;">
@@ -146,6 +148,12 @@ function renderProduct(p){
     </div>
   `;
   bindGallerySwipe();
+  if(!p.sizes?.includes(selectedSize)) selectedSize='';
+  $$('.size-option').forEach(btn=>btn.addEventListener('click',()=>{
+    selectedSize=btn.dataset.size;
+    $$('.size-option').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.size===selectedSize)));
+    renderPdActions(p);
+  }));
   renderPdActions(p);
   renderStarInput();
   $('#submitReviewBtn').addEventListener('click', submitReview);
@@ -344,9 +352,14 @@ function setJsonLd(id, data){
 }
 
 function renderPdActions(p){
-  const qty = CartStore.qtyFor(p.id);
+  if(isOutOfStock(p)){$('#pdActions').innerHTML='<button class="ghost-btn" disabled style="flex:1;">Currently unavailable</button>';return;}
+  if(p.sizes?.length && !p.sizes.includes(selectedSize)){
+    $('#pdActions').innerHTML='<button class="ghost-btn" disabled style="flex:1;">Choose a size first</button>';return;
+  }
+  const variant=sizedCartProduct(p,p.sizes?.includes(selectedSize) ? selectedSize : '');
+  const qty = CartStore.qtyFor(variant.id);
   const outOfStock = isOutOfStock(p);
-  const maxReached = p.stockQty !== null && qty >= p.stockQty;
+  const maxReached = p.stockQty !== null && CartStore.qtyForProduct(p.id) >= p.stockQty;
   if (outOfStock){
     $('#pdActions').innerHTML = `<button class="ghost-btn" disabled style="flex:1;">Currently unavailable</button>`;
     return;
@@ -354,23 +367,23 @@ function renderPdActions(p){
   $('#pdActions').innerHTML = qty > 0
     ? `<div class="stepper" id="pdStepper" style="height:44px;"><button data-act="dec">−</button><span>${qty}</span><button data-act="inc" ${maxReached ? 'disabled' : ''}>+</button></div>
        <button class="primary-btn" id="pdGoCart" style="flex:1;">View cart</button>`
-    : `<button class="ghost-btn" id="pdAdd" style="flex:1;">Add to cart</button>
-       <button class="primary-btn" id="pdBuyNow" style="flex:1;">Buy Now</button>`;
+    : `<button class="ghost-btn" id="pdAdd" ${maxReached ? 'disabled' : ''} style="flex:1;">Add to cart</button>
+       <button class="primary-btn" id="pdBuyNow" ${maxReached ? 'disabled' : ''} style="flex:1;">Buy Now</button>`;
   const stepper = $('#pdStepper');
   if (stepper){
     const incBtn = $('[data-act="inc"]', stepper);
-    if (incBtn && !incBtn.disabled) incBtn.addEventListener('click', () => { CartStore.add(p, 1); updateCartBadge(); renderPdActions(p); });
-    $('[data-act="dec"]', stepper).addEventListener('click', () => { CartStore.add(p, -1); updateCartBadge(); renderPdActions(p); });
+    if (incBtn && !incBtn.disabled) incBtn.addEventListener('click', () => { CartStore.add(variant, 1); updateCartBadge(); renderPdActions(p); });
+    $('[data-act="dec"]', stepper).addEventListener('click', () => { CartStore.add(variant, -1); updateCartBadge(); renderPdActions(p); });
   }
   const addBtn = $('#pdAdd');
   if (addBtn) addBtn.addEventListener('click', () => {
-    CartStore.add(p, 1); renderPdActions(p);
+    CartStore.add(variant, 1); renderPdActions(p);
     showToast(`${p.name} added to cart`);
     playAddFlourish($('.pd-slide img'));
   });
   const buyBtn = $('#pdBuyNow');
   if (buyBtn) buyBtn.addEventListener('click', () => {
-    CartStore.add(p, 1); renderPdActions(p);
+    CartStore.add(variant, 1); renderPdActions(p);
     playAddFlourish($('.pd-slide img'), { openCartAfter: true });
   });
   const goCart = $('#pdGoCart');

@@ -70,15 +70,15 @@ const ALLOWED_ORDER_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'De
 // Set the ADMIN_KEY Script Property before deploying — the admin page uses it to
 // add/delete products and manage orders. Anyone who has this key can edit
 // your sheet and see customer order details.
-const ADMIN_KEY = ''; // Prefer the ADMIN_KEY Script Property; never publish secrets in GitHub.
+const ADMIN_KEY = 'ashwini'; // Prefer the ADMIN_KEY Script Property; never publish secrets in GitHub.
 
 // Optional — silently pings a Telegram chat/channel the instant a new order
 // comes in, so you don't have to keep the Sheet or admin page open to know.
 // Leave TELEGRAM_BOT_TOKEN blank to turn this off entirely; nothing else
 // about order-taking changes either way. See SETUP-GUIDE.md for how to get
 // a bot token and chat ID from @BotFather in about two minutes.
-const TELEGRAM_BOT_TOKEN = ''; // e.g. '123456789:AAExampleTokenFromBotFather'
-const TELEGRAM_CHAT_ID = '';   // your numeric chat ID, or '@yourchannel'
+const TELEGRAM_BOT_TOKEN = '7986254241:AAH0I0vCQe2LEe6dUf-u5gc8Bcw6DLyfoJg'; // e.g. '123456789:AAExampleTokenFromBotFather'
+const TELEGRAM_CHAT_ID = '629369496';   // your numeric chat ID, or '@yourchannel'
 
 function doGet(e) {
   const action = (e.parameter.action || 'products').toString();
@@ -319,6 +319,7 @@ function getAllProducts(includeCost) {
 function addProduct(p) {
   return withWriteLock_(function() {
     validateProductFields_(p, true);
+    if(p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizes');
     const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet);
     const id = String(p.id || '').trim() || nextId_(sheet, 'DSB');
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) throw new Error('Use letters, numbers, hyphens or underscores for product IDs.');
@@ -333,6 +334,7 @@ function addProduct(p) {
 function updateProduct(p) {
   return withWriteLock_(function() {
     validateProductFields_(p, false);
+    if(p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizes');
     const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet);
     const row = findRow_(sheet, 'id', String(p.id || '').trim());
     if (!row) throw new Error('Product not found.');
@@ -669,10 +671,11 @@ function normalizeAndValidateOrder_(o) {
   const seen = Object.create(null), itemsDetail = [];
   for (const x of o.itemsDetail) {
     const id = String(x && x.id || '').trim(), qty = Number(x && x.qty);
-    if (!id || id.length > 80 || !Number.isInteger(qty) || qty < 1 || qty > 999 || seen[id]) return {success:false,error:'Invalid or duplicate cart item.'};
-    seen[id] = true; itemsDetail.push({id:id,qty:qty});
+    const size=String(x && x.size || '').trim(), variantKey=JSON.stringify([id,size]);
+    if (!id || id.length > 80 || size.length>40 || !Number.isInteger(qty) || qty < 1 || qty > 999 || seen[variantKey]) return {success:false,error:'Invalid or duplicate cart item.'};
+    seen[variantKey] = true; itemsDetail.push({id:id,qty:qty,...(size ? {size:size} : {})});
   }
-  itemsDetail.sort((a,b) => a.id.localeCompare(b.id));
+  itemsDetail.sort((a,b) => a.id.localeCompare(b.id) || String(a.size || '').localeCompare(String(b.size || '')));
   return {ok:true,customerName:customerName,phone:phone,address:address,paymentMethod:paymentMethod,promoCode:promoCode,itemsDetail:itemsDetail};
 }
 
@@ -716,11 +719,16 @@ function buildValidatedOrderItems_(itemsDetail, productData) {
   }
 
   const items = [];
+  const requestedTotals=Object.create(null);
+  itemsDetail.forEach(x=>{requestedTotals[x.id]=(requestedTotals[x.id] || 0)+x.qty;});
   let subtotal = 0;
   for (const requested of itemsDetail) {
     const found = byId[requested.id];
     if (!found) return { ok: false, error: `Product ${requested.id} is no longer available.` };
     const row = found.row;
+    const sizes=parseSizes_(heads.indexOf('sizes')<0 ? '' : row[heads.indexOf('sizes')]);
+    const size=String(requested.size || '');
+    if(sizes.length ? !sizes.includes(size) : !!size) return {ok:false,code:'invalid_size',error:'Please choose an available size for ' + (row[nameCol] || requested.id) + '.'};
     const status = String(stockCol === -1 ? 'in stock' : row[stockCol] || 'in stock').trim().toLowerCase();
     if (status === 'out of stock') return { ok: false, error: `${row[nameCol] || requested.id} is out of stock.` };
 
@@ -733,7 +741,7 @@ function buildValidatedOrderItems_(itemsDetail, productData) {
       tracked = true;
       availableQty = Number(row[qtyCol]);
       if (!Number.isInteger(availableQty) || availableQty < 0) return {ok:false,error:'Invalid inventory quantity. Please contact the shop.'};
-      if (requested.qty > availableQty) {
+      if (requestedTotals[requested.id] > availableQty) {
         return { ok: false, error: `Only ${availableQty} left for ${row[nameCol] || requested.id}.`, code: 'insufficient_stock', productId: requested.id, availableQty: availableQty };
       }
     }
@@ -743,11 +751,11 @@ function buildValidatedOrderItems_(itemsDetail, productData) {
     items.push({
       id: requested.id, name: String(nameCol === -1 ? requested.id : row[nameCol] || requested.id),
       category: catCol === -1 ? '' : row[catCol], subcategory: subCol === -1 ? '' : row[subCol],
-      qty: requested.qty, unitPrice, costPrice: costCol === -1 ? 0 : safeNumber_(row[costCol], 0),
+      qty: requested.qty, ...(size ? {size:size} : {}), unitPrice, costPrice: costCol === -1 ? 0 : safeNumber_(row[costCol], 0),
       lineTotal, tracked, availableQty, rowIndex: found.rowIndex
     });
   }
-  return { ok: true, items, subtotal, summary: items.map(x => `${x.id} ${x.name} x${x.qty}`).join(' | ') };
+  return { ok: true, items, subtotal, summary: items.map(x => `${x.id} ${x.name}${x.size ? ' (Size: '+x.size+')' : ''} x${x.qty}`).join(' | ') };
 }
 
 
@@ -857,9 +865,10 @@ function recordOrderItemsFromValidated_(orderId, date, items) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(ORDER_ITEMS_SHEET);
   if (!sheet) { sheet = ss.insertSheet(ORDER_ITEMS_SHEET); sheet.appendRow(['orderId','date','productId','productName','category','subcategory','qty','unitPrice','costPrice','lineRevenue','lineCost','lineProfit']); }
+  if(items.some(x=>x.size)) ensureColumn_(sheet,'size');
   const heads = headers_(sheet), existing = rowsAsObjects_(sheet).filter(r => String(r.orderid) === orderId);
-  const rows = items.filter(item => !existing.some(r => String(r.productid) === item.id)).map(item => {
-    const record = {orderid:orderId,date:new Date(date),productid:item.id,productname:item.name,category:item.category,subcategory:item.subcategory,qty:item.qty,unitprice:item.unitPrice,costprice:item.costPrice,linerevenue:item.lineTotal,linecost:roundMoney_(item.qty * item.costPrice),lineprofit:roundMoney_(item.lineTotal - item.qty * item.costPrice)};
+  const rows = items.filter(item => !existing.some(r => String(r.productid) === item.id && String(r.size || '') === String(item.size || ''))).map(item => {
+    const record = {orderid:orderId,date:new Date(date),productid:item.id,productname:item.name,size:item.size || '',category:item.category,subcategory:item.subcategory,qty:item.qty,unitprice:item.unitPrice,costprice:item.costPrice,linerevenue:item.lineTotal,linecost:roundMoney_(item.qty * item.costPrice),lineprofit:roundMoney_(item.lineTotal - item.qty * item.costPrice)};
     return heads.map(h => sheetText_(record[h] !== undefined ? record[h] : ''));
   });
   if (rows.length) sheet.getRange(sheet.getLastRow()+1,1,rows.length,heads.length).setValues(rows);
@@ -956,6 +965,11 @@ function findRow_(sheet, column, value) {
   return hit ? hit.getRow() : 0;
 }
 function validateProductFields_(p, adding) {
+  if(p.sizes !== undefined){
+    const raw=String(p.sizes), sizes=parseSizes_(raw);
+    if(raw.length>1000 || sizes.length>30 || sizes.some(x=>x.length>40 || /[|<>\x00-\x1f]/.test(x))) throw new Error('Use up to 30 sizes, each at most 40 characters, without | or angle brackets.');
+    p.sizes=sizes.join(', ');
+  }
   if (adding && !String(p.name || '').trim()) throw new Error('Product name is required.');
   if (adding || p.price !== undefined) {
     const n = Number(p.price);
@@ -1008,7 +1022,7 @@ function priceOrder_(order, sheets) {
   const cfg = getCheckoutConfig_(), merchandiseTotal = roundMoney_(priced.subtotal-discount);
   const deliveryCharge = merchandiseTotal < cfg.deliveryFreeAbove ? cfg.deliveryCharge : 0;
   const codCharge = order.paymentMethod === 'Cash on Delivery' ? cfg.codCharge : 0;
-  const quote = {subtotal:roundMoney_(priced.subtotal),discount:discount,merchandiseTotal:merchandiseTotal,deliveryCharge:deliveryCharge,codCharge:codCharge,correctedTotal:roundMoney_(merchandiseTotal+deliveryCharge+codCharge),items:priced.items.map(x => ({id:x.id,name:x.name,qty:x.qty,unitPrice:x.unitPrice,lineTotal:x.lineTotal}))};
+  const quote = {subtotal:roundMoney_(priced.subtotal),discount:discount,merchandiseTotal:merchandiseTotal,deliveryCharge:deliveryCharge,codCharge:codCharge,correctedTotal:roundMoney_(merchandiseTotal+deliveryCharge+codCharge),items:priced.items.map(x => ({id:x.id,name:x.name,qty:x.qty,...(x.size ? {size:x.size} : {}),unitPrice:x.unitPrice,lineTotal:x.lineTotal}))};
   const props = PropertiesService.getScriptProperties();
   let key = props.getProperty('CHECKOUT_SIGNING_KEY');
   if (!key) { key = Utilities.getUuid() + Utilities.getUuid(); props.setProperty('CHECKOUT_SIGNING_KEY',key); }
@@ -1059,12 +1073,15 @@ function finishTransaction_(sheet,row,data,committed) {
   SpreadsheetApp.flush();
 }
 function stockPlan_(items,sheets) {
-  const heads = sheets.productHeads, statusCol = heads.indexOf('stock');
-  return items.filter(x => x.tracked).map(x => {
-    const oldStatus = statusCol < 0 ? null : sheets.productData[x.rowIndex][statusCol];
-    return {id:x.id,beforeQty:x.availableQty,afterQty:x.availableQty-x.qty,beforeStatus:oldStatus,afterStatus:oldStatus === null ? null : (x.availableQty === x.qty ? 'out of stock' : oldStatus)};
+  const grouped=new Map();
+  items.filter(x=>x.tracked).forEach(x=>{if(!grouped.has(x.id)) grouped.set(x.id,{...x,qty:0});grouped.get(x.id).qty+=x.qty;});
+  const statusCol=sheets.productHeads.indexOf('stock');
+  return Array.from(grouped.values()).map(x=>{
+    const oldStatus=statusCol<0 ? null : sheets.productData[x.rowIndex][statusCol];
+    return {id:x.id,beforeQty:x.availableQty,afterQty:x.availableQty-x.qty,beforeStatus:oldStatus,afterStatus:oldStatus===null ? null : (x.availableQty===x.qty ? 'out of stock' : oldStatus)};
   });
 }
+
 function applyStockPlan_(plan,forward) {
   if (!plan || !plan.length) return;
   const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet), data = sheet.getDataRange().getValues();
@@ -1129,3 +1146,6 @@ function orderResult(requestId,phone) {
     return {success:false,code:'not_found',error:'No order was saved for this attempt.'};
   });
 }
+
+function parseSizes_(value){return [...new Set(String(value || '').split(/[,\n]/).map(x=>x.trim()).filter(Boolean))];}
+function ensureColumn_(sheet,name){if(headers_(sheet).indexOf(name)<0) sheet.getRange(1,sheet.getLastColumn()+1).setValue(name);}

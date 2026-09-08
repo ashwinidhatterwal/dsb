@@ -7,6 +7,10 @@
    ========================================================= */
 const CART_STORAGE_KEY = 'dsb_cart_v1';
 
+function sizeCartKey(id,size){ return size ? String(id)+'::size:'+encodeURIComponent(size) : String(id); }
+function sizedCartProduct(product,size){
+  return size ? {...product,productId:product.productId || product.id,id:sizeCartKey(product.productId || product.id,size),size} : product;
+}
 const CartStore = (function(){
   let memoryFallback = {};
   let usingFallback = false;
@@ -35,8 +39,15 @@ const CartStore = (function(){
   return {
     getAll(){ return readAll(); },
     qtyFor(id){ return readAll()[id]?.qty || 0; },
+    qtyForProduct(id){return Object.values(readAll()).filter(x=>(x.product.productId || x.product.id)===id).reduce((sum,x)=>sum+x.qty,0);},
     add(product, delta){
       const cart = readAll();
+      if(delta>0){
+        if(product.sizes?.length && !product.sizes.includes(product.size)) return cart[product.id]?.qty || 0;
+        const baseId=product.productId || product.id;
+        const used=Object.values(cart).filter(x=>(x.product.productId || x.product.id)===baseId).reduce((n,x)=>n+x.qty,0);
+        if(product.stock==='out of stock' || (product.stockQty!=null && used+delta>product.stockQty)) return cart[product.id]?.qty || 0;
+      }
       const nextQty = (cart[product.id]?.qty || 0) + delta;
       if (nextQty <= 0) delete cart[product.id];
       else cart[product.id] = { product, qty: nextQty };
@@ -60,24 +71,20 @@ const CartStore = (function(){
       const cart = readAll();
       const removed = [];
       let changed = false;
+      const used = {};
       Object.keys(cart).forEach(id => {
-        const fresh = catalog.find(p => p.id === id);
-        if (!fresh){
-          removed.push(cart[id].product.name);
-          delete cart[id];
-          changed = true;
-          return;
+        const old=cart[id].product, baseId=old.productId || old.id;
+        const fresh=catalog.find(p=>p.id===baseId);
+        if(!fresh || fresh.stock==='out of stock' || ((fresh.sizes || []).length ? !fresh.sizes.includes(old.size) : !!old.size)){
+          removed.push(old.name + (old.size ? ' ('+old.size+')' : ''));delete cart[id];changed=true;return;
         }
-        cart[id].product = fresh;
-        if (fresh.stockQty !== null && cart[id].qty > fresh.stockQty){
-          if (fresh.stockQty <= 0){
-            removed.push(fresh.name);
-            delete cart[id];
-          } else {
-            cart[id].qty = fresh.stockQty;
-          }
+        cart[id].product=sizedCartProduct(fresh,old.size || '');
+        if(fresh.stockQty!=null){
+          const available=Math.max(0,fresh.stockQty-(used[baseId] || 0));
+          cart[id].qty=Math.min(cart[id].qty,available);
+          if(!cart[id].qty){removed.push(old.name);delete cart[id];changed=true;return;}
         }
-        changed = true;
+        used[baseId]=(used[baseId] || 0)+cart[id].qty;changed=true;
       });
       if (changed) writeAll(cart);
       return { removed };

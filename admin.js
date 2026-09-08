@@ -229,6 +229,9 @@ function fillForm(p){
   $('#f-stock').value = p.stock || 'in stock';
   $('#f-stockqty').value = (p.stockqty === undefined || p.stockqty === null || p.stockqty === '') ? '' : p.stockqty;
   $('#f-tags').value = p.tags || '';
+  $('#f-sizes').value = p.sizes || '';
+  $('#f-hasSizes').checked = !!String(p.sizes || '').trim();
+  $('#sizeOptionsField').hidden = !$('#f-hasSizes').checked;
   updateImagePreview(p.image || '');
   currentExtraImages = String(p.images || '').split(',').map(s => s.trim()).filter(Boolean);
   renderExtraImagesPreview();
@@ -243,6 +246,7 @@ function clearForm(){
   ['f-id','f-name','f-nameHindi','f-category','f-subcategory','f-price','f-mrp','f-costprice','f-image','f-description','f-stockqty','f-tags']
     .forEach(id => $('#' + id).value = '');
   $('#f-stock').value = 'in stock';
+  $('#f-sizes').value='';$('#f-hasSizes').checked=false;$('#sizeOptionsField').hidden=true;
   $('#f-imagefile').value = '';
   $('#uploadStatus').textContent = '';
   updateImagePreview('');
@@ -365,8 +369,10 @@ async function saveProduct(){
     // stock" — same thing the backend does when an order brings it to zero.
     stock: (stockqty === 0) ? 'out of stock' : $('#f-stock').value,
     stockqty,
-    tags: $('#f-tags').value.trim()
+    tags: $('#f-tags').value.trim(),
+    sizes: $('#f-hasSizes').checked ? [...new Set($('#f-sizes').value.split(/[,\n]/).map(x=>x.trim()).filter(Boolean))].join(', ') : ''
   };
+  if($('#f-hasSizes').checked && !product.sizes){status(statusEl,'Enter at least one size or turn off size selection.',false);return;}
   if (!product.name){
     status(statusEl, 'Product name is required.', false);
     return;
@@ -543,3 +549,5 @@ async function resizeUpload(file){
     return blob.size<file.size || scale<1 ? blob : file;
   } finally {bitmap.close();}
 }
+
+$('#f-hasSizes').addEventListener('change',()=>{ $('#sizeOptionsField').hidden=!$('#f-hasSizes').checked; });

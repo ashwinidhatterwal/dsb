@@ -406,12 +406,12 @@ function renderCartDrawer(){
               <img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}">
               <div class="ci-info">
                 <div class="ci-name">${escapeHtml(product.name)}</div>
-                <div class="ci-id">${money(product.price)} each</div>
+                <div class="ci-id">${product.size ? `<span>Size: ${escapeHtml(product.size)}</span> · ` : ''}${money(product.price)} each</div>
                 <div class="ci-price">${money(product.price*qty)}</div>
               </div>
               <div class="cart-item-actions">
                 <div class="stepper" data-id="${escapeHtml(product.id)}">
-                  <button type="button" data-act="dec" aria-label="Decrease quantity">−</button><span>${qty}</span><button type="button" data-act="inc" aria-label="Increase quantity" ${product.stockQty !== null && qty >= product.stockQty ? 'disabled' : ''}>+</button>
+                  <button type="button" data-act="dec" aria-label="Decrease quantity">−</button><span>${qty}</span><button type="button" data-act="inc" aria-label="Increase quantity" ${product.stockQty !== null && CartStore.qtyForProduct(product.productId || product.id) >= product.stockQty ? 'disabled' : ''}>+</button>
                 </div>
                 <button type="button" class="cart-remove" data-act="remove" data-id="${escapeHtml(product.id)}" aria-label="Remove ${escapeHtml(product.name)}">Remove</button>
               </div>
@@ -470,7 +470,7 @@ function renderCartDrawer(){
     const entry = cart[id];
     if (!entry) return;
     $('[data-act="inc"]', stepper).addEventListener('click', () => {
-      if (entry.product.stockQty !== null && CartStore.qtyFor(id) >= entry.product.stockQty){ showToast(`Only ${entry.product.stockQty} in stock`); return; }
+      if (entry.product.stockQty !== null && CartStore.qtyForProduct(entry.product.productId || entry.product.id) >= entry.product.stockQty){ showToast(`Only ${entry.product.stockQty} in stock`); return; }
       CartStore.add(entry.product, 1); updateCartBadge(); renderCartDrawer(); if (typeof renderGrid === 'function') renderGrid(); if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard();
     });
     $('[data-act="dec"]', stepper).addEventListener('click', () => { CartStore.add(entry.product, -1); updateCartBadge(); renderCartDrawer(); if (typeof renderGrid === 'function') renderGrid(); if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard(); });
@@ -522,7 +522,7 @@ function downloadReceipt(receipt){
     ? `<div class="notice"><strong>Important:</strong> This is an order confirmation slip only. It is <strong>not a payment receipt</strong> and does not confirm that a UPI payment was received.</div>`
     : `<div class="notice"><strong>Payment:</strong> Cash on Delivery selected. Payment is due at delivery.</div>`;
   const itemRows = (receipt.items || []).map(item => `
-    <tr><td>${escapeHtml(item.name)}</td><td>${Number(item.qty)||0}</td><td>${money(item.unitPrice)}</td><td>${money(item.lineTotal)}</td></tr>`).join('');
+    <tr><td>${escapeHtml(item.name)}${item.size ? ` (Size: ${escapeHtml(item.size)})` : ''}</td><td>${Number(item.qty)||0}</td><td>${money(item.unitPrice)}</td><td>${money(item.lineTotal)}</td></tr>`).join('');
   const feeRows = `${receipt.discount > 0 ? `<tr><td colspan="3">Discount${receipt.promoCode ? ` (${escapeHtml(receipt.promoCode)})` : ''}</td><td>−${money(receipt.discount)}</td></tr>` : ''}
     ${receipt.deliveryCharge > 0 ? `<tr><td colspan="3">Delivery</td><td>${money(receipt.deliveryCharge)}</td></tr>` : ''}
     ${receipt.codCharge > 0 ? `<tr><td colspan="3">Cash on Delivery fee</td><td>${money(receipt.codCharge)}</td></tr>` : ''}`;
@@ -545,7 +545,7 @@ async function postCheckout(action,body){
   return requestJson(CONFIG.SHEET_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,...body})},30000);
 }
 function checkoutOrderFromForm(){
-  return {customerName:checkoutState.name.trim(),phone:checkoutState.phone.trim(),address:checkoutState.address.trim(),paymentMethod:checkoutState.paymentMethod==='UPI'?'UPI':'Cash on Delivery',promoCode:checkoutState.appliedPromo?.code || '',itemsDetail:Object.values(CartStore.getAll()).map(({product,qty})=>({id:product.id,qty})),website:$('#orderWebsite')?.value || ''};
+  return {customerName:checkoutState.name.trim(),phone:checkoutState.phone.trim(),address:checkoutState.address.trim(),paymentMethod:checkoutState.paymentMethod==='UPI'?'UPI':'Cash on Delivery',promoCode:checkoutState.appliedPromo?.code || '',itemsDetail:Object.values(CartStore.getAll()).map(({product,qty})=>({id:product.productId || product.id,qty,...(product.size ? {size:product.size} : {})})),website:$('#orderWebsite')?.value || ''};
 }
 async function submitOrder(){
   if (checkoutBusy) return;
@@ -569,7 +569,7 @@ function showCheckoutError(message){
 function renderCheckoutReview(message=''){
   if(!checkoutQuote) return;
   const {order,quote:q}=checkoutQuote;
-  $('#cartContent').innerHTML=`<button class="closebtn" id="cartClose" aria-label="Close cart">✕</button><section class="checkout-review"><h2>Review your order</h2>${message?`<p role="alert">${escapeHtml(message)}</p>`:''}<p>${escapeHtml(order.customerName)} · ${escapeHtml(order.phone)}</p><p>${escapeHtml(order.address)}</p><ul>${q.items.map(x=>`<li>${escapeHtml(x.name)} × ${x.qty} — ${money(x.lineTotal)}</li>`).join('')}</ul><div class="cart-total-box"><div class="row"><span>Subtotal</span><span>${money(q.subtotal)}</span></div><div class="row"><span>Discount</span><span>−${money(q.discount)}</span></div><div class="row"><span>Delivery</span><span>${money(q.deliveryCharge)}</span></div><div class="row"><span>Cash on Delivery fee</span><span>${money(q.codCharge)}</span></div><div class="row total"><span>Total</span><span>${money(q.correctedTotal)}</span></div></div><p>${order.paymentMethod==='UPI'?'UPI payment opens after your order is saved with the confirmed total.':'Payment is due at delivery.'}</p><button class="primary-btn" id="confirmOrderBtn">Confirm order</button><button class="ghost-btn" id="editCheckoutBtn">Edit details</button></section>`;
+  $('#cartContent').innerHTML=`<button class="closebtn" id="cartClose" aria-label="Close cart">✕</button><section class="checkout-review"><h2>Review your order</h2>${message?`<p role="alert">${escapeHtml(message)}</p>`:''}<p>${escapeHtml(order.customerName)} · ${escapeHtml(order.phone)}</p><p>${escapeHtml(order.address)}</p><ul>${q.items.map(x=>`<li>${escapeHtml(x.name)}${x.size ? ` (Size: ${escapeHtml(x.size)})` : ''} × ${x.qty} — ${money(x.lineTotal)}</li>`).join('')}</ul><div class="cart-total-box"><div class="row"><span>Subtotal</span><span>${money(q.subtotal)}</span></div><div class="row"><span>Discount</span><span>−${money(q.discount)}</span></div><div class="row"><span>Delivery</span><span>${money(q.deliveryCharge)}</span></div><div class="row"><span>Cash on Delivery fee</span><span>${money(q.codCharge)}</span></div><div class="row total"><span>Total</span><span>${money(q.correctedTotal)}</span></div></div><p>${order.paymentMethod==='UPI'?'UPI payment opens after your order is saved with the confirmed total.':'Payment is due at delivery.'}</p><button class="primary-btn" id="confirmOrderBtn">Confirm order</button><button class="ghost-btn" id="editCheckoutBtn">Edit details</button></section>`;
   $('#cartClose').onclick=closeCart;
   $('#editCheckoutBtn').onclick=()=>{if(checkoutBusy)return;checkoutQuote=null;renderCartDrawer();$('#custName')?.focus();};
   $('#confirmOrderBtn').onclick=confirmCheckout;
@@ -585,7 +585,7 @@ async function confirmCheckoutUnlocked(){
   try { pendingCheckout=JSON.parse(localStorage.getItem(PENDING_CHECKOUT_KEY) || 'null'); } catch(_){}
   if(pendingCheckout){renderPendingCheckout();return;}
   const cart=CartStore.getAll();
-  if(checkoutQuote.order.itemsDetail.some(x=>!cart[x.id] || cart[x.id].qty<x.qty)){checkoutQuote=null;renderCartDrawer();showCheckoutError('Your cart changed in another tab. Please review it again.');return;}
+  if(checkoutQuote.order.itemsDetail.some(x=>!cart[sizeCartKey(x.id,x.size)] || cart[sizeCartKey(x.id,x.size)].qty<x.qty)){checkoutQuote=null;renderCartDrawer();showCheckoutError('Your cart changed in another tab. Please review it again.');return;}
   pendingCheckout={requestId:newCheckoutId(),order:checkoutQuote.order,quoteToken:checkoutQuote.quote.quoteToken};
   try {localStorage.setItem(PENDING_CHECKOUT_KEY,JSON.stringify(pendingCheckout));}
   catch(_){pendingCheckout=null;showCheckoutError('Allow browser storage to place an order safely, or contact the shop.');return;}
@@ -602,7 +602,7 @@ async function sendPendingCheckout(){
       clearPendingCheckout();checkoutQuote={order:p.order,quote:data.quote};renderCheckoutReview(data.error);return;
     }
     // Only explicit pre-commit validation failures let the shopper edit immediately.
-    if(['invalid_promo','insufficient_stock','upgrade_required','validation_failed'].includes(data.code)){
+    if(['invalid_promo','invalid_size','insufficient_stock','upgrade_required','validation_failed'].includes(data.code)){
       clearPendingCheckout();checkoutQuote=null;renderCartDrawer();showCheckoutError(data.error);return;
     }
     renderPendingCheckout(data.error || 'Please check this order before trying again.');
@@ -634,7 +634,7 @@ function completeCheckout(data,order){
   try { localStorage.setItem('dsb_last_receipt_v2',JSON.stringify(lastReceipt)); } catch(_){}
   // Clear only quantities actually ordered. Items added in another tab are preserved.
   const current=CartStore.getAll();
-  order.itemsDetail.forEach(item=>{const entry=current[item.id];if(entry)CartStore.add(entry.product,-Math.min(entry.qty,item.qty));});
+  order.itemsDetail.forEach(item=>{const entry=current[sizeCartKey(item.id,item.size)];if(entry)CartStore.add(entry.product,-Math.min(entry.qty,item.qty));});
   clearPendingCheckout();checkoutQuote=null;checkoutState.promoInput='';checkoutState.appliedPromo=null;checkoutState.promoStatus='';
   try{sessionStorage.removeItem(CATALOG_SESSION_KEY);}catch(_){}
   updateCartBadge();renderOrderConfirmation(lastReceipt);

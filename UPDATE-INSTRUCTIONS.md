@@ -1,3 +1,37 @@
+# Size selection update — 8 September 2026
+
+## Install this update
+
+1. Replace `code.gs` in your EXISTING Apps Script project, preserve your Script Properties and any custom delivery/COD fee values, then deploy a New version of the existing web app. Keep the same URL.
+2. Upload the updated website files to your existing GitHub repository. This includes the updated JavaScript, HTML and CSS; do not mix old and new size/cart scripts. Keep your existing Actions publishing setup.
+3. Refresh the admin page and storefront after deployment.
+
+## Configure a product
+
+In Admin → Products → Edit (or Add a product), enable **This product requires size selection**. Enter comma-separated values in **Available sizes**, then save.
+
+Examples:
+
+- Lingerie: `32B, 34B, 36B, 38B`
+- Clothing: `S, M, L, XL`
+- Bangles: `2.4, 2.6, 2.8`
+
+Use the exact sizes you sell. Eligibility is controlled per product, not guessed from its category. Leave the switch off for products that do not need sizes. Turning it off clears the product's size options.
+
+The product page requires a size before adding to cart. Homepage cards for these products show Choose size and open the product page. Different sizes occupy separate cart lines. The selected size is recorded in the order summary, admin order details, tracking, Telegram notification and English order slip.
+
+All sizes share the product's current price and total stock quantity. This release does not maintain separate inventory or prices per size. Remove unavailable sizes from the options list. Orders already placed retain their original selected sizes.
+
+No manual sheet migration is required. The backend appends an optional `sizes` column to Products when saving a product and a `size` column to OrderItems when the first sized order is recorded. It does not rename, reorder or replace existing columns or orders. Do not re-import the sample templates over existing data.
+
+Previously saved unsized cart entries for a product that now requires sizes are removed when the cart is reconciled, prompting the customer to choose a size. A stale or invalid size is also rejected by the backend before an order is saved.
+
+Validation: 30 isolated regression scenarios passed (20 backend, 10 frontend/sitemap), including separate size lines, shared stock limits, cancellation/reactivation, duplicate retries and unsized-product compatibility. These checks do not submit live orders or replace mobile browser testing.
+
+---
+
+## Earlier reliability update instructions
+
 # Reliability update — read before uploading
 
 This is an update to your existing Google Sheets + Apps Script shop. No paid services, new database or replacement Google Sheet is required. The supplied ZIP has been patched and tested locally; it has not been deployed to your live website or Apps Script account.
@@ -72,7 +106,7 @@ Cart, search, tracking and size-guide overlays gain focus containment, backgroun
 
 ## Verification supplied
 
-22 automated regression scenarios passed using isolated fixtures: 15 backend checks and 7 frontend/state-machine/sitemap checks. JavaScript syntax and local asset references were checked. Tests do not place real orders, write your real Sheet, verify actual payments, send Telegram messages, or prove behaviour on every mobile browser.
+30 automated regression scenarios passed using isolated fixtures: 20 backend checks and 10 frontend/state-machine/sitemap checks. JavaScript syntax and local asset references were checked. Tests do not place real orders, write your real Sheet, verify actual payments, send Telegram messages, or prove behaviour on every mobile browser.
 
 For optional local verification with Node.js:
 

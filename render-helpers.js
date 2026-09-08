@@ -21,6 +21,7 @@ function cardActionsHtml(p){
   if (isOutOfStock(p)){
     return `<button class="addbtn" disabled style="opacity:.5; cursor:not-allowed;">Out of stock</button>`;
   }
+  if(p.sizes?.length) return `<a class="addbtn size-select-link" href="product.html?id=${encodeURIComponent(p.id)}">Choose size</a>`;
   const qty = CartStore.qtyFor(p.id);
   const maxReached = p.stockQty !== null && qty >= p.stockQty;
   return qty > 0
@@ -88,7 +89,7 @@ function bindCardEvents(cards, list){
 // and price never get touched again after the card is first drawn.
 function bindCardActionEvents(card, product, list){
   const actionsWrap = $('.card-actions', card);
-  if (!actionsWrap) return;
+  if (!actionsWrap || product.sizes?.length) return;
   const addBtn = $('.addbtn:not([disabled])', actionsWrap);
   if (addBtn) addBtn.addEventListener('click', () => handleCardAdd(product, 1, card, list));
   const stepper = $('.stepper', actionsWrap);
