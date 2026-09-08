@@ -1,0 +1,9 @@
+BACKGROUND TELEGRAM SETUP
+
+1. Replace your Apps Script code with code.gs and save. Keep your existing Script Properties for Telegram credentials and ADMIN_KEY.
+2. Select setupTelegramBackground in the function dropdown, click Run, and authorize it. Run this once using the account that owns the deployment.
+3. Deploy > Manage deployments > Edit your existing web app > New version > Deploy. Keep the existing URL.
+
+No website or visible sheet changes are needed for this update. Setup adds three internal tracking columns to OrderTransactions.
+Orders confirm after their database transaction finishes; Telegram runs independently using a roughly one-minute timer. Failed sends retry with increasing delays. Do not remove the timer.
+A Telegram timeout after delivery can occasionally cause a repeated notification; it cannot create a duplicate order. Old orders are not resent.

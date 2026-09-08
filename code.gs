@@ -611,7 +611,6 @@ function getOrderItemQuantities_(orderId) {
 
 
 function addOrder(o) {
-  let notification = null;
   const result = withWriteLock_(function() {
     const order = normalizeAndValidateOrder_(o || {});
     if (!order.ok) return order;
@@ -634,7 +633,7 @@ function addOrder(o) {
     const record = {orderid:id,date:now,customername:order.customerName,phone:order.phone,address:order.address,paymentmethod:order.paymentMethod,promocode:order.promoCode,discount:q.discount,deliverycharge:q.deliveryCharge,codcharge:q.codCharge,items:quoted.priced.summary,total:q.correctedTotal,status:'Pending'};
     const result = Object.assign({}, q, {success:true,orderId:id,orderDate:now,paymentMethod:order.paymentMethod,promoCode:order.promoCode});
     delete result.quoteToken;
-    const data = {kind:'order',orderId:id,fingerprint:fingerprint,phoneHash:hashText_(order.phone),record:record,result:result,items:quoted.priced.items,stock:stockPlan_(quoted.priced.items,sheets),promo:promoPlan_(order.promoCode,order.phone)};
+    const data = {kind:'order',notifyAsync:true,orderId:id,fingerprint:fingerprint,phoneHash:hashText_(order.phone),record:record,result:result,items:quoted.priced.items,stock:stockPlan_(quoted.priced.items,sheets),promo:promoPlan_(order.promoCode,order.phone)};
     jr = saveTransaction_(journal, jr, o.requestId, 'Pending', data);
     // Durable preparation is flushed BEFORE stock is touched.
     SpreadsheetApp.flush();
@@ -642,17 +641,15 @@ function addOrder(o) {
       applyStockPlan_(data.stock, true);
       sheets.orders.appendRow(sheets.orderHeads.map(h => sheetText_(record[h] !== undefined ? record[h] : '')));
       SpreadsheetApp.flush();
-      finishTransaction_(journal,jr,data,true);
+      finishTransaction_(journal,jr,data,true,true);
     } catch(err) {
       // A failed response/write can be ambiguous: the order row is the commit marker.
       const committed = !!findRow_(sheets.orders,'orderid',id);
       try { finishTransaction_(journal,jr,data,committed); } catch(recoveryError) { console.error('Transaction recovery pending: ' + id); }
       if (!committed) return {success:false,error:'The order could not be completed. Use Retry to safely check again.',code:'retry_same_request'};
     }
-    notification = record;
     return result;
   });
-  if (notification) { try { notifyTelegramOrder_(notification); } catch(err) { console.error('Notification failed after order commit.'); } }
   return result;
 }
 
@@ -682,8 +679,8 @@ function normalizeAndValidateOrder_(o) {
 
 function getOrderSheets_() {
   const productSheet = getSheet_(PRODUCTS_SHEET);
-  const productHeads = headers_(productSheet);
   const productData = productSheet.getDataRange().getValues();
+  const productHeads = productData[0].map(h => String(h).trim().toLowerCase());
   const orderHeads = headers_(getSheet_(ORDERS_SHEET));
   if (['orderid','date','customername','phone','address','paymentmethod','promocode','discount','items','total','status'].some(h => orderHeads.indexOf(h)<0)) throw new Error('Orders sheet is missing required columns. Ask the shop to check setup.');
   return {
@@ -764,9 +761,7 @@ function buildValidatedOrderItems_(itemsDetail, productData) {
 // itself — the sheet row is already written by the time this runs. Nothing
 // is shown to the customer either way, which is what makes it "silent".
 function notifyTelegramOrder_(record) {
-  // Telegram is intentionally non-blocking: an order must NEVER fail just
-  // because Telegram is unavailable. Unlike the previous version, failures
-  // are logged so they can actually be diagnosed in Apps Script Executions.
+  // Synchronous transport, called by the background worker or manual test only.
   const token = String(secret_('TELEGRAM_BOT_TOKEN', TELEGRAM_BOT_TOKEN)).trim();
   const chatId = String(secret_('TELEGRAM_CHAT_ID', TELEGRAM_CHAT_ID)).trim();
 
@@ -1059,9 +1054,9 @@ function recoverTransactions_() {
     finishTransaction_(sheet,hit.getRow(),data,committed);
   });
 }
-function finishTransaction_(sheet,row,data,committed) {
+function finishTransaction_(sheet,row,data,committed,stockAlreadyApplied) {
   // Absolute values make recovery repeatable after a partial Sheets failure.
-  applyStockPlan_(data.stock,committed);
+  if (!stockAlreadyApplied) applyStockPlan_(data.stock,committed);
   if (committed && data.kind === 'order') {
     recordOrderItemsFromValidated_(data.orderId,data.record.date,data.items);
     applyPromoPlan_(data.promo);
@@ -1084,7 +1079,7 @@ function stockPlan_(items,sheets) {
 
 function applyStockPlan_(plan,forward) {
   if (!plan || !plan.length) return;
-  const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet), data = sheet.getDataRange().getValues();
+  const sheet = getSheet_(PRODUCTS_SHEET), data = sheet.getDataRange().getValues(), heads = data[0].map(h => String(h).trim().toLowerCase());
   const idCol = heads.indexOf('id'), qtyCol = heads.indexOf('stockqty'), statusCol = heads.indexOf('stock');
   if (idCol < 0 || qtyCol < 0) throw new Error('Inventory columns are missing; transaction recovery is required.');
   const rows = Object.create(null); data.slice(1).forEach((r,i) => { rows[String(r[idCol])] = i+2; });
@@ -1100,7 +1095,7 @@ function statusStockPlan_(orderId,oldStatus,newStatus) {
   if ((oldStatus === 'Cancelled') === (newStatus === 'Cancelled')) return [];
   const items = getOrderItemQuantities_(orderId);
   if (!items.length) throw new Error('No item history found; inventory cannot be safely changed for this order.');
-  const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet), data = sheet.getDataRange().getValues();
+  const sheet = getSheet_(PRODUCTS_SHEET), data = sheet.getDataRange().getValues(), heads = data[0].map(h => String(h).trim().toLowerCase());
   const idCol = heads.indexOf('id'), qtyCol = heads.indexOf('stockqty'), statusCol = heads.indexOf('stock');
   if (qtyCol < 0) return [];
   const reactivating = oldStatus === 'Cancelled';
@@ -1149,3 +1144,44 @@ function orderResult(requestId,phone) {
 
 function parseSizes_(value){return [...new Set(String(value || '').split(/[,\n]/).map(x=>x.trim()).filter(Boolean))];}
 function ensureColumn_(sheet,name){if(headers_(sheet).indexOf(name)<0) sheet.getRange(1,sheet.getLastColumn()+1).setValue(name);}
+
+// Run ONCE from the Apps Script editor, then authorize the timer.
+function setupTelegramBackground() {
+  const sheet = transactionSheet_();
+  sheet.getRange(1,5,1,3).setValues([['telegramStatus','telegramRetryAt','telegramAttempts']]);
+  if (!ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'processTelegramQueue')) {
+    ScriptApp.newTrigger('processTelegramQueue').timeBased().everyMinutes(1).create();
+  }
+  console.log('Background Telegram delivery enabled. Deploy this code to the existing web app.');
+}
+function processTelegramQueue() {
+  // Separate from the inventory script lock: Telegram cannot block checkout.
+  const lock = LockService.getUserLock();
+  if (!lock.tryLock(1)) return;
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(JOURNAL_SHEET);
+    if (!sheet || sheet.getLastRow()<2) return;
+    const started = Date.now();
+    const hits = sheet.getRange(2,2,sheet.getLastRow()-1,1).createTextFinder('Committed').matchEntireCell(true).findAll();
+    const states = sheet.getRange(2,5,sheet.getLastRow()-1,3).getValues();
+    let sent = 0;
+    for (const hit of hits) {
+      if (sent>=5 || Date.now()-started>45000) break;
+      const row = hit.getRow(), state = states[row-2];
+      if (state[0]==='Sent' || Number(state[1])>Date.now()) continue;
+      const data = readTransaction_(sheet,row).data;
+      // Existing orders from before this release must not be resent.
+      if (data.kind!=='order' || !data.notifyAsync) continue;
+      const attempts = (Number(state[2]) || 0)+1;
+      // Persist a retry deadline before transport, including hard execution failures.
+      sheet.getRange(row,5,1,3).setValues([['Pending',Date.now()+Math.min(3600000,60000*Math.pow(2,Math.min(attempts-1,6))),attempts]]);
+      SpreadsheetApp.flush();
+      const result = notifyTelegramOrder_(data.record);
+      if (result && result.ok) {
+        sheet.getRange(row,5,1,3).setValues([['Sent',0,attempts]]);
+        SpreadsheetApp.flush();
+      }
+      sent++;
+    }
+  } finally { lock.releaseLock(); }
+}
