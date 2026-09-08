@@ -682,15 +682,16 @@ function normalizeAndValidateOrder_(o) {
 
 function getOrderSheets_() {
   const productSheet = getSheet_(PRODUCTS_SHEET);
-  const productHeads = headers_(productSheet);
   const productData = productSheet.getDataRange().getValues();
-  const orderHeads = headers_(getSheet_(ORDERS_SHEET));
+  const productHeads = productData[0].map(h => String(h).trim().toLowerCase());
+  const orders = getSheet_(ORDERS_SHEET);
+  const orderHeads = headers_(orders);
   if (['orderid','date','customername','phone','address','paymentmethod','promocode','discount','items','total','status'].some(h => orderHeads.indexOf(h)<0)) throw new Error('Orders sheet is missing required columns. Ask the shop to check setup.');
   return {
     productSheet: productSheet,
     productHeads: productHeads,
     productData: productData,
-    orders: getSheet_(ORDERS_SHEET),
+    orders: orders,
     orderHeads: orderHeads
   };
 }

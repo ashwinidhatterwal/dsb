@@ -536,6 +536,7 @@ function downloadReceipt(receipt){
 
 const PENDING_CHECKOUT_KEY = 'dsb_pending_checkout_v2';
 let checkoutBusy = false, checkoutQuote = null, pendingCheckout = null;
+let recentCheckoutQuote = null;
 try { pendingCheckout = JSON.parse(localStorage.getItem(PENDING_CHECKOUT_KEY) || 'null'); } catch (_) {}
 if (pendingCheckout && (!pendingCheckout.order || !pendingCheckout.requestId)) pendingCheckout = null;
 async function postCheckout(action,body){
@@ -553,8 +554,11 @@ async function submitOrder(){
   checkoutBusy=true;
   const btn=$('#orderWaBtn'); if(btn){btn.disabled=true;btn.textContent='Checking stock…';}
   try {
-    const data=await postCheckout('quoteOrder',{order});
+    const key=JSON.stringify(order);
+    const data=recentCheckoutQuote && recentCheckoutQuote.key===key && Date.now()-recentCheckoutQuote.at<20000
+      ? recentCheckoutQuote.data : await postCheckout('quoteOrder',{order});
     if(data.success!==true || !data.quoteToken) throw new Error(data.error || 'Checkout needs an update. Please contact the shop.');
+    if (!recentCheckoutQuote || recentCheckoutQuote.data!==data) recentCheckoutQuote={key,data,at:Date.now()};
     checkoutQuote={order,quote:data}; renderCheckoutReview();
   } catch(err){showCheckoutError(err.message);}
   finally{checkoutBusy=false;if(btn?.isConnected){btn.disabled=false;btn.textContent='Review order';}}

@@ -6,11 +6,6 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://suhagbhandar.in/catalog.html</loc>
-    <changefreq>daily</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
     <loc>https://suhagbhandar.in/about.html</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -31,118 +26,8 @@
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0005</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0007</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0008</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0009</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0011</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0012</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0013</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0014</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0015</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0016</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0017</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0018</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0019</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0020</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0021</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0022</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0023</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0024</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0025</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0026</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0027</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0028</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://suhagbhandar.in/product.html?id=DSB-0029</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <loc>https://suhagbhandar.in/catalog.html</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
   </url>
 </urlset>
