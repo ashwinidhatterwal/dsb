@@ -94,14 +94,12 @@ function flyToCart(imgEl, onLand){
   const dy = endCenterY - startCenterY;
   const arcLift = Math.min(100, Math.abs(dy) * 0.5 + 40); // gentle rise that flattens out as it nears the cart
 
-  const anim = clone.animate([
-    { transform: 'translate(0,0) scale(1)',                                        opacity: 1, offset: 0    },
-    { transform: `translate(${dx*0.18}px, ${dy*0.18 - arcLift}px) scale(.78)`,      opacity: 1, offset: .25 },
-    { transform: `translate(${dx*0.42}px, ${dy*0.42 - arcLift*0.6}px) scale(.52)`,  opacity: 1, offset: .5  },
-    { transform: `translate(${dx*0.70}px, ${dy*0.70 - arcLift*0.2}px) scale(.26)`,  opacity: 1, offset: .75 },
-    { transform: `translate(${dx*0.94}px, ${dy*0.94}px) scale(.08)`,                opacity: 1, offset: .95 },
-    { transform: `translate(${dx}px, ${dy}px) scale(.02)`,                          opacity: 0, offset: 1    }
-  ], { duration: 1050, easing: 'cubic-bezier(.76,.05,.86,.06)' }); // slow drift, then pulled in fast at the very end
+  // Sample a continuous curve; only transform and opacity animate.
+  const frames=Array.from({length:21},(_,i)=>{
+    const t=i/20;
+    return {transform:`translate(${dx*t}px, ${dy*t-Math.sin(Math.PI*t)*arcLift*.55}px) scale(${1-.96*t})`,opacity:t>.8 ? (1-t)/.2 : 1,offset:t};
+  });
+  const anim = clone.animate(frames,{duration:520,easing:'cubic-bezier(.2,.65,.35,1)'});
 
   anim.onfinish = () => {
     clone.remove();

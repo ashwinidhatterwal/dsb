@@ -365,7 +365,7 @@ function renderPdActions(p){
     return;
   }
   $('#pdActions').innerHTML = qty > 0
-    ? `<div class="stepper" id="pdStepper" style="height:44px;"><button data-act="dec">−</button><span>${qty}</span><button data-act="inc" ${maxReached ? 'disabled' : ''}>+</button></div>
+    ? `<div class="stepper" id="pdStepper" style="height:44px;"><button type="button" data-act="dec" aria-label="Decrease quantity">−</button><span>${qty}</span><button type="button" data-act="inc" aria-label="Increase quantity" ${maxReached ? 'disabled' : ''}>+</button></div>
        <button class="primary-btn" id="pdGoCart" style="flex:1;">View cart</button>`
     : `<button class="ghost-btn" id="pdAdd" ${maxReached ? 'disabled' : ''} style="flex:1;">Add to cart</button>
        <button class="primary-btn" id="pdBuyNow" ${maxReached ? 'disabled' : ''} style="flex:1;">Buy Now</button>`;
