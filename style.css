@@ -1414,4 +1414,16 @@ html[lang="hi"] .hero-compact .hero-title{line-height:1.4;padding-block:2px;}
 .card .price{font-size:18px;}
 .card .card-actions{gap:6px;}
 .card-rating-slot:empty{display:none;min-height:0;}
-.related-rail{align-items:start;}
+.related-rail{align-items:stretch;}
+
+/* Equal tile rows without fixed pixel heights or clipping translated content. */
+.grid{grid-auto-rows:1fr;align-items:stretch;}
+.grid>.card,.related-rail>.card{align-self:stretch;height:100%;min-width:0;}
+.card .imgwrap{flex-shrink:0;}
+.card .body{min-width:0;}
+.card .card-actions{min-height:94px;flex-shrink:0;}
+/* Keep category and subcategory controls below the measured search bar. */
+#shopMain .cat-rail-outer{position:sticky;top:var(--shop-bar-height,62px);z-index:35;padding-top:0;background:#fffaf5;border-bottom:1px solid var(--line);backdrop-filter:none;}
+.pay-option-copy{display:flex;flex-direction:column;gap:4px;min-width:0;padding-block:10px;}
+.upi-saving{color:#23653c;font-size:12px;font-weight:600;line-height:1.4;}
+.pay-option:has(input:checked){border-color:#bd135c;background:#fff5f9;}

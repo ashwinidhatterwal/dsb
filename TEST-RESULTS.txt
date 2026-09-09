@@ -1,3 +1,10 @@
+SHOP FOLLOW-UP: focused DOM checks passed for category grid replacing sliders,
+late review render staying hidden, All restoring sliders, default UPI selection,
+COD choice surviving rerenders, actual fee savings matching totals, Hindi copy,
+no savings claim for zero fees, and COD default when UPI is unavailable.
+JavaScript syntax and unchanged backend byte comparison passed. Equal-height
+and sticky positioning CSS reviewed; no browser layout/visual test performed.
+
 CATEGORY FOLLOW-UP: focused DOM fixture checks passed for category/subcategory
 clicks updating both rails, All restoring products, out-of-stock exclusion, empty
 selections hiding/clearing rails, and selection changes resetting horizontal

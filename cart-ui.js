@@ -31,7 +31,7 @@ const checkoutState = {
   name: savedCheckoutInfo.name || '',
   phone: savedCheckoutInfo.phone || '',
   address: savedCheckoutInfo.address || '',
-  paymentMethod: 'COD',
+  paymentMethod: CONFIG.UPI_ID ? 'UPI' : 'COD',
   promoInput: '',
   appliedPromo: null,   // { code, type, value }
   promoStatus: '',
@@ -385,6 +385,7 @@ function renderCartDrawer(){
   const subtotal = CartStore.total();
   const { discount, merchandiseTotal, deliveryCharge, codCharge, grandTotal } = computeCheckoutTotals(subtotal);
   const showUpi = !!CONFIG.UPI_ID;
+  const upiSaving = Math.max(0, Number(checkoutState.feeConfig?.codCharge) || 0);
 
   wrap.innerHTML = `
     <div class="cart-header">
@@ -438,8 +439,8 @@ function renderCartDrawer(){
         <div class="field">
           <label>Payment method</label>
           <div class="pay-options">
+            ${showUpi ? `<label class="pay-option pay-option-upi"><input type="radio" name="payMethod" value="UPI" ${checkoutState.paymentMethod === 'UPI' ? 'checked' : ''}> <span class="pay-option-copy"><span>Pay via UPI</span>${upiSaving > 0 ? `<small class="upi-saving">Save ${money(upiSaving)} compared with COD</small>` : ''}</span></label>` : ''}
             <label class="pay-option"><input type="radio" name="payMethod" value="COD" ${checkoutState.paymentMethod === 'COD' ? 'checked' : ''}> <span>Cash on Delivery</span></label>
-            ${showUpi ? `<label class="pay-option"><input type="radio" name="payMethod" value="UPI" ${checkoutState.paymentMethod === 'UPI' ? 'checked' : ''}> <span>Pay via UPI</span></label>` : ''}
           </div>
           ${(showUpi && checkoutState.paymentMethod === 'UPI') ? '<p class="hint">UPI payment opens after your order is saved with the confirmed total.</p>' : ''}
         </div>

@@ -157,6 +157,7 @@
     if ((m=s.match(/^Only (\d+) left$/))) return `केवल ${m[1]} बाकी`;
     if ((m=s.match(/^No results for "(.+)"$/))) return `“${m[1]}” के लिए कोई परिणाम नहीं मिला`;
     if ((m=s.match(/^(\d+) reviews?$/))) return `${m[1]} समीक्षाएँ`;
+    if ((m=s.match(/^Save (.+) compared with COD$/))) return `COD की तुलना में ${m[1]} बचाएँ`;
     if ((m=s.match(/^(.+) added to cart$/))) return `${m[1]} कार्ट में जोड़ा गया`;
     return null;
   }

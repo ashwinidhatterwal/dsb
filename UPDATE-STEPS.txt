@@ -1,3 +1,18 @@
+SHOP FOLLOW-UP — 20260909shop4 (supersedes category3 behavior below)
+
+Replace the website files, including .github, and let GitHub Actions publish.
+No Apps Script redeployment is needed if the experience update is installed.
+
+- Equal-height product tiles with bottom-aligned, stable action rows.
+- Category selections hide both homepage sliders and show the filtered grid.
+  All restores the sliders.
+- Category/subcategory bar stays below the search bar while browsing products;
+  its offset adjusts to the actual search-bar height.
+- UPI is selected by default when configured. COD remains selectable.
+- UPI savings display the actual configured COD fee avoided, in English/Hindi.
+  No extra discount or backend policy is introduced; no saving is claimed if
+  the COD fee is zero or not yet known.
+
 CATEGORY AND COMPACT CARD FOLLOW-UP — 20260909category3
 
 Replace the website files and let GitHub Actions publish. If you installed the

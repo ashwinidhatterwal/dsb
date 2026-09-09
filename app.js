@@ -84,7 +84,7 @@ function renderCarousel(sectionId, railId, list){
     delete rail.dataset.engaged;
     rail.dataset.selection = selection;
   }
-  if (!list.length){
+  if (activeCategory !== 'All' || !list.length){
     rail.innerHTML = '';
     section.style.display = 'none';
     return;
@@ -257,6 +257,13 @@ function renderSearchResults(){
 
 /* ---------------- Wire up static UI ---------------- */
 function initUI(){
+  const stickyBar = $('#stickyBar');
+  if (stickyBar){
+    const syncCategoryOffset = () => document.documentElement.style.setProperty('--shop-bar-height', `${stickyBar.getBoundingClientRect().height}px`);
+    syncCategoryOffset();
+    if ('ResizeObserver' in window) new ResizeObserver(syncCategoryOffset).observe(stickyBar);
+    else window.addEventListener('resize', syncCategoryOffset, {passive:true});
+  }
   gridPager = createPager($('#productGrid'), $('#gridSentinel'));
   searchPager = createPager($('#searchResults'), $('#searchSentinel'));
   renderSkeletonGrid($('#productGrid'), 8);
