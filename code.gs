@@ -625,7 +625,7 @@ function addOrder(o) {
     }
     const sheets = getOrderSheets_(), quoted = priceOrder_(order, sheets);
     if (!quoted.ok) return Object.assign({code:'validation_failed'},quoted);
-    if (!o.quoteToken || o.quoteToken !== quoted.quote.quoteToken) return {success:false,code:'quote_changed',error:'Prices or charges changed. Please review the updated total.',quote:quoted.quote};
+    if (o.quoteToken ? o.quoteToken !== quoted.quote.quoteToken : !sameCheckoutQuote_(o.expectedQuote,quoted.quote)) return {success:false,code:'quote_changed',error:'Prices or charges changed. Please review the updated total.',quote:quoted.quote};
     rateLimit_('order-phone:' + hashText_(order.phone), 5, 3600);
     rateLimit_('orders-global', 120, 3600);
     const id = 'ORD-' + hashText_(o.requestId).slice(0,16).toUpperCase(), now = new Date();
@@ -1184,4 +1184,13 @@ function processTelegramQueue() {
       sent++;
     }
   } finally { lock.releaseLock(); }
+}
+
+// Client amounts are consent only; inventory and all charged amounts come from Sheets.
+function sameCheckoutQuote_(expected,actual) {
+  if (!expected || !Array.isArray(expected.items)) return false;
+  const amounts=['subtotal','discount','deliveryCharge','codCharge','correctedTotal'];
+  if (amounts.some(k=>typeof expected[k]!=='number' || !Number.isFinite(expected[k]) || expected[k]!==actual[k])) return false;
+  const normalize=items=>items.map(x=>({id:String(x.id),size:String(x.size || ''),qty:x.qty,unitPrice:x.unitPrice,lineTotal:x.lineTotal})).sort((a,b)=>a.id.localeCompare(b.id)||a.size.localeCompare(b.size));
+  return JSON.stringify(normalize(expected.items))===JSON.stringify(normalize(actual.items));
 }

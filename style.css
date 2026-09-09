@@ -1398,3 +1398,11 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .primary-btn:active,.ghost-btn:active,.iconbtn:active,.card .addbtn:active,.card .buynowbtn:active{transform:scale(.98);}
 @media(hover:none){.card:hover,.card:hover img,.chip:hover,.subchip:hover,.iconbtn:hover,.addbtn:hover,.hero-tile:hover{transform:none;}.wa-float{animation:none;}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important;}}
+
+/* Checkout-only ornament: transform animation leaves the layout stationary. */
+.checkout-wait-art{position:relative;display:grid;place-items:center;width:104px;height:104px;margin:20px auto 28px;}
+.checkout-wait-art span{font-size:42px;animation:checkoutBagFloat 2.4s ease-in-out infinite;}
+.checkout-wait-ring{position:absolute;inset:0;border:2px solid rgba(200,0,96,.12);border-top-color:var(--rani);border-right-color:var(--marigold);border-radius:50%;animation:checkoutRingSpin 1.8s linear infinite;}
+@keyframes checkoutRingSpin{to{transform:rotate(360deg)}}
+@keyframes checkoutBagFloat{50%{transform:translateY(-5px)}}
+@media(prefers-reduced-motion:reduce){.checkout-wait-art span,.checkout-wait-ring{animation:none!important}}

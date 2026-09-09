@@ -550,6 +550,12 @@ async function submitOrder(){
   const order = checkoutOrderFromForm();
   if (!order.itemsDetail.length) return;
   if (order.customerName.length<2 || !/^\+?[\d\s()-]{10,20}$/.test(order.phone) || order.address.length<5){showToast('Please fill in a valid name, phone number and delivery address.');return;}
+  if(checkoutState.feeConfig){
+    const subtotal=CartStore.total(), totals=computeCheckoutTotals(subtotal);
+    const items=Object.values(CartStore.getAll()).map(({product,qty})=>({id:product.productId || product.id,name:product.name,qty,...(product.size?{size:product.size}:{}),unitPrice:Number(product.price),lineTotal:Math.round(Number(product.price)*qty*100)/100}));
+    checkoutQuote={order,quote:{subtotal,discount:totals.discount,deliveryCharge:totals.deliveryCharge,codCharge:totals.codCharge,correctedTotal:totals.grandTotal,items}};
+    renderCheckoutReview();return;
+  }
   checkoutBusy=true;
   const btn=$('#orderWaBtn'); if(btn){btn.disabled=true;btn.textContent='Checking stock…';}
   try {
@@ -584,7 +590,7 @@ async function confirmCheckoutUnlocked(){
   if(pendingCheckout){renderPendingCheckout();return;}
   const cart=CartStore.getAll();
   if(checkoutQuote.order.itemsDetail.some(x=>!cart[sizeCartKey(x.id,x.size)] || cart[sizeCartKey(x.id,x.size)].qty<x.qty)){checkoutQuote=null;renderCartDrawer();showCheckoutError('Your cart changed in another tab. Please review it again.');return;}
-  pendingCheckout={requestId:newCheckoutId(),order:checkoutQuote.order,quoteToken:checkoutQuote.quote.quoteToken};
+  pendingCheckout={requestId:newCheckoutId(),order:checkoutQuote.order,quoteToken:checkoutQuote.quote.quoteToken,expectedQuote:checkoutQuote.quote};
   try {localStorage.setItem(PENDING_CHECKOUT_KEY,JSON.stringify(pendingCheckout));}
   catch(_){pendingCheckout=null;showCheckoutError('Allow browser storage to place an order safely, or contact the shop.');return;}
   await sendPendingCheckout();
@@ -594,7 +600,7 @@ async function sendPendingCheckout(){
   checkoutBusy=true;renderPendingCheckout();
   try{
     const p=pendingCheckout;
-    const data=await postCheckout('addOrder',{order:{...p.order,requestId:p.requestId,quoteToken:p.quoteToken}});
+    const data=await postCheckout('addOrder',{order:{...p.order,requestId:p.requestId,quoteToken:p.quoteToken,expectedQuote:p.expectedQuote}});
     if(data.success===true && data.orderId){completeCheckout(data,p.order);return;}
     if(data.code==='quote_changed' && data.quote){
       clearPendingCheckout();checkoutQuote={order:p.order,quote:data.quote};renderCheckoutReview(data.error);return;
@@ -608,7 +614,7 @@ async function sendPendingCheckout(){
   finally{checkoutBusy=false;$('#retryCheckoutBtn')?.removeAttribute('disabled');}
 }
 function renderPendingCheckout(message=''){
-  $('#cartContent').innerHTML=`<button class="closebtn" id="cartClose" aria-label="Close cart">✕</button><section class="checkout-review"><h2>Checking your order</h2><p role="status">${escapeHtml(message || (checkoutBusy?'Saving your order…':'A previous order attempt needs to be checked.'))}</p><p>Checking again will not create a duplicate order.</p><button class="primary-btn" id="retryCheckoutBtn" ${checkoutBusy?'disabled':''}>Check order status</button></section>`;
+  $('#cartContent').innerHTML=`<button class="closebtn" id="cartClose" aria-label="Close cart">✕</button><section class="checkout-review">${checkoutBusy && !message ? '<div class="checkout-wait-art" aria-hidden="true"><div class="checkout-wait-ring"></div><span>🛍️</span></div>' : ''}<h2>Checking your order</h2><p role="status">${escapeHtml(message || (checkoutBusy?'Checking availability and saving your order…':'A previous order attempt needs to be checked.'))}</p><p>Checking again will not create a duplicate order.</p><button class="primary-btn" id="retryCheckoutBtn" ${checkoutBusy?'disabled':''}>Check order status</button></section>`;
   $('#cartClose').onclick=closeCart;$('#retryCheckoutBtn').onclick=checkPendingCheckout;
   if(!checkoutBusy)$('#retryCheckoutBtn').focus();
 }

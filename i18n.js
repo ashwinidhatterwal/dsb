@@ -8,6 +8,7 @@
   const originalAttrs = new WeakMap();
 
   const HI = {
+    'Checking availability and saving your order…':'उपलब्धता जाँचकर आपका ऑर्डर दर्ज कर रहे हैं…',
     'Choose size':'साइज़ चुनें','Choose a size first':'पहले साइज़ चुनें','Select a size before adding to cart.':'कार्ट में जोड़ने से पहले साइज़ चुनें।',
     'Review order':'ऑर्डर देखें','Review your order':'अपना ऑर्डर देखें','Confirm order':'ऑर्डर की पुष्टि करें','Edit details':'जानकारी बदलें',
     'Estimated total':'अनुमानित कुल','Subtotal — fees checked next':'उप-कुल — शुल्क अगले चरण में',
