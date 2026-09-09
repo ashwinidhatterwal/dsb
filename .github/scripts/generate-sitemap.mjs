@@ -67,7 +67,8 @@ async function main() {
 
   const apiUrl = new URL(apiBase);
   apiUrl.searchParams.set('action', 'products');
-  const productIds = uniqueProductIds(await fetchJson(apiUrl));
+  const payload=await fetchJson(apiUrl);
+  const productIds = uniqueProductIds(payload);
 
   // A zero-product response can be legitimate, but it can also mean a broken
   // sheet/API. Refuse to wipe an existing product sitemap accidentally if the
@@ -75,10 +76,12 @@ async function main() {
   if (productIds.length === 0) {
     let old = '';
     try { old = await fs.readFile(SITEMAP_PATH, 'utf8'); } catch {}
-    if (old.includes('/product.html?id=')) {
+    if (old.includes('/product.html?id=') || old.includes('/products/p-')) {
       throw new Error('Products API returned zero products; refusing to remove existing product URLs automatically.');
     }
   }
+
+  await fs.writeFile('.catalog-build.json',JSON.stringify(Array.isArray(payload)?payload:payload.products),'utf8');
 
   const staticEntries = [
     entry(`${siteBase}/`, 'daily', '1.0'),
@@ -91,7 +94,7 @@ async function main() {
 
   const productEntries = productIds.map(id =>
     // URLSearchParams gives the same safe ID encoding used by the storefront.
-    entry(`${siteBase}/product.html?id=${encodeURIComponent(id)}`, 'weekly', '0.8')
+    entry(`${siteBase}/products/p-${Buffer.from(String(id)).toString('hex')}.html`, 'weekly', '0.8')
   );
 
   const output = [
