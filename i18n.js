@@ -6,8 +6,12 @@
   let lang='en';try{lang=localStorage.getItem(KEY)==='hi'?'hi':'en';}catch(_){}
   const originalText = new WeakMap();
   const originalAttrs = new WeakMap();
+  const renderedText=new WeakMap();
 
   const HI = {
+    'Order online · Shop support on WhatsApp':'ऑनलाइन ऑर्डर करें · व्हाट्सऐप पर सहायता',
+    'Taking longer than usual. Your order may still be saving.':'सामान्य से अधिक समय लग रहा है। आपका ऑर्डर अभी दर्ज हो सकता है।',
+    'Some saved cart data was damaged and has been removed.':'कार्ट की कुछ पुरानी जानकारी खराब थी और हटा दी गई है।',
     'Checking availability and saving your order…':'उपलब्धता जाँचकर आपका ऑर्डर दर्ज कर रहे हैं…',
     'Choose size':'साइज़ चुनें','Choose a size first':'पहले साइज़ चुनें','Select a size before adding to cart.':'कार्ट में जोड़ने से पहले साइज़ चुनें।',
     'Review order':'ऑर्डर देखें','Review your order':'अपना ऑर्डर देखें','Confirm order':'ऑर्डर की पुष्टि करें','Edit details':'जानकारी बदलें',
@@ -137,13 +141,14 @@
   function storeText(node){ if(!originalText.has(node)) originalText.set(node,node.nodeValue); }
   function translateTextNode(node){
     if(!node.parentElement || node.parentElement.closest('script,style,noscript,[data-i18n-skip]')) return;
+    if(renderedText.has(node) && node.nodeValue!==renderedText.get(node)) originalText.set(node,node.nodeValue);
     storeText(node);
     const original=originalText.get(node);
-    if(lang==='en'){ node.nodeValue=original; return; }
+    if(lang==='en'){ if(node.nodeValue!==original)node.nodeValue=original; renderedText.set(node,original);return; }
     const trimmed=normalize(original); if(!trimmed) return;
     const translated=HI[trimmed] || dynamicHi(trimmed); if(!translated) return;
     const lead=(original.match(/^\s*/)||[''])[0], tail=(original.match(/\s*$/)||[''])[0];
-    node.nodeValue=lead+translated+tail;
+    const next=lead+translated+tail;if(node.nodeValue!==next)node.nodeValue=next;renderedText.set(node,next);
   }
   function translateElement(el){
     if(!(el instanceof Element) || el.closest('[data-i18n-skip]')) return;
@@ -172,8 +177,13 @@
   function init(){
     document.querySelectorAll('.lang-toggle').forEach(b=>b.addEventListener('click',()=>setLang(lang==='hi'?'en':'hi')));
     translateTree(document.body);
-    const obs=new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>translateTree(n))));
-    obs.observe(document.body,{childList:true,subtree:true});
+    let scheduled=false;const roots=new Set();
+    const obs=new MutationObserver(ms=>{
+      ms.forEach(m=>{if(m.type==='characterData'){if(m.target.nodeValue!==renderedText.get(m.target))roots.add(m.target);}else m.addedNodes.forEach(n=>roots.add(n));});
+      if(!roots.size || scheduled)return;
+      scheduled=true;requestAnimationFrame(()=>{scheduled=false;const batch=[...roots];roots.clear();batch.filter(n=>n.isConnected && !batch.some(parent=>parent!==n && parent.contains?.(n))).forEach(translateTree);});
+    });
+    obs.observe(document.body,{childList:true,characterData:true,subtree:true});
   }
   window.DSB_I18N={get lang(){return lang;},isHindi:()=>lang==='hi',t:translateString,setLang,apply:translateTree};
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init,{once:true}); else init();

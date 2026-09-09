@@ -39,7 +39,7 @@ async function loadProductsForShop(){
   renderCategoryRail();
   renderGrid();
   renderHomeCarousels();
-  reviewsPromise.then(() => { renderGrid(); renderHomeCarousels(); });
+  reviewsPromise.then(() => { updateVisibleRatings(); });
   initScrollReveal();
 }
 

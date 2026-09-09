@@ -6,7 +6,7 @@ let selectedRating = 5;
 let selectedSize = '';
 
 function getProductIdFromUrl(){
-  return new URLSearchParams(location.search).get('id') || '';
+  return new URLSearchParams(location.search).get('id') || document.documentElement.dataset.productId || '';
 }
 
 // renderStars() lives in utils.js now — shared with product cards.
@@ -26,7 +26,7 @@ function renderProductSkeleton(){
 async function init(){
   const root = $('#pdRoot');
   const id = getProductIdFromUrl().trim();
-  renderProductSkeleton();
+  if(!root.querySelector('[data-prerendered]'))renderProductSkeleton();
 
   if (!id){
     root.innerHTML = `
@@ -157,7 +157,7 @@ function renderProduct(p){
   renderPdActions(p);
   renderStarInput();
   $('#submitReviewBtn').addEventListener('click', submitReview);
-  $('#pdShareBtn').addEventListener('click', () => shareProduct(p));
+  $('#pdShareBtn').addEventListener('click', async () => shareProduct(p));
   const sizeBtn = $('#pdSizeGuideBtn');
   if (sizeBtn) sizeBtn.addEventListener('click', openSizeGuide);
   updateSeoTags(p);
@@ -261,7 +261,8 @@ function bindGallerySwipe(){
 
 /* ---------------- SEO: per-product tags + structured data ---------------- */
 function updateSeoTags(p){
-  const url = `${CONFIG.SITE_URL}/product.html?id=${encodeURIComponent(p.id)}`;
+  document.getElementById('staticProductLd')?.remove();
+  const url = document.documentElement.dataset.productId ? location.origin+location.pathname : `${CONFIG.SITE_URL}/product.html?id=${encodeURIComponent(p.id)}`;
   const imageUrl = (() => { try { return new URL(p.image, CONFIG.SITE_URL + '/').href; } catch (_) { return p.image; } })();
   const title = `${p.name} — ${CONFIG.SHOP_NAME}`;
   const desc = (p.description && p.description.trim())
@@ -289,7 +290,8 @@ function updateSeoTags(p){
 // reviews exist (never fabricated — omitted entirely until there's at least
 // one genuine review, since Google disallows rating markup with no basis).
 function updateStructuredData(p, reviews){
-  const url = `${CONFIG.SITE_URL}/product.html?id=${encodeURIComponent(p.id)}`;
+  document.getElementById('staticProductLd')?.remove();
+  const url = document.documentElement.dataset.productId ? location.origin+location.pathname : `${CONFIG.SITE_URL}/product.html?id=${encodeURIComponent(p.id)}`;
   const images = (p.gallery && p.gallery.length ? p.gallery : [p.image]).map(src => {
     try { return new URL(src, CONFIG.SITE_URL + '/').href; } catch (_) { return src; }
   });
@@ -372,18 +374,18 @@ function renderPdActions(p){
   const stepper = $('#pdStepper');
   if (stepper){
     const incBtn = $('[data-act="inc"]', stepper);
-    if (incBtn && !incBtn.disabled) incBtn.addEventListener('click', () => { CartStore.add(variant, 1); updateCartBadge(); renderPdActions(p); });
-    $('[data-act="dec"]', stepper).addEventListener('click', () => { CartStore.add(variant, -1); updateCartBadge(); renderPdActions(p); });
+    if (incBtn && !incBtn.disabled) incBtn.addEventListener('click', async () => { await CartStore.addSafe(variant, 1); updateCartBadge(); renderPdActions(p); });
+    $('[data-act="dec"]', stepper).addEventListener('click', async () => { await CartStore.addSafe(variant, -1); updateCartBadge(); renderPdActions(p); });
   }
   const addBtn = $('#pdAdd');
-  if (addBtn) addBtn.addEventListener('click', () => {
-    CartStore.add(variant, 1); renderPdActions(p);
+  if (addBtn) addBtn.addEventListener('click', async () => {
+    await CartStore.addSafe(variant, 1); renderPdActions(p);
     showToast(`${p.name} added to cart`);
     playAddFlourish($('.pd-slide img'));
   });
   const buyBtn = $('#pdBuyNow');
-  if (buyBtn) buyBtn.addEventListener('click', () => {
-    CartStore.add(variant, 1); renderPdActions(p);
+  if (buyBtn) buyBtn.addEventListener('click', async () => {
+    await CartStore.addSafe(variant, 1); renderPdActions(p);
     playAddFlourish($('.pd-slide img'), { openCartAfter: true });
   });
   const goCart = $('#pdGoCart');
@@ -418,7 +420,7 @@ function renderStarInput(){
     box.innerHTML = [1,2,3,4,5].map(v =>
       `<button type="button" class="star-btn ${v <= selectedRating ? 'filled' : ''}" data-v="${v}" aria-label="${v} stars" aria-pressed="${v===selectedRating}">★</button>`
     ).join('');
-    $$('.star-btn', box).forEach(btn => btn.addEventListener('click', () => {
+    $$('.star-btn', box).forEach(btn => btn.addEventListener('click', async () => {
       selectedRating = Number(btn.dataset.v);
       draw();
     }));
@@ -522,7 +524,7 @@ function status_(el, msg, ok){
 document.addEventListener('dsb:languagechange', () => { if (CURRENT_PRODUCT) { renderProduct(CURRENT_PRODUCT); renderRelated(CURRENT_PRODUCT); loadReviews(CURRENT_PRODUCT.id); } });
 
 document.addEventListener('DOMContentLoaded', () => {
-  $('#searchTrigger').addEventListener('click', () => { location.href = 'index.html'; });
+  $('#searchTrigger').addEventListener('click', async () => { location.href = 'index.html'; });
   $('#cartTrigger').addEventListener('click', openCart);
   $('#cartOverlay').addEventListener('click', (e) => { if (e.target.id === 'cartOverlay') closeCart(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ closeCart(); closeSizeGuide(); } });

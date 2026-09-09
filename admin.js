@@ -35,8 +35,22 @@ let PRODUCTS = [];
 let editingProductId = null; // set while editing an existing product; null when adding a new one
 let ORDERS = [];
 
+
+async function adminFetch(url,options={}){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+  try {
+    const response=await fetch(url,{...options,signal:controller.signal});
+    if(!response.ok) throw new Error(`Server returned HTTP ${response.status}`);
+    const data=await response.json();
+    return {json:async()=>data};
+  } catch(err){
+    if(err.name==='AbortError') throw new Error('Request timed out. A write may already have saved; refresh the list before retrying.');
+    throw err;
+  } finally {clearTimeout(timer);}
+}
+
 async function adminRead(action){
-  const res = await fetch(API_URL, {
+  const res = await adminFetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ key: ADMIN_KEY, action })
@@ -58,7 +72,7 @@ function showToast(msg){
   setTimeout(() => t.classList.remove('show'), 1800);
 }
 
-async function loadProducts(){
+async function loadProducts(refreshRelated=true){
   const statusEl = $('#connectStatus');
   try{
     const data = await adminRead('adminProducts');
@@ -70,10 +84,10 @@ async function loadProducts(){
     $('#adminApp').style.display = 'block';
   } catch(err){
     status(statusEl, 'Could not load products: ' + err.message, false);
-    return;
+    return false;
   }
-  loadOrders();
-  loadDashboard();
+  if(refreshRelated){loadOrders();loadDashboard();}
+  return true;
 }
 
 function formatDateTime(value){
@@ -162,7 +176,7 @@ function renderOrderList(){
 
 async function updateOrderStatus(orderId, newStatus){
   try{
-    const res = await fetch(API_URL, {
+    const res = await adminFetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ key: ADMIN_KEY, action: 'updateOrderStatus', orderId, status: newStatus })
@@ -183,10 +197,19 @@ function renderCategoryOptions(){
   $('#subcategoryList').innerHTML = subs.map(s => `<option value="${escapeHtml(s)}">`).join('');
 }
 
+let productPage=0,productFilter='';
+const ADMIN_PAGE_SIZE=40;
 function renderProductList(){
   const wrap = $('#productList');
   const q = $('#filterInput').value.trim().toLowerCase();
-  const list = PRODUCTS.filter(p => !q || `${p.name} ${p.category} ${p.subcategory} ${p.id}`.toLowerCase().includes(q));
+  if(q!==productFilter){productPage=0;productFilter=q;}
+  const matches=PRODUCTS.filter(p => !q || `${p.name} ${p.category} ${p.subcategory} ${p.id}`.toLowerCase().includes(q));
+  productPage=Math.min(productPage,Math.max(0,Math.ceil(matches.length/ADMIN_PAGE_SIZE)-1));
+  const list=matches.slice(productPage*ADMIN_PAGE_SIZE,(productPage+1)*ADMIN_PAGE_SIZE);
+  let pager=$('#adminProductPager');
+  if(!pager){pager=document.createElement('div');pager.id='adminProductPager';wrap.after(pager);}
+  pager.innerHTML=`<button type="button" id="productsPrev" ${productPage===0?'disabled':''}>Previous</button> <span>${matches.length ? productPage*ADMIN_PAGE_SIZE+1 : 0}–${Math.min((productPage+1)*ADMIN_PAGE_SIZE,matches.length)} of ${matches.length}</span> <button type="button" id="productsNext" ${(productPage+1)*ADMIN_PAGE_SIZE>=matches.length?'disabled':''}>Next</button>`;
+  $('#productsPrev').onclick=()=>{productPage--;renderProductList();};$('#productsNext').onclick=()=>{productPage++;renderProductList();};
   $('#countLabel').textContent = PRODUCTS.length;
   if (!list.length){
     wrap.innerHTML = `<p class="hint">No products match.</p>`;
@@ -205,12 +228,8 @@ function renderProductList(){
       </div>
     </div>
   `).join('');
-  $$('.arow', wrap).forEach(row => {
-    const id = row.dataset.id;
-    const product = PRODUCTS.find(p => String(p.id) === String(id));
-    $('[data-act="edit"]', row).addEventListener('click', () => fillForm(product));
-    $('[data-act="delete"]', row).addEventListener('click', () => deleteProduct(id, product?.name));
-  });
+  const byId=new Map(list.map(p=>[String(p.id),p]));
+  wrap.onclick=e=>{const button=e.target.closest('button[data-act]'),row=button?.closest('.arow');if(!row)return;const product=byId.get(row.dataset.id);if(!product)return;if(button.dataset.act==='edit')fillForm(product);else deleteProduct(product.id,product.name);};
 }
 
 function fillForm(p){
@@ -269,7 +288,7 @@ async function uploadFileToCloudinary(file){
   const upload = await resizeUpload(file);
   form.append('file', upload, file.name.replace(/\.[^.]+$/, '') + ({ 'image/png':'.png','image/webp':'.webp','image/jpeg':'.jpg' }[upload.type] || '.jpg'));
   form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+  const res = await adminFetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
     method: 'POST',
     body: form
   });
@@ -399,7 +418,7 @@ async function saveProduct(){
   btn.disabled = true;
   btn.textContent = 'Saving…';
   try{
-    const res = await fetch(API_URL, {
+    const res = await adminFetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight against Apps Script
       body: JSON.stringify(payload)
@@ -409,10 +428,11 @@ async function saveProduct(){
     status(statusEl, isUpdate ? 'Product updated.' : `Product added as ${data.id}.`, true);
     showToast(isUpdate ? 'Product updated' : 'Product added');
     clearForm();
-    await loadProducts();
+    btn.disabled=false;btn.textContent='Save product';
     switchTab('products');
+    if(!await loadProducts(false)) showToast('Product saved. List refresh failed; refresh before editing again.');
   } catch(err){
-    status(statusEl, 'Save failed: ' + err.message, false);
+    status(statusEl, 'Save could not be confirmed: ' + err.message + ' Check the product list before retrying.', false);
   } finally {
     btn.disabled = false;
     btn.textContent = 'Save product';
@@ -422,7 +442,7 @@ async function saveProduct(){
 async function deleteProduct(id, name){
   if (!confirm(`Delete "${name || id}"? This cannot be undone.`)) return;
   try{
-    const res = await fetch(API_URL, {
+    const res = await adminFetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ key: ADMIN_KEY, action: 'delete', id })

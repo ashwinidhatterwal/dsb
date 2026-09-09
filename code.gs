@@ -861,7 +861,10 @@ function recordOrderItemsFromValidated_(orderId, date, items) {
   let sheet = ss.getSheetByName(ORDER_ITEMS_SHEET);
   if (!sheet) { sheet = ss.insertSheet(ORDER_ITEMS_SHEET); sheet.appendRow(['orderId','date','productId','productName','category','subcategory','qty','unitPrice','costPrice','lineRevenue','lineCost','lineProfit']); }
   if(items.some(x=>x.size)) ensureColumn_(sheet,'size');
-  const heads = headers_(sheet), existing = rowsAsObjects_(sheet).filter(r => String(r.orderid) === orderId);
+  const heads = headers_(sheet), idColumn = heads.indexOf('orderid');
+  if (idColumn < 0) throw new Error('OrderItems is missing orderId.');
+  const hits = sheet.getLastRow()>1 ? sheet.getRange(2,idColumn+1,sheet.getLastRow()-1,1).createTextFinder(String(orderId)).matchEntireCell(true).findAll() : [];
+  const existing = hits.map(hit => { const values=sheet.getRange(hit.getRow(),1,1,heads.length).getValues()[0]; const item={};heads.forEach((h,i)=>item[h]=values[i]);return item; });
   const rows = items.filter(item => !existing.some(r => String(r.productid) === item.id && String(r.size || '') === String(item.size || ''))).map(item => {
     const record = {orderid:orderId,date:new Date(date),productid:item.id,productname:item.name,size:item.size || '',category:item.category,subcategory:item.subcategory,qty:item.qty,unitprice:item.unitPrice,costprice:item.costPrice,linerevenue:item.lineTotal,linecost:roundMoney_(item.qty * item.costPrice),lineprofit:roundMoney_(item.lineTotal - item.qty * item.costPrice)};
     return heads.map(h => sheetText_(record[h] !== undefined ? record[h] : ''));
@@ -1035,7 +1038,8 @@ function saveTransaction_(sheet,row,id,status,data) {
   // A Sheets cell supports 50,000 characters. Fail before inventory changes.
   if (raw.length > 48000) throw new Error('This order is too large. Please place a smaller order.');
   row = row || sheet.getLastRow()+1;
-  sheet.getRange(row,1,1,4).setValues([[id,status,raw,new Date()]]);
+  if(data.kind==='order' && data.notifyAsync) sheet.getRange(row,1,1,7).setValues([[id,status,raw,new Date(),'Pending',0,0]]);
+  else sheet.getRange(row,1,1,4).setValues([[id,status,raw,new Date()]]);
   return row;
 }
 function readTransaction_(sheet,row) {
@@ -1162,16 +1166,17 @@ function processTelegramQueue() {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(JOURNAL_SHEET);
     if (!sheet || sheet.getLastRow()<2) return;
     const started = Date.now();
-    const hits = sheet.getRange(2,2,sheet.getLastRow()-1,1).createTextFinder('Committed').matchEntireCell(true).findAll();
-    const states = sheet.getRange(2,5,sheet.getLastRow()-1,3).getValues();
-    let sent = 0;
-    for (const hit of hits) {
-      if (sent>=5 || Date.now()-started>45000) break;
-      const row = hit.getRow(), state = states[row-2];
-      if (state[0]==='Sent' || Number(state[1])>Date.now()) continue;
-      const data = readTransaction_(sheet,row).data;
-      // Existing orders from before this release must not be resent.
-      if (data.kind!=='order' || !data.notifyAsync) continue;
+    const last=sheet.getLastRow();
+    const hits=sheet.getRange(2,5,last-1,1).createTextFinder('Pending').matchEntireCell(true).findAll();
+    let sent=0;
+    for(const hit of hits){
+      if(sent>=5 || Date.now()-started>45000)break;
+      const row=hit.getRow(),state=sheet.getRange(row,5,1,3).getValues()[0];
+      if(Number(state[1])>Date.now())continue;
+      const transaction=readTransaction_(sheet,row);
+      if(transaction.status==='Pending')continue;
+      const data=transaction.data;
+      if(transaction.status!=='Committed' || data.kind!=='order' || !data.notifyAsync){sheet.getRange(row,5).setValue('Skipped');continue;}
       const attempts = (Number(state[2]) || 0)+1;
       // Persist a retry deadline before transport, including hard execution failures.
       sheet.getRange(row,5,1,3).setValues([['Pending',Date.now()+Math.min(3600000,60000*Math.pow(2,Math.min(attempts-1,6))),attempts]]);
@@ -1182,6 +1187,16 @@ function processTelegramQueue() {
         SpreadsheetApp.flush();
       }
       sent++;
+    }
+    const props=PropertiesService.getScriptProperties();
+    const cursor=Math.max(2,Number(props.getProperty('TELEGRAM_MIGRATE_ROW')) || 2);
+    const stop=Math.min(last,cursor+49);
+    for(let row=cursor;row<=stop && Date.now()-started<45000;row++){
+      if(!sheet.getRange(row,5).getValue()){
+        const t=readTransaction_(sheet,row);
+        sheet.getRange(row,5).setValue(t.data.kind==='order' && t.data.notifyAsync && t.status!=='RolledBack' ? 'Pending' : 'Skipped');
+      }
+      props.setProperty('TELEGRAM_MIGRATE_ROW',String(row+1));
     }
   } finally { lock.releaseLock(); }
 }

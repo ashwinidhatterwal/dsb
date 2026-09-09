@@ -260,14 +260,15 @@ function unlockPageFromCart(){
   window.scrollTo(0, cartScrollLockY);
 }
 
-function openCart(){
+async function openCart(){
   // Reconcile against the live catalog if one is loaded on this page (it
   // won't be on About/Contact, which never fetch products — safe no-op there).
   if (typeof ALL_PRODUCTS !== 'undefined' && ALL_PRODUCTS.length){
-    const { removed } = CartStore.syncWithCatalog(ALL_PRODUCTS);
+    const { removed } = await CartStore.syncSafe(ALL_PRODUCTS);
     if (removed.length) showToast(`${removed.join(', ')} ${removed.length > 1 ? 'are' : 'is'} no longer available and ${removed.length > 1 ? 'were' : 'was'} removed from your cart`);
   }
   renderCartDrawer();
+  if(CartStore.takeRepairNotice()) showToast('Some saved cart data was damaged and has been removed.');
   lockPageForCart();
   $('#cartOverlay').classList.add('open');
   openDialogFocus($('#cartContent'),closeCart);
@@ -467,15 +468,15 @@ function renderCartDrawer(){
     const id = stepper.dataset.id;
     const entry = cart[id];
     if (!entry) return;
-    $('[data-act="inc"]', stepper).addEventListener('click', () => {
+    $('[data-act="inc"]', stepper).addEventListener('click', async () => {
       if (entry.product.stockQty !== null && CartStore.qtyForProduct(entry.product.productId || entry.product.id) >= entry.product.stockQty){ showToast(`Only ${entry.product.stockQty} in stock`); return; }
-      CartStore.add(entry.product, 1); updateCartBadge(); renderCartDrawer(); if (typeof renderGrid === 'function') renderGrid(); if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard();
+      await CartStore.addSafe(entry.product, 1); updateCartBadge(); renderCartDrawer(); if (typeof renderGrid === 'function') renderGrid(); if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard();
     });
-    $('[data-act="dec"]', stepper).addEventListener('click', () => { CartStore.add(entry.product, -1); updateCartBadge(); renderCartDrawer(); if (typeof renderGrid === 'function') renderGrid(); if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard(); });
+    $('[data-act="dec"]', stepper).addEventListener('click', async () => { await CartStore.addSafe(entry.product, -1); updateCartBadge(); renderCartDrawer(); if (typeof renderGrid === 'function') renderGrid(); if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard(); });
   });
-  $$('.cart-remove', wrap).forEach(btn => btn.addEventListener('click', () => {
+  $$('.cart-remove', wrap).forEach(btn => btn.addEventListener('click', async () => {
     const entry = cart[btn.dataset.id]; if (!entry) return;
-    CartStore.add(entry.product, -entry.qty); updateCartBadge(); renderCartDrawer(); if (typeof renderGrid === 'function') renderGrid(); if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard();
+    await CartStore.addSafe(entry.product, -entry.qty); updateCartBadge(); renderCartDrawer(); if (typeof renderGrid === 'function') renderGrid(); if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard();
   }));
 
   $('#custName').addEventListener('input', e => { checkoutState.name = e.target.value; saveCheckoutInfo(); });
@@ -485,7 +486,7 @@ function renderCartDrawer(){
   $('#applyPromoBtn').addEventListener('click', applyPromoCode);
   $$('input[name="payMethod"]', wrap).forEach(radio => radio.addEventListener('change', e => { checkoutState.paymentMethod = e.target.value; saveCheckoutInfo(); renderCartDrawer(); }));
   $('#orderWaBtn').addEventListener('click', submitOrder);
-  $('#clearCartBtn').addEventListener('click', () => { if (confirm('Clear all items from your cart?')) { CartStore.clear(); updateCartBadge(); renderCartDrawer(); } });
+  $('#clearCartBtn').addEventListener('click', async () => { if (confirm('Clear all items from your cart?')) { await CartStore.clearSafe(); updateCartBadge(); renderCartDrawer(); } });
   requestAnimationFrame(() => { const main = $('#cartMain'); if (main) main.scrollTop = Math.min(previousScroll, main.scrollHeight); if (focusId) document.getElementById(focusId)?.focus({preventScroll:true}); });
 }
 
@@ -509,7 +510,7 @@ function renderOrderConfirmation(receipt){
   const close = () => closeCart();
   $('#cartClose').addEventListener('click', close);
   $('#confirmCloseBtn').addEventListener('click', close);
-  $('#downloadReceiptBtn').addEventListener('click', () => downloadReceipt(receipt));
+  $('#downloadReceiptBtn').addEventListener('click', async () => downloadReceipt(receipt));
   $('#downloadReceiptBtn').focus();
 }
 
@@ -601,7 +602,7 @@ async function sendPendingCheckout(){
   try{
     const p=pendingCheckout;
     const data=await postCheckout('addOrder',{order:{...p.order,requestId:p.requestId,quoteToken:p.quoteToken,expectedQuote:p.expectedQuote}});
-    if(data.success===true && data.orderId){completeCheckout(data,p.order);return;}
+    if(data.success===true && data.orderId){await completeCheckout(data,p.order);return;}
     if(data.code==='quote_changed' && data.quote){
       clearPendingCheckout();checkoutQuote={order:p.order,quote:data.quote};renderCheckoutReview(data.error);return;
     }
@@ -613,9 +614,12 @@ async function sendPendingCheckout(){
   }catch(err){renderPendingCheckout('The connection was interrupted. Check this order before placing another one.');}
   finally{checkoutBusy=false;$('#retryCheckoutBtn')?.removeAttribute('disabled');}
 }
+let pendingFeedbackTimer;
 function renderPendingCheckout(message=''){
+  clearTimeout(pendingFeedbackTimer);
   $('#cartContent').innerHTML=`<button class="closebtn" id="cartClose" aria-label="Close cart">✕</button><section class="checkout-review">${checkoutBusy && !message ? '<div class="checkout-wait-art" aria-hidden="true"><div class="checkout-wait-ring"></div><span>🛍️</span></div>' : ''}<h2>Checking your order</h2><p role="status">${escapeHtml(message || (checkoutBusy?'Checking availability and saving your order…':'A previous order attempt needs to be checked.'))}</p><p>Checking again will not create a duplicate order.</p><button class="primary-btn" id="retryCheckoutBtn" ${checkoutBusy?'disabled':''}>Check order status</button></section>`;
   $('#cartClose').onclick=closeCart;$('#retryCheckoutBtn').onclick=checkPendingCheckout;
+  if(checkoutBusy && !message)pendingFeedbackTimer=setTimeout(()=>{const status=$('#cartContent .checkout-review [role="status"]');if(status && checkoutBusy)status.textContent='Taking longer than usual. Your order may still be saving.';},10000);
   if(!checkoutBusy)$('#retryCheckoutBtn').focus();
 }
 async function checkPendingCheckout(){
@@ -623,7 +627,7 @@ async function checkPendingCheckout(){
   checkoutBusy=true;renderPendingCheckout();
   try{
     const p=pendingCheckout,data=await postCheckout('orderResult',{requestId:p.requestId,phone:p.order.phone});
-    if(data.success && data.orderId){completeCheckout(data,p.order);return;}
+    if(data.success && data.orderId){await completeCheckout(data,p.order);return;}
     if(data.code==='not_found'){
       renderPendingCheckout('No saved order was found yet. Retry this same order safely.');
       $('#retryCheckoutBtn').textContent='Retry same order';
@@ -633,12 +637,11 @@ async function checkPendingCheckout(){
   finally{checkoutBusy=false;$('#retryCheckoutBtn')?.removeAttribute('disabled');}
 }
 function clearPendingCheckout(){pendingCheckout=null;try{localStorage.removeItem(PENDING_CHECKOUT_KEY);}catch(_){}}
-function completeCheckout(data,order){
+async function completeCheckout(data,order){
   lastReceipt={orderId:data.orderId,orderDate:data.orderDate,name:order.customerName,phone:order.phone,address:order.address,paymentMethod:order.paymentMethod,promoCode:data.promoCode || '',subtotal:data.subtotal,discount:data.discount,deliveryCharge:data.deliveryCharge,codCharge:data.codCharge,total:data.correctedTotal,items:data.items};
   try { localStorage.setItem('dsb_last_receipt_v2',JSON.stringify(lastReceipt)); } catch(_){}
   // Clear only quantities actually ordered. Items added in another tab are preserved.
-  const current=CartStore.getAll();
-  order.itemsDetail.forEach(item=>{const entry=current[sizeCartKey(item.id,item.size)];if(entry)CartStore.add(entry.product,-Math.min(entry.qty,item.qty));});
+  await CartStore.consumeSafe(order.itemsDetail,data.orderId);
   clearPendingCheckout();checkoutQuote=null;checkoutState.promoInput='';checkoutState.appliedPromo=null;checkoutState.promoStatus='';
   try{sessionStorage.removeItem(CATALOG_SESSION_KEY);}catch(_){}
   updateCartBadge();renderOrderConfirmation(lastReceipt);

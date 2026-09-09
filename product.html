@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Product — Dhatterwal Suhag Bhandar</title>
-<meta name="description" content="Shop this product and more at Dhatterwal Suhag Bhandar — lingerie, cosmetics, hair care, snacks, stationery and daily essentials in Hanumangarh, Rajasthan. Order on WhatsApp.">
+<meta name="description" content="Shop this product and more at Dhatterwal Suhag Bhandar — lingerie, cosmetics, hair care, snacks, stationery and daily essentials in Hanumangarh, Rajasthan. Order online with secure order confirmation.">
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
 <meta name="theme-color" content="#C81163">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,6 +15,7 @@
 /* Set the product canonical URL before the catalogue/API finishes loading.
    This avoids every product initially looking canonical to product.html. */
 (function(){
+  if(document.documentElement.dataset.productId)return;
   var id = new URLSearchParams(location.search).get('id');
   var canonical = document.getElementById('canonicalLink');
   if (id && canonical) canonical.href = 'https://suhagbhandar.in/product.html?id=' + encodeURIComponent(id.trim());
@@ -32,20 +33,20 @@
 <meta property="og:type" content="product">
 <meta property="og:site_name" content="Dhatterwal Suhag Bhandar">
 <meta id="ogTitle" property="og:title" content="Dhatterwal Suhag Bhandar">
-<meta id="ogDescription" property="og:description" content="Shop lingerie, cosmetics, hair care, snacks, stationery and more — order on WhatsApp.">
+<meta id="ogDescription" property="og:description" content="Shop lingerie, cosmetics, hair care, snacks, stationery and more — order online.">
 <meta id="ogUrl" property="og:url" content="https://suhagbhandar.in/product.html">
 <meta id="ogImage" property="og:image" content="https://placehold.co/1200x630/C81163/FFF6E9?text=Dhatterwal%20Suhag%20Bhandar">
 <meta property="og:locale" content="en_IN">
 
 <meta name="twitter:card" content="summary_large_image">
 <meta id="twitterTitle" name="twitter:title" content="Dhatterwal Suhag Bhandar">
-<meta id="twitterDescription" name="twitter:description" content="Shop lingerie, cosmetics, hair care, snacks, stationery and more — order on WhatsApp.">
+<meta id="twitterDescription" name="twitter:description" content="Shop lingerie, cosmetics, hair care, snacks, stationery and more — order online.">
 <meta id="twitterImage" name="twitter:image" content="https://placehold.co/1200x630/C81163/FFF6E9?text=Dhatterwal%20Suhag%20Bhandar">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Hind:wght@400;500;600;700&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260908fast9">
+<link rel="stylesheet" href="style.css?v=20260909efficiency1">
 <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -73,7 +74,7 @@
 
 <footer>
   <div class="fname">Dhatterwal Suhag Bhandar</div>
-  Order confirmation happens on WhatsApp<br>
+  Order online · Shop support on WhatsApp<br>
   <a href="index.html">← Back to shop</a> &nbsp;•&nbsp; <a href="catalog.html">All products</a> &nbsp;•&nbsp; <a href="about.html">About</a> &nbsp;•&nbsp; <a href="contact.html">Contact</a><br>
   <a href="privacy.html">Privacy</a> &nbsp;•&nbsp; <a href="returns.html">Returns</a> &nbsp;•&nbsp; <a href="admin.html" data-i18n-skip>Shop admin</a>
 </footer>
@@ -115,14 +116,14 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="config.js?v=20260908fast9"></script>
-<script src="i18n.js?v=20260908fast9"></script>
-<script src="utils.js?v=20260908fast9"></script>
-<script src="cart.js?v=20260908fast9"></script>
-<script src="products-data.js?v=20260908fast9"></script>
-<script src="render-helpers.js?v=20260908fast9"></script>
-<script src="cart-ui.js?v=20260908fast9"></script>
-<script src="product.js?v=20260908fast9"></script>
-<script src="pwa-install.js?v=20260908fast9" defer></script>
+<script src="config.js?v=20260909efficiency1"></script>
+<script src="i18n.js?v=20260909efficiency1"></script>
+<script src="utils.js?v=20260909efficiency1"></script>
+<script src="cart.js?v=20260909efficiency1"></script>
+<script src="products-data.js?v=20260909efficiency1"></script>
+<script src="render-helpers.js?v=20260909efficiency1"></script>
+<script src="cart-ui.js?v=20260909efficiency1"></script>
+<script src="product.js?v=20260909efficiency1"></script>
+<script src="pwa-install.js?v=20260909efficiency1" defer></script>
 </body>
 </html>

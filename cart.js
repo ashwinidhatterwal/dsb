@@ -14,41 +14,69 @@ function sizedCartProduct(product,size){
 const CartStore = (function(){
   let memoryFallback = {};
   let usingFallback = false;
+  let consumedFallback=[];
 
+  let repaired=false;
+  function sanitize(value){
+    if(!value || typeof value!=='object' || Array.isArray(value)){repaired=true;return {};}
+    const valid={};
+    Object.entries(value).forEach(([key,line])=>{
+      if(key==='__dsbApplied')return;
+      const p=line?.product;
+      if(!p || typeof p.id!=='string' || key!==p.id || !Number.isInteger(line.qty) || line.qty<1 || line.qty>999 || !Number.isFinite(p.price) || p.price<=0){repaired=true;return;}
+      valid[key]=line;
+    });
+    return valid;
+  }
   function readAll(){
     if (usingFallback) return memoryFallback;
     try{
       const raw = localStorage.getItem(CART_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : {};
+      return raw ? sanitize(JSON.parse(raw)) : {};
     } catch(e){
-      usingFallback = true;
+      repaired=true;
       return memoryFallback;
     }
   }
 
-  function writeAll(cart){
-    if (usingFallback){ memoryFallback = cart; return; }
+  function appliedOrders(){
+    if(usingFallback)return consumedFallback;
+    try {const value=JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || '{}').__dsbApplied;return Array.isArray(value)?value:[];} catch(_){return [];}
+  }
+  function writeAll(cart,applied=appliedOrders()){
+    if (usingFallback){ memoryFallback = cart;consumedFallback=applied; return; }
     try{
-      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({...cart,__dsbApplied:applied.slice(-100)}));
     } catch(e){
       usingFallback = true;
-      memoryFallback = cart;
+      memoryFallback = cart;consumedFallback=applied;
     }
   }
 
+  function locked(fn){return typeof navigator!=='undefined' && navigator.locks?.request ? navigator.locks.request('dsb-cart-write',fn) : fn();}
   return {
+    takeRepairNotice(){const value=repaired;repaired=false;return value;},
+    addSafe(product,delta){return locked(()=>this.add(product,delta));},
+    clearSafe(){return locked(()=>this.clear());},
+    syncSafe(catalog){return locked(()=>this.syncWithCatalog(catalog));},
+    consumeSafe(items,orderId){return locked(()=>{
+      const applied=appliedOrders();if(orderId && applied.includes(orderId))return;
+      const cart=readAll();items.forEach(item=>{const key=sizeCartKey(item.id,item.size),entry=cart[key];if(!entry)return;entry.qty-=Math.min(entry.qty,item.qty);if(!entry.qty)delete cart[key];});
+      writeAll(cart,orderId?[...applied,orderId]:applied);
+    });},
     getAll(){ return readAll(); },
     qtyFor(id){ return readAll()[id]?.qty || 0; },
     qtyForProduct(id){return Object.values(readAll()).filter(x=>(x.product.productId || x.product.id)===id).reduce((sum,x)=>sum+x.qty,0);},
     add(product, delta){
       const cart = readAll();
+      if(!Number.isInteger(delta) || !Number.isFinite(product.price) || product.price<=0) return cart[product.id]?.qty || 0;
       if(delta>0){
         if(product.sizes?.length && !product.sizes.includes(product.size)) return cart[product.id]?.qty || 0;
         const baseId=product.productId || product.id;
         const used=Object.values(cart).filter(x=>(x.product.productId || x.product.id)===baseId).reduce((n,x)=>n+x.qty,0);
         if(product.stock==='out of stock' || (product.stockQty!=null && used+delta>product.stockQty)) return cart[product.id]?.qty || 0;
       }
-      const nextQty = (cart[product.id]?.qty || 0) + delta;
+      const nextQty = Math.min(999,(cart[product.id]?.qty || 0) + delta);
       if (nextQty <= 0) delete cart[product.id];
       else cart[product.id] = { product, qty: nextQty };
       writeAll(cart);

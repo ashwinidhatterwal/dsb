@@ -59,7 +59,7 @@ function cardHtml(p){
     <div class="body">
       <a class="name" href="${href}">${escapeHtml(customerProductName(p))}</a>
       ${customerProductSecondaryName(p) ? `<div class="name-hindi">${escapeHtml(customerProductSecondaryName(p))}</div>` : ''}
-      ${cardRatingHtml(p)}
+      <div class="card-rating-slot">${cardRatingHtml(p)}</div>
       <div class="prices">
         <span class="price">${money(p.price)}</span>
         ${p.mrp > p.price ? `<span class="mrp">${money(p.mrp)}</span>` : ''}
@@ -91,31 +91,31 @@ function bindCardActionEvents(card, product, list){
   const actionsWrap = $('.card-actions', card);
   if (!actionsWrap || product.sizes?.length) return;
   const addBtn = $('.addbtn:not([disabled])', actionsWrap);
-  if (addBtn) addBtn.addEventListener('click', () => handleCardAdd(product, 1, card, list));
+  if (addBtn) addBtn.addEventListener('click', async () => handleCardAdd(product, 1, card, list));
   const stepper = $('.stepper', actionsWrap);
   if (stepper){
     const incBtn = $('[data-act="inc"]', stepper);
-    if (incBtn && !incBtn.disabled) incBtn.addEventListener('click', () => handleCardAdd(product, 1, card, list));
-    $('[data-act="dec"]', stepper).addEventListener('click', () => handleCardAdd(product, -1, card, list));
+    if (incBtn && !incBtn.disabled) incBtn.addEventListener('click', async () => handleCardAdd(product, 1, card, list));
+    $('[data-act="dec"]', stepper).addEventListener('click', async () => handleCardAdd(product, -1, card, list));
   }
   const buyBtn = $('.buynowbtn', actionsWrap);
-  if (buyBtn) buyBtn.addEventListener('click', () => {
+  if (buyBtn) buyBtn.addEventListener('click', async () => {
     if (product.stockQty !== null && CartStore.qtyFor(product.id) >= product.stockQty){
       showToast(`Only ${product.stockQty} in stock`);
       return;
     }
-    CartStore.add(product, 1);
+    await CartStore.addSafe(product, 1);
     updateCardActionsUI(card, product, list);
     playAddFlourish($('img', card), { openCartAfter: true });
   });
 }
 
-function handleCardAdd(product, delta, card, list){
+async function handleCardAdd(product, delta, card, list){
   if (delta > 0 && product.stockQty !== null && CartStore.qtyFor(product.id) >= product.stockQty){
     showToast(`Only ${product.stockQty} in stock`);
     return;
   }
-  CartStore.add(product, delta);
+  await CartStore.addSafe(product, delta);
   updateCardActionsUI(card, product, list);
   if (delta > 0){
     showToast(`${product.name} added to cart`);
@@ -132,4 +132,8 @@ function updateCardActionsUI(card, product, list){
   if (!actionsWrap) return;
   actionsWrap.innerHTML = cardActionsHtml(product);
   bindCardActionEvents(card, product, list);
+}
+
+function updateVisibleRatings(){
+  document.querySelectorAll('.card[data-id]').forEach(card=>{const slot=card.querySelector('.card-rating-slot');if(slot)slot.innerHTML=cardRatingHtml({id:card.dataset.id});});
 }
