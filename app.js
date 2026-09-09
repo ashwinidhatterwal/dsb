@@ -39,7 +39,11 @@ async function loadProductsForShop(){
   renderCategoryRail();
   renderGrid();
   renderHomeCarousels();
-  reviewsPromise.then(() => { updateVisibleRatings(); });
+  reviewsPromise.then(() => {
+    updateVisibleRatings();
+    const rail=$('#popularPicksRail');
+    if(rail && !rail.dataset.engaged && rail.scrollLeft===0)renderCarousel('popularPicksSection','popularPicksRail',popularProducts(10));
+  });
   if($('#searchOverlay')?.classList.contains('open'))renderSearchResults();
   initScrollReveal();
 }
@@ -49,7 +53,9 @@ async function loadProductsForShop(){
 // reviews exist). Until then it quietly falls back to the biggest discounts,
 // so the rail is never empty on a brand-new store.
 function popularProducts(limit){
-  return ALL_PRODUCTS.filter(p=>!isOutOfStock(p)).slice().sort((a,b)=>discountPct(b)-discountPct(a)).slice(0,limit);
+  const available=ALL_PRODUCTS.filter(p=>!isOutOfStock(p));
+  const score=p=>{const r=reviewSummaryFor(p.id);return r?.count?r.avg*Math.log1p(r.count):0;};
+  return available.slice().sort((a,b)=>score(b)-score(a)||discountPct(b)-discountPct(a)).slice(0,limit);
 }
 
 function newArrivalProducts(limit){
@@ -268,6 +274,15 @@ function initUI(){
     if (e.key === 'Escape'){ closeCart(); closeSearch(); }
   });
 
+  document.querySelectorAll('.carousel-section .related-rail').forEach(rail=>{
+    rail.addEventListener('pointerdown',()=>{rail.dataset.engaged='1';},{passive:true});
+    rail.addEventListener('keydown',event=>{
+      rail.dataset.engaged='1';
+      if(event.target===rail && ['ArrowLeft','ArrowRight'].includes(event.key)){
+        event.preventDefault();rail.scrollBy({left:(event.key==='ArrowRight'?1:-1)*rail.clientWidth*.8,behavior:prefersReducedMotion()?'instant':'smooth'});
+      }
+    });
+  });
   updateCartBadge();
 }
 

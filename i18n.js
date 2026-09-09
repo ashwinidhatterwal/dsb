@@ -128,6 +128,12 @@
     'Order ID from your order slip':'ऑर्डर पर्ची पर दिया गया ऑर्डर आईडी',
     'Browse the shop, add what you need to your cart, and check out — we\'ll ask for your name, phone number, and delivery address, then your order is saved securely and you receive a downloadable order slip. The shop contacts you on WhatsApp to confirm delivery details. Pay by cash on delivery, or via UPI if that option is shown at checkout.':'दुकान में उत्पाद देखें, कार्ट में जोड़ें और नाम, फ़ोन नंबर व डिलीवरी पता भरें। ऑर्डर दर्ज होने पर डाउनलोड करने योग्य पर्ची मिलेगी। दुकान डिलीवरी की जानकारी की पुष्टि के लिए व्हाट्सऐप पर संपर्क करेगी। भुगतान कैश ऑन डिलीवरी या चेकआउट में उपलब्ध UPI विकल्प से करें।'
   });
+  Object.assign(HI,{
+    'Popular picks':'लोकप्रिय उत्पाद','New arrivals':'नए उत्पाद','Bangles':'चूड़ियाँ',
+    'Bangles · Beauty · Everyday essentials':'चूड़ियाँ · सौंदर्य उत्पाद · रोज़मर्रा का सामान',
+    'Swipe sideways to explore':'और उत्पाद देखने के लिए बगल में स्वाइप करें',
+    'Dhatterwal Suhag Bhandar specialises in bangles, alongside cosmetics, lingerie, stationery and everyday essentials. Based in Goluwala, Hanumangarh, Rajasthan, we bring our shop online so you can browse products, place an order and get support on WhatsApp.':'धत्तरवाल सुहाग भंडार चूड़ियों में विशेषज्ञता रखता है। साथ ही यहाँ कॉस्मेटिक्स, अंतर्वस्त्र, स्टेशनरी और रोज़मर्रा का सामान भी मिलता है। गोलूवाला, हनुमानगढ़, राजस्थान स्थित हमारी दुकान पर अब ऑनलाइन उत्पाद देखें, ऑर्डर करें और व्हाट्सऐप पर सहायता लें।'
+  });
   const TITLES_HI={
     'index.html':'धत्तरवाल सुहाग भंडार — ऑनलाइन खरीदारी',
     'about.html':'हमारे बारे में — धत्तरवाल सुहाग भंडार',

@@ -1,3 +1,21 @@
+COSMETIC FOLLOW-UP — 20260909cosmetic2
+
+If you already installed the previous experience update, replace only the website
+files, including the .github folder. code.gs is unchanged; no Apps Script redeploy
+is needed for this cosmetic follow-up. Let GitHub Actions publish, then refresh.
+If upgrading from an older original version, follow the complete steps below.
+
+Changes:
+- Fixed-height Add/quantity row with Buy Now in its own stable row below it.
+- New arrivals and Popular picks restored above the main product grid.
+- Fractional-width slider cards expose the next product on mobile/tablet/desktop.
+- Visible swipe hints, arrow buttons and keyboard navigation.
+- Popular picks use available review ratings/counts, with discount fallback.
+- Bangles highlighted in the compact header, About page and metadata, with Hindi copy.
+
+Checks: section order, slider/card CSS sizing rules, updated JavaScript syntax and
+unchanged backend checked. This follow-up has not had live browser visual testing.
+
 DSB CUSTOMER EXPERIENCE UPDATE — 9 September 2026
 Version: 20260909experience1
 

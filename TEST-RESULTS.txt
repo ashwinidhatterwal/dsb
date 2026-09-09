@@ -1,3 +1,5 @@
+COSMETIC FOLLOW-UP: static section/order and CSS sizing checks passed; updated app.js and i18n.js syntax checks passed. Backend matches the prior version. Previous regression results follow; they were not repeated for this cosmetic update.
+
 ISOLATED REGRESSION RESULTS — 20260909experience1
 
 30 checks passed:
