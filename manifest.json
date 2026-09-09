@@ -1,7 +1,7 @@
 {
   "name": "Suhag Bhandar",
   "short_name": "Suhag Bhandar",
-  "description": "Lingerie, cosmetics, hair care, snacks, stationery and daily essentials — order on WhatsApp.",
+  "description": "Lingerie, cosmetics, hair care, snacks, stationery and daily essentials — order online with WhatsApp support.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

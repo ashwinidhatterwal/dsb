@@ -40,6 +40,7 @@ async function loadProductsForShop(){
   renderGrid();
   renderHomeCarousels();
   reviewsPromise.then(() => { updateVisibleRatings(); });
+  if($('#searchOverlay')?.classList.contains('open'))renderSearchResults();
   initScrollReveal();
 }
 
@@ -48,17 +49,7 @@ async function loadProductsForShop(){
 // reviews exist). Until then it quietly falls back to the biggest discounts,
 // so the rail is never empty on a brand-new store.
 function popularProducts(limit){
-  const inStock = ALL_PRODUCTS.filter(p => !isOutOfStock(p));
-  const withReviews = inStock
-    .map(p => ({ p, sum: reviewSummaryFor(p.id) }))
-    .filter(x => x.sum && x.sum.count > 0);
-  if (withReviews.length >= 4){
-    return withReviews
-      .sort((a, b) => (b.sum.avg * Math.log(b.sum.count + 1)) - (a.sum.avg * Math.log(a.sum.count + 1)))
-      .slice(0, limit)
-      .map(x => x.p);
-  }
-  return inStock.slice().sort((a, b) => discountPct(b) - discountPct(a)).slice(0, limit);
+  return ALL_PRODUCTS.filter(p=>!isOutOfStock(p)).slice().sort((a,b)=>discountPct(b)-discountPct(a)).slice(0,limit);
 }
 
 function newArrivalProducts(limit){
@@ -85,6 +76,10 @@ function renderCarousel(sectionId, railId, list){
 
 function applyCategoryFromUrl(){
   const params = new URLSearchParams(location.search);
+  activeCategory='All';activeSubcategory='All';
+  sortMode=['newest','price-asc','price-desc'].includes(params.get('sort'))?params.get('sort'):'featured';
+  inStockOnly=params.get('stock')==='1';
+  $('#sortSelect').value=sortMode;$('#inStockOnly').checked=inStockOnly;
   const cat = params.get('category');
   if (cat && CATEGORIES[cat]){
     activeCategory = cat;
@@ -156,7 +151,7 @@ function createPager(container, sentinelEl){
       return;
     }
     const template = document.createElement('template');
-    template.innerHTML = next.map(cardHtml).join('');
+    template.innerHTML = next.map((p,i)=>cardHtml(p,{eager:container.id==='productGrid' && renderedCount===0 && i<2})).join('');
     const cards = Array.from(template.content.children);
     container.appendChild(template.content);
     bindCardEvents(cards, list);
@@ -164,7 +159,8 @@ function createPager(container, sentinelEl){
     if (sentinelEl) sentinelEl.style.display = renderedCount >= list.length ? 'none' : 'block';
   }
 
-  function reset(newList, emptyMessage){
+  function reset(newList, emptyMessage,preserve=false){
+    const target=preserve?Math.max(PAGE_SIZE,renderedCount):PAGE_SIZE;
     list = newList;
     renderedCount = 0;
     container.innerHTML = '';
@@ -173,7 +169,7 @@ function createPager(container, sentinelEl){
       if (sentinelEl) sentinelEl.style.display = 'none';
       return;
     }
-    renderNextBatch();
+    do{renderNextBatch();}while(renderedCount<Math.min(target,list.length));
   }
 
   if (sentinelEl && 'IntersectionObserver' in window){
@@ -194,10 +190,6 @@ function filteredProducts(){
     if (activeCategory !== 'All' && p.category !== activeCategory) return false;
     if (activeSubcategory !== 'All' && p.subcategory !== activeSubcategory) return false;
     if (inStockOnly && isOutOfStock(p)) return false;
-    if (searchQuery){
-      const hay = `${p.name} ${p.nameHindi || ''} ${p.category} ${p.subcategory} ${p.tags}`.toLowerCase();
-      if (!hay.includes(searchQuery.toLowerCase())) return false;
-    }
     return true;
   });
 }
@@ -212,10 +204,11 @@ function sortProducts(list){
   return list;
 }
 
-function renderGrid(){
+function renderGrid(preserve=false){
+  saveBrowseUrl();
   const list = sortProducts(filteredProducts());
   $('#resultCount').textContent = `${list.length} item${list.length===1?'':'s'}`;
-  gridPager.reset(list);
+  gridPager.reset(list,undefined,preserve);
 }
 
 /* ---------------- Search overlay ---------------- */
@@ -261,7 +254,9 @@ function initUI(){
 
   $('#searchTrigger').addEventListener('click', openSearch);
   $('#searchOverlayClose').addEventListener('click', closeSearch);
-  $('#searchInput2').addEventListener('input', (e) => { searchQuery = e.target.value; renderSearchResults(); });
+  let searchTimer;
+  $('#searchInput2').addEventListener('input', (e) => { searchQuery = e.target.value;clearTimeout(searchTimer);searchTimer=setTimeout(renderSearchResults,120); });
+  if(new URLSearchParams(location.search).get('search')==='1')openSearch();
 
   $('#cartTrigger').addEventListener('click', openCart);
   $('#cartOverlay').addEventListener('click', (e) => { if (e.target.id === 'cartOverlay') closeCart(); });
@@ -282,4 +277,32 @@ document.addEventListener('DOMContentLoaded', () => {
   initUI();
   initWhatsAppFloat();
   loadProductsForShop();
+});
+
+function saveBrowseUrl(){
+  const url=new URL(location.href);
+  for(const [key,value] of Object.entries({category:activeCategory==='All'?'':activeCategory,subcategory:activeSubcategory==='All'?'':activeSubcategory,sort:sortMode==='featured'?'':sortMode,stock:inStockOnly?'1':''})){
+    if(value)url.searchParams.set(key,value);else url.searchParams.delete(key);
+  }
+  history.replaceState(null,'',url);
+}
+window.addEventListener('popstate',()=>{if(!gridPager)return;applyCategoryFromUrl();renderCategoryRail();renderGrid();});
+
+function updateCatalogNotice(){
+  const el=$('#catalogNotice');if(!el)return;
+  el.hidden=CATALOG_META.source==='live' || CATALOG_META.source==='loading';
+  el.textContent='Showing saved products. Current prices and stock are checked when you order.';
+}
+document.addEventListener('dsb:catalogstatus',updateCatalogNotice);
+document.addEventListener('dsb:catalogchange',()=>{
+  if(!gridPager)return;
+  const anchor=Array.from(document.querySelectorAll('#productGrid .card')).find(c=>c.getBoundingClientRect().bottom>80);
+  const id=anchor?.dataset.id,top=anchor?.getBoundingClientRect().top;
+  buildCategoryMap();if(activeCategory!=='All' && !CATEGORIES[activeCategory]){activeCategory='All';activeSubcategory='All';}
+  renderCategoryRail();renderGrid(true);renderHomeCarousels();initScrollReveal();
+  if($('#searchOverlay')?.classList.contains('open'))renderSearchResults();
+  if(id && !document.body.classList.contains('modal-open'))requestAnimationFrame(()=>{
+    const next=Array.from(document.querySelectorAll('#productGrid .card')).find(c=>c.dataset.id===id);
+    if(next)window.scrollBy({top:next.getBoundingClientRect().top-top,behavior:'instant'});
+  });
 });

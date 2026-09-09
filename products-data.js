@@ -56,38 +56,77 @@ function lowStockLabel(p){
   return '';
 }
 
-const CATALOG_SESSION_KEY = 'dsb_catalog_v2';
-let catalogRequest = null;
-async function loadAllProducts(options = {}){
-  if (catalogRequest) return catalogRequest;
-  catalogRequest = (async () => {
-    const api = CONFIG.SHEET_API_URL;
-    if (!options.force && api) {
-      try {
-        const cached = JSON.parse(sessionStorage.getItem(CATALOG_SESSION_KEY) || 'null');
-        if (cached && cached.api === api && Date.now() - cached.time < 60000 && Array.isArray(cached.rows)) {
-          ALL_PRODUCTS = normalizeRows(cached.rows); return ALL_PRODUCTS;
-        }
-      } catch (_) {}
-    }
-    // Sample data is available ONLY when deliberately configured for local demo mode.
-    const payload = await requestJson(api ? api + '?action=products' : CONFIG.FALLBACK_FILE);
-    const rows = Array.isArray(payload) ? payload : payload && payload.products;
-    if (!Array.isArray(rows)) throw new Error('Could not load the catalogue. Please try again.');
-    ALL_PRODUCTS = normalizeRows(rows);
-    if (api) { try { sessionStorage.setItem(CATALOG_SESSION_KEY,JSON.stringify({api:api,time:Date.now(),rows:rows})); } catch (_) {} }
-    return ALL_PRODUCTS;
-  })();
-  try { return await catalogRequest; } finally { catalogRequest = null; }
+const CATALOG_SESSION_KEY = 'dsb_catalog_v3';
+let catalogRequest=null, catalogLiveRequest=null;
+let CATALOG_META={source:'loading',time:0};
+const CATALOG_MAX_AGE=24*60*60*1000;
+function applyCatalogRows(rows,source,time){
+  const products=normalizeRows(rows),changed=JSON.stringify(products)!==JSON.stringify(ALL_PRODUCTS);
+  const hadProducts=ALL_PRODUCTS.length>0;
+  ALL_PRODUCTS=products;CATALOG_META={source,time};
+  if(hadProducts && changed)document.dispatchEvent(new CustomEvent('dsb:catalogchange'));
+  document.dispatchEvent(new CustomEvent('dsb:catalogstatus'));
+  return ALL_PRODUCTS;
 }
-
+async function refreshLiveCatalog(){
+  if(catalogLiveRequest)return catalogLiveRequest;
+  catalogLiveRequest=(async()=>{
+    const api=CONFIG.SHEET_API_URL;
+    const payload=await requestJson(api?api+'?action=products':CONFIG.FALLBACK_FILE);
+    const rows=Array.isArray(payload)?payload:payload?.products;
+    if(!Array.isArray(rows))throw new Error('Could not load the catalogue. Please try again.');
+    const time=Date.now();
+    try{sessionStorage.setItem(CATALOG_SESSION_KEY,JSON.stringify({api,time,rows}));}catch(_){}
+    return applyCatalogRows(rows,'live',time);
+  })();
+  try{return await catalogLiveRequest;}finally{catalogLiveRequest=null;}
+}
+async function loadAllProducts(options={}){
+  if(options.force)return refreshLiveCatalog();
+  if(catalogRequest)return catalogRequest;
+  catalogRequest=(async()=>{
+    try{
+      const cached=JSON.parse(sessionStorage.getItem(CATALOG_SESSION_KEY)||'null');
+      if(cached?.api===CONFIG.SHEET_API_URL && Array.isArray(cached.rows) && Date.now()-cached.time<CATALOG_MAX_AGE){
+        const fresh=Date.now()-cached.time<60000;
+        applyCatalogRows(cached.rows,fresh?'live':'cached',cached.time);
+        if(!fresh)setTimeout(()=>refreshLiveCatalog().catch(()=>{}),0);
+        return ALL_PRODUCTS;
+      }
+    }catch(_){}
+    const live=refreshLiveCatalog();
+    const snapshot=requestJson('catalog-snapshot.json',{cache:'no-cache'},5000).then(data=>{
+      if(!Array.isArray(data.rows) || data.api!==CONFIG.SHEET_API_URL || !Number.isFinite(data.generatedAt) || Date.now()-data.generatedAt>CATALOG_MAX_AGE || data.generatedAt>Date.now()+60000)throw new Error('Catalogue snapshot expired.');
+      if(CATALOG_META.source==='live')return ALL_PRODUCTS;
+      return applyCatalogRows(data.rows,'snapshot',data.generatedAt);
+    });
+    return Promise.any([live,snapshot]);
+  })();
+  try{return await catalogRequest;}finally{catalogRequest=null;}
+}
+const publicDataRequests=new Map();
+async function cachedPublicJson(key,url,ttl=180000,force=false){
+  const storageKey='dsb_public_'+key,api=CONFIG.SHEET_API_URL;
+  if(!force){try{const c=JSON.parse(sessionStorage.getItem(storageKey)||'null');if(c?.api===api && Date.now()-c.time<ttl)return c.data;}catch(_){}}
+  if(publicDataRequests.has(key))return publicDataRequests.get(key);
+  const request=requestJson(url).then(data=>{
+    if(data?.error)throw new Error(data.error);
+    try{sessionStorage.setItem(storageKey,JSON.stringify({api,time:Date.now(),data}));}catch(_){}
+    return data;
+  });
+  publicDataRequests.set(key,request);
+  try{return await request;}finally{publicDataRequests.delete(key);}
+}
+function invalidateReviewCache(productId){
+  for(const key of ['review-summary','reviews-'+productId]){try{sessionStorage.removeItem('dsb_public_'+key);}catch(_){}}
+}
 // One request for every review in the sheet, reduced down to a per-product
 // average + count. Never blocks the product grid — call it alongside
 // loadAllProducts() and just re-render once it resolves.
 async function loadReviewSummaries(){
   if (!CONFIG.SHEET_API_URL) return REVIEW_SUMMARY;
   try{
-    const payload = await requestJson(`${CONFIG.SHEET_API_URL}?action=reviews&summary=1`);
+    const payload = await cachedPublicJson('review-summary',`${CONFIG.SHEET_API_URL}?action=reviews&summary=1`);
 
     // The current Apps Script endpoint already returns the compact
     // { productId: { avg, count } } map. Use it directly instead of

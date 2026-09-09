@@ -21,7 +21,7 @@ function cardActionsHtml(p){
   if (isOutOfStock(p)){
     return `<button class="addbtn" disabled style="opacity:.5; cursor:not-allowed;">Out of stock</button>`;
   }
-  if(p.sizes?.length) return `<a class="addbtn size-select-link" href="product.html?id=${encodeURIComponent(p.id)}">Choose size</a>`;
+  if(p.sizes?.length) return `<a class="addbtn size-select-link" href="${typeof preferredProductPath==='function'?preferredProductPath(p.id):`product.html?id=${encodeURIComponent(p.id)}`}">Choose size</a>`;
   const qty = CartStore.qtyFor(p.id);
   const maxReached = p.stockQty !== null && qty >= p.stockQty;
   return qty > 0
@@ -42,16 +42,16 @@ function cardRatingHtml(p){
   return `<div class="card-rating">${renderStars(sum.avg)}<span class="rating-count">(${sum.count})</span></div>`;
 }
 
-function cardHtml(p){
+function cardHtml(p,options={}){
   const disc = discountPct(p);
-  const href = `product.html?id=${encodeURIComponent(p.id)}`;
+  const href = `${typeof preferredProductPath==='function'?preferredProductPath(p.id):`product.html?id=${encodeURIComponent(p.id)}`}`;
   const low = lowStockLabel(p);
   return `
   <div class="card" data-id="${escapeHtml(p.id)}">
     <a class="imgwrap" href="${href}">
       ${disc ? `<span class="discount">${disc}% OFF</span>` : ''}
       <span class="subtag">${escapeHtml(p.subcategory)}</span>
-      <img src="${escapeHtml(productImageUrl(p.image,400))}" srcset="${escapeHtml(productImageUrl(p.image,200))} 200w, ${escapeHtml(productImageUrl(p.image,400))} 400w, ${escapeHtml(productImageUrl(p.image,600))} 600w" sizes="(max-width:600px) 46vw, 220px" alt="${escapeHtml(customerProductName(p))}" loading="lazy" decoding="async">
+      <img src="${escapeHtml(productImageUrl(p.image,400))}" srcset="${escapeHtml(productImageUrl(p.image,200))} 200w, ${escapeHtml(productImageUrl(p.image,400))} 400w, ${escapeHtml(productImageUrl(p.image,600))} 600w" sizes="(max-width:600px) 46vw, 220px" alt="${escapeHtml(customerProductName(p))}" loading="${options.eager?'eager':'lazy'}" ${options.eager?'fetchpriority="high"':''} decoding="async" width="400" height="400">
     </a>
     <button type="button" class="card-share" data-share="${escapeHtml(p.id)}" aria-label="Share ${escapeHtml(p.name)}">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>
@@ -136,4 +136,18 @@ function updateCardActionsUI(card, product, list){
 
 function updateVisibleRatings(){
   document.querySelectorAll('.card[data-id]').forEach(card=>{const slot=card.querySelector('.card-rating-slot');if(slot)slot.innerHTML=cardRatingHtml({id:card.dataset.id});});
+}
+
+function updateVisibleCartActions(){
+  if(typeof ALL_PRODUCTS==='undefined')return;
+  const byId=new Map(ALL_PRODUCTS.map(p=>[p.id,p]));
+  document.querySelectorAll('.card[data-id]').forEach(card=>{
+    const p=byId.get(card.dataset.id);if(!p)return;
+    const actions=card.querySelector('.card-actions');if(!actions)return;
+    const html=cardActionsHtml(p);
+    if(actions.dataset.cartHtml===html)return;
+    const focused=actions.contains(document.activeElement)?document.activeElement.dataset.act:null;
+    actions.innerHTML=html;actions.dataset.cartHtml=html;bindCardActionEvents(card,p,ALL_PRODUCTS);
+    if(focused)actions.querySelector(`[data-act="${focused}"]`)?.focus({preventScroll:true});
+  });
 }

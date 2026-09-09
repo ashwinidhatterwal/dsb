@@ -45,7 +45,7 @@ const ORDERS_SHEET = 'Orders';
 const PROMOS_SHEET = 'Promos';
 const ORDER_ITEMS_SHEET = 'OrderItems';
 const PROMO_CUSTOMERS_SHEET = 'PromoCustomers';
-const CATALOG_CACHE_KEY = 'dsb.catalog.v3';
+const CATALOG_CACHE_KEY = 'dsb.catalog.v4';
 const JOURNAL_SHEET = 'OrderTransactions';
 const COMPLETED_STATUSES = ['Delivered', 'Fulfilled'];
 const CATALOG_CACHE_TTL = 120; // seconds
@@ -111,7 +111,7 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    if (!e || !e.postData || e.postData.contents.length > 24000) return jsonResponse({success:false,error:'Request is too large.'});
+    if (!e || !e.postData || e.postData.contents.length > 24000) return jsonResponse({success:false,code:'validation_failed',error:'Request is too large.'});
     const body = JSON.parse(e.postData.contents);
     if (body.action === 'quoteOrder') return jsonResponse(quoteOrder(body.order || {}));
     if (body.action === 'orderResult') return jsonResponse(orderResult(body.requestId, body.phone));
@@ -130,7 +130,7 @@ function doPost(e) {
       return jsonResponse({ error: 'unauthorized' });
     }
     if (body.action === 'add') {
-      return jsonResponse(addProduct(body.product || {}));
+      return jsonResponse(addProduct(body.product || {},body.requestId));
     }
     if (body.action === 'update') {
       return jsonResponse(updateProduct(body.product || {}));
@@ -139,7 +139,7 @@ function doPost(e) {
       return jsonResponse(getAllProducts(true));
     }
     if (body.action === 'adminOrders') {
-      return jsonResponse(getAllOrders());
+      return jsonResponse(getAllOrders(body.options));
     }
     if (body.action === 'adminDashboard') {
       return jsonResponse(getDashboardData());
@@ -286,7 +286,7 @@ function safeNumber_(value, fallback) {
 }
 
 function cleanPhone_(value) {
-  return String(value || '').replace(/\D/g, '').slice(0, 15);
+  return String(value || '').replace(/\D/g, '');
 }
 
 function hashText_(value) {
@@ -308,20 +308,36 @@ function getAllProducts(includeCost) {
   const rows = rowsAsObjects_(getSheet_(PRODUCTS_SHEET));
   if (includeCost) return rows;
   const publicRows = rows.map(r => {
-    const copy = Object.assign({}, r);
-    delete copy.costprice;
+    const copy={};
+    ['id','name','namehindi','category','subcategory','price','mrp','image','images','description','stock','stockqty','tags','sizes'].forEach(key=>{if(r[key]!==undefined)copy[key]=r[key];});
     return copy;
   });
   cachePutJson_(CATALOG_CACHE_KEY, publicRows, CATALOG_CACHE_TTL);
   return publicRows;
 }
 
-function addProduct(p) {
+function addProduct(p,requestId) {
   return withWriteLock_(function() {
     validateProductFields_(p, true);
     if(p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizes');
     const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet);
-    const id = String(p.id || '').trim() || nextId_(sheet, 'DSB');
+    let reservation=null;
+    if(requestId){
+      if(!validRequestId_(requestId))throw new Error('Invalid save request. Refresh the admin page.');
+      const ss=SpreadsheetApp.getActiveSpreadsheet();let requests=ss.getSheetByName('AdminProductRequests');
+      if(!requests){requests=ss.insertSheet('AdminProductRequests');requests.appendRow(['id','productid','fingerprint']);try{requests.hideSheet();}catch(_){}}
+      const fingerprint=hashText_(JSON.stringify(p)),row=findRow_(requests,'id',requestId);
+      if(row){const values=requests.getRange(row,1,1,3).getValues()[0];if(values[2]!==fingerprint)throw new Error('This save attempt belongs to different product details.');reservation={requests,id:String(values[1]),existing:true};}
+      else{
+        let candidate=String(p.id || '').trim() || nextId_(sheet,'DSB');
+        if(!p.id){while(findRow_(requests,'productid',candidate)){const n=Number(candidate.replace(/^DSB-?/,''))+1;candidate='DSB-'+String(n).padStart(4,'0');}}
+        if(findRow_(sheet,'id',candidate) || findRow_(requests,'productid',candidate))throw new Error('That product ID is already used or reserved.');
+        if (!/^[A-Za-z0-9_-]{1,80}$/.test(candidate)) throw new Error('Use letters, numbers, hyphens or underscores for product IDs.');
+        requests.appendRow([requestId,candidate,fingerprint]);SpreadsheetApp.flush();reservation={requests,id:candidate};
+      }
+      if(reservation.existing && findRow_(sheet,'id',reservation.id))return {success:true,id:reservation.id,replayed:true};
+    }
+    const id = reservation ? reservation.id : (String(p.id || '').trim() || nextId_(sheet, 'DSB'));
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) throw new Error('Use letters, numbers, hyphens or underscores for product IDs.');
     if (findRow_(sheet, 'id', id)) throw new Error('That product ID already exists.');
     sheet.appendRow(heads.map(h => sheetText_(h === 'id' ? id : (p[h] !== undefined ? p[h] : ''))));
@@ -346,7 +362,8 @@ function updateProduct(p) {
       if (col >= 0 && String(sheet.getRange(row,col+1).getValue()) !== String(expected)) throw new Error('Stock changed since this form was opened. Reload products before editing stock.');
     });
     // Write only explicitly edited fields; do not rewrite unrelated formulas.
-    heads.forEach((h, i) => { if (h !== 'id' && p[h] !== undefined) sheet.getRange(row, i + 1).setValue(sheetText_(p[h])); });
+    const edits=heads.map((h,i)=>({col:i+1,value:sheetText_(p[h]),edited:h!=='id' && p[h]!==undefined})).filter(x=>x.edited);
+    for(let i=0;i<edits.length;){let j=i+1;while(j<edits.length && edits[j].col===edits[j-1].col+1)j++;sheet.getRange(row,edits[i].col,1,j-i).setValues([edits.slice(i,j).map(x=>x.value)]);i=j;}
     invalidatePublicCaches_();
     return {success:true};
   });
@@ -443,8 +460,14 @@ function getActivePromos() {
 
 /* ---------------- Orders ---------------- */
 
-function getAllOrders() {
-  return rowsAsObjects_(getSheet_(ORDERS_SHEET));
+function getAllOrders(options) {
+  const all=rowsAsObjects_(getSheet_(ORDERS_SHEET));
+  if(!options)return all;
+  const q=String(options.query||'').trim().toLowerCase().slice(0,100),status=String(options.status||'all');
+  const list=all.filter(o=>(status==='all'||(o.status||'Pending')===status)&&(!q||`${o.customername} ${o.phone} ${o.orderid}`.toLowerCase().includes(q)));
+  list.sort((a,b)=>options.sort==='name-asc'?String(a.customername||'').localeCompare(String(b.customername||'')):(options.sort==='date-asc'?1:-1)*(new Date(a.date)-new Date(b.date)));
+  const pageSize=40,page=Math.max(0,Math.min(Math.floor(Number(options.page)||0),Math.max(0,Math.ceil(list.length/pageSize)-1)));
+  return {orders:list.slice(page*pageSize,(page+1)*pageSize),page,pageSize,total:list.length,allCount:all.length};
 }
 
 // Server-side dashboard aggregation keeps the browser light. Completed order
@@ -518,7 +541,12 @@ function getDashboardData() {
   const accountingIncomplete = Object.keys(completedOrders).some(id => { const d = new Date(completedOrders[id].date); return Utilities.formatDate(d,tz,'yyyy-MM') === monthKey && !accounted[id]; });
   const topProducts = Object.keys(productStats).map(k => productStats[k])
     .sort((a, b) => b.revenue - a.revenue || b.qty - a.qty).slice(0, 5);
-  const dashboard = { todayRevenue, todayOrders, monthRevenue, monthOrders, monthProfit, accountingIncomplete, statusCounts, lowStock, topProducts };
+  const recentOrders=orders.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,5);
+  const sevenDaySales=[];
+  for(let i=6;i>=0;i--){const day=new Date(now.getTime()-i*86400000);sevenDaySales.push({key:Utilities.formatDate(day,tz,'yyyy-MM-dd'),label:Utilities.formatDate(day,tz,'EEE'),total:0});}
+  orders.forEach(o=>{if(COMPLETED_STATUSES.indexOf(o.status)<0)return;const d=new Date(o.date);if(isNaN(d.getTime()))return;const slot=sevenDaySales.find(x=>x.key===Utilities.formatDate(d,tz,'yyyy-MM-dd'));if(slot)slot.total+=Math.max(0,safeNumber_(o.total,0));});
+  const telegram=getTelegramHealth_();
+  const dashboard = { todayRevenue, todayOrders, monthRevenue, monthOrders, monthProfit, accountingIncomplete, statusCounts, lowStock, topProducts, recentOrders, sevenDaySales, telegram };
   return dashboard;
 }
 
@@ -638,7 +666,7 @@ function addOrder(o) {
     // Durable preparation is flushed BEFORE stock is touched.
     SpreadsheetApp.flush();
     try {
-      applyStockPlan_(data.stock, true);
+      applyStockPlan_(data.stock, true, sheets);
       sheets.orders.appendRow(sheets.orderHeads.map(h => sheetText_(record[h] !== undefined ? record[h] : '')));
       SpreadsheetApp.flush();
       finishTransaction_(journal,jr,data,true,true);
@@ -659,17 +687,17 @@ function normalizeAndValidateOrder_(o) {
   const phone = cleanPhone_(o.phone), address = String(o.address || '').trim();
   const paymentMethod = String(o.paymentMethod || o.paymentmethod || 'Cash on Delivery');
   const promoCode = String(o.promoCode || o.promocode || '').trim().toUpperCase();
-  if (o.website) return {success:false,error:'Could not accept this request.'};
-  if (customerName.length < 2 || customerName.length > 100) return {success:false,error:'Please provide a valid customer name.'};
-  if (!/^\d{10,15}$/.test(phone)) return {success:false,error:'Please provide a valid phone number.'};
-  if (address.length < 5 || address.length > 500) return {success:false,error:'Please provide a valid delivery address.'};
-  if (ALLOWED_PAYMENT_METHODS.indexOf(paymentMethod) < 0 || promoCode.length > 30) return {success:false,error:'Invalid payment method or promo code.'};
-  if (!Array.isArray(o.itemsDetail) || !o.itemsDetail.length || o.itemsDetail.length > 50) return {success:false,error:'Cart is empty or too large.'};
+  if (o.website) return {success:false,code:'validation_failed',error:'Could not accept this request.'};
+  if (customerName.length < 2 || customerName.length > 100) return {success:false,code:'validation_failed',error:'Please provide a valid customer name.'};
+  if (!/^\d{10,15}$/.test(phone)) return {success:false,code:'validation_failed',error:'Please provide a valid phone number.'};
+  if (address.length < 5 || address.length > 500) return {success:false,code:'validation_failed',error:'Please provide a valid delivery address.'};
+  if (ALLOWED_PAYMENT_METHODS.indexOf(paymentMethod) < 0 || promoCode.length > 30) return {success:false,code:'validation_failed',error:'Invalid payment method or promo code.'};
+  if (!Array.isArray(o.itemsDetail) || !o.itemsDetail.length || o.itemsDetail.length > 50) return {success:false,code:'validation_failed',error:'Cart is empty or too large.'};
   const seen = Object.create(null), itemsDetail = [];
   for (const x of o.itemsDetail) {
     const id = String(x && x.id || '').trim(), qty = Number(x && x.qty);
     const size=String(x && x.size || '').trim(), variantKey=JSON.stringify([id,size]);
-    if (!id || id.length > 80 || size.length>40 || !Number.isInteger(qty) || qty < 1 || qty > 999 || seen[variantKey]) return {success:false,error:'Invalid or duplicate cart item.'};
+    if (!id || id.length > 80 || size.length>40 || !Number.isInteger(qty) || qty < 1 || qty > 999 || seen[variantKey]) return {success:false,code:'validation_failed',error:'Invalid or duplicate cart item.'};
     seen[variantKey] = true; itemsDetail.push({id:id,qty:qty,...(size ? {size:size} : {})});
   }
   itemsDetail.sort((a,b) => a.id.localeCompare(b.id) || String(a.size || '').localeCompare(String(b.size || '')));
@@ -921,6 +949,7 @@ function validatePromoFast_(code, phone) {
 
 function trackOrder(orderId, phone) {
   if (!orderId || !phone) return { success: false, error: 'missing orderId or phone' };
+  rateLimit_('tracking:'+hashText_(String(orderId)),30,600);
   const sheet = getSheet_(ORDERS_SHEET);
   const heads = headers_(sheet);
   const idCol = heads.indexOf('orderid');
@@ -935,9 +964,10 @@ function trackOrder(orderId, phone) {
   const row = sheet.getRange(hit.getRow(), 1, 1, sheet.getLastColumn()).getValues()[0];
   const order = {};
   heads.forEach((h, i) => order[h] = row[i]);
-  const storedPhone = cleanPhone_(order.phone);
-  const givenPhone = cleanPhone_(phone);
-  if (!storedPhone || !givenPhone || storedPhone.slice(-4) !== givenPhone.slice(-4)) {
+  const trackingPhone = value => {const digits=cleanPhone_(value);return digits.length===12 && digits.startsWith('91') ? digits.slice(2) : digits.length===11 && digits.startsWith('0') ? digits.slice(1) : digits;};
+  const storedPhone = trackingPhone(order.phone);
+  const givenPhone = trackingPhone(phone);
+  if (!storedPhone || !givenPhone || storedPhone !== givenPhone) {
     return { success: false, error: 'not_found' };
   }
 
@@ -987,7 +1017,7 @@ function rateLimit_(key, limit, seconds) {
   let state;
   try { state = JSON.parse(cache.get(k) || 'null'); } catch(err) {}
   if (!state || state.until <= now) state = {count:0,until:now + seconds * 1000};
-  if (state.count >= limit) throw new Error('Too many attempts. Please try again later or contact the shop.');
+  if (state.count >= limit) { const error=new Error('Too many attempts. Please try again later or contact the shop.'); error.dsbCode='rate_limited'; throw error; }
   state.count++;
   cache.put(k,JSON.stringify(state),Math.min(21600,Math.max(1,Math.ceil((state.until-now)/1000))));
 }
@@ -996,7 +1026,7 @@ function withWriteLock_(fn) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) return {success:false,code:'busy',error:'The shop is busy. Please retry in a moment.'};
   try { recoverTransactions_(); return fn(); }
-  catch(err) { console.error(String(err)); return {success:false,error:String(err.message || err),code:'retry_same_request'}; }
+  catch(err) { console.error(String(err)); return {success:false,error:String(err.message || err),code:err.dsbCode || 'retry_same_request'}; }
   finally { lock.releaseLock(); }
 }
 function quoteOrder(o) {
@@ -1081,18 +1111,24 @@ function stockPlan_(items,sheets) {
   });
 }
 
-function applyStockPlan_(plan,forward) {
+function applyStockPlan_(plan,forward,sheets) {
   if (!plan || !plan.length) return;
-  const sheet = getSheet_(PRODUCTS_SHEET), data = sheet.getDataRange().getValues(), heads = data[0].map(h => String(h).trim().toLowerCase());
+  const sheet = sheets ? sheets.productSheet : getSheet_(PRODUCTS_SHEET), data = sheets ? sheets.productData : sheet.getDataRange().getValues(), heads = data[0].map(h => String(h).trim().toLowerCase());
   const idCol = heads.indexOf('id'), qtyCol = heads.indexOf('stockqty'), statusCol = heads.indexOf('stock');
   if (idCol < 0 || qtyCol < 0) throw new Error('Inventory columns are missing; transaction recovery is required.');
   const rows = Object.create(null); data.slice(1).forEach((r,i) => { rows[String(r[idCol])] = i+2; });
-  plan.forEach(x => {
-    const row = rows[x.id];
-    if (!row) throw new Error('Inventory recovery cannot find product ' + x.id + '. Restore it before retrying.');
-    sheet.getRange(row,qtyCol+1).setValue(forward ? x.afterQty : x.beforeQty);
-    const status = forward ? x.afterStatus : x.beforeStatus;
-    if (statusCol >= 0 && status !== null) sheet.getRange(row,statusCol+1).setValue(status);
+  const columns=new Map();
+  const add=(col,row,value)=>{if(!columns.has(col))columns.set(col,[]);columns.get(col).push({row,value});};
+  plan.forEach(x=>{
+    const row=rows[x.id];
+    if(!row)throw new Error('Inventory recovery cannot find product '+x.id+'. Restore it before retrying.');
+    add(qtyCol+1,row,forward?x.afterQty:x.beforeQty);
+    const status=forward?x.afterStatus:x.beforeStatus;
+    if(statusCol>=0 && status!==null)add(statusCol+1,row,status);
+  });
+  columns.forEach((edits,col)=>{
+    edits.sort((a,b)=>a.row-b.row);
+    for(let i=0;i<edits.length;){let j=i+1;while(j<edits.length && edits[j].row===edits[j-1].row+1)j++;sheet.getRange(edits[i].row,col,j-i,1).setValues(edits.slice(i,j).map(x=>[x.value]));i=j;}
   });
 }
 function statusStockPlan_(orderId,oldStatus,newStatus) {
@@ -1166,6 +1202,7 @@ function processTelegramQueue() {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(JOURNAL_SHEET);
     if (!sheet || sheet.getLastRow()<2) return;
     const started = Date.now();
+    PropertiesService.getScriptProperties().setProperty('TELEGRAM_LAST_RUN',String(started));
     const last=sheet.getLastRow();
     const hits=sheet.getRange(2,5,last-1,1).createTextFinder('Pending').matchEntireCell(true).findAll();
     let sent=0;
@@ -1184,6 +1221,7 @@ function processTelegramQueue() {
       const result = notifyTelegramOrder_(data.record);
       if (result && result.ok) {
         sheet.getRange(row,5,1,3).setValues([['Sent',0,attempts]]);
+        PropertiesService.getScriptProperties().setProperty('TELEGRAM_LAST_SUCCESS',String(Date.now()));
         SpreadsheetApp.flush();
       }
       sent++;
@@ -1208,4 +1246,12 @@ function sameCheckoutQuote_(expected,actual) {
   if (amounts.some(k=>typeof expected[k]!=='number' || !Number.isFinite(expected[k]) || expected[k]!==actual[k])) return false;
   const normalize=items=>items.map(x=>({id:String(x.id),size:String(x.size || ''),qty:x.qty,unitPrice:x.unitPrice,lineTotal:x.lineTotal})).sort((a,b)=>a.id.localeCompare(b.id)||a.size.localeCompare(b.size));
   return JSON.stringify(normalize(expected.items))===JSON.stringify(normalize(actual.items));
+}
+
+function getTelegramHealth_(){
+  const props=PropertiesService.getScriptProperties();
+  const result={lastRun:Number(props.getProperty('TELEGRAM_LAST_RUN'))||0,lastSuccess:Number(props.getProperty('TELEGRAM_LAST_SUCCESS'))||0,pending:0};
+  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(JOURNAL_SHEET);
+  if(sheet && sheet.getLastRow()>1 && sheet.getLastColumn()>=5)result.pending=sheet.getRange(2,5,sheet.getLastRow()-1,1).createTextFinder('Pending').matchEntireCell(true).findAll().length;
+  return result;
 }

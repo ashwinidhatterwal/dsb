@@ -9,6 +9,10 @@
   const renderedText=new WeakMap();
 
   const HI = {
+    'Could not check promo codes. Please try again.':'प्रोमो कोड की जाँच नहीं हो सकी। कृपया फिर से कोशिश करें।',
+    'Live availability is temporarily unavailable. Please retry before ordering.':'अभी उपलब्धता की जानकारी नहीं मिल रही है। ऑर्डर करने से पहले फिर से कोशिश करें।',
+    'Connecting to the shop for current availability…':'वर्तमान उपलब्धता के लिए दुकान से जुड़ रहे हैं…',
+    'Price and availability are checked before ordering.':'ऑर्डर से पहले कीमत और उपलब्धता की जाँच की जाती है।',
     'Order online · Shop support on WhatsApp':'ऑनलाइन ऑर्डर करें · व्हाट्सऐप पर सहायता',
     'Taking longer than usual. Your order may still be saving.':'सामान्य से अधिक समय लग रहा है। आपका ऑर्डर अभी दर्ज हो सकता है।',
     'Some saved cart data was damaged and has been removed.':'कार्ट की कुछ पुरानी जानकारी खराब थी और हटा दी गई है।',
@@ -108,6 +112,22 @@
   Object.assign(HI, PARAS);
 
 
+  Object.assign(HI,{
+    'Dhatterwal':'धत्तरवाल','Suhag Bhandar':'सुहाग भंडार','GOLUWALA · RAJASTHAN':'गोलूवाला · राजस्थान',
+    'Shop by category':'श्रेणी के अनुसार खरीदें','Selected deals':'दुकान की पसंद','More to explore':'और उत्पाद देखें',
+    'Enter a name of 2–100 characters.':'नाम में 2 से 100 अक्षर लिखें।','Enter a valid phone number with 10–15 digits.':'10 से 15 अंकों का सही फ़ोन नंबर लिखें।',
+    'Enter a complete delivery address of 5–500 characters.':'5 से 500 अक्षरों में पूरा डिलीवरी पता लिखें।','Please place a smaller order with up to 50 different items.':'एक ऑर्डर में अधिकतम 50 अलग-अलग उत्पाद रखें।',
+    'Your cart was updated':'आपका कार्ट अपडेट किया गया है','No longer available':'अब उपलब्ध नहीं है','Quantity updated':'मात्रा बदली गई','Price updated':'कीमत बदली गई',
+    'Showing saved products. Current prices and stock are checked when you order.':'सहेजी हुई उत्पाद सूची दिखाई जा रही है। ऑर्डर करते समय वर्तमान कीमत और स्टॉक की जाँच होगी।',
+    'Showing saved products. Current availability is checked before ordering.':'सहेजी हुई उत्पाद सूची दिखाई जा रही है। ऑर्डर से पहले वर्तमान उपलब्धता की जाँच होगी।',
+    'Delivery charges are shown before you confirm your order.':'ऑर्डर की पुष्टि से पहले डिलीवरी शुल्क दिखाया जाएगा।',
+    'Ask about delivery to your area':'अपने क्षेत्र में डिलीवरी के बारे में पूछें','Returns & exchanges':'रिटर्न और एक्सचेंज',
+    'Contact the shop for product details before ordering.':'ऑर्डर करने से पहले उत्पाद की जानकारी के लिए दुकान से संपर्क करें।',
+    'Add shop to Home Screen':'दुकान को होम स्क्रीन पर जोड़ें',
+    'Order received':'ऑर्डर प्राप्त हुआ','Confirmed':'पुष्टि हो गई','Packed':'पैक हो गया','Shipped':'भेज दिया गया','Delivered':'डिलीवर हो गया','Cancelled':'रद्द हो गया',
+    'Order ID from your order slip':'ऑर्डर पर्ची पर दिया गया ऑर्डर आईडी',
+    'Browse the shop, add what you need to your cart, and check out — we\'ll ask for your name, phone number, and delivery address, then your order is saved securely and you receive a downloadable order slip. The shop contacts you on WhatsApp to confirm delivery details. Pay by cash on delivery, or via UPI if that option is shown at checkout.':'दुकान में उत्पाद देखें, कार्ट में जोड़ें और नाम, फ़ोन नंबर व डिलीवरी पता भरें। ऑर्डर दर्ज होने पर डाउनलोड करने योग्य पर्ची मिलेगी। दुकान डिलीवरी की जानकारी की पुष्टि के लिए व्हाट्सऐप पर संपर्क करेगी। भुगतान कैश ऑन डिलीवरी या चेकआउट में उपलब्ध UPI विकल्प से करें।'
+  });
   const TITLES_HI={
     'index.html':'धत्तरवाल सुहाग भंडार — ऑनलाइन खरीदारी',
     'about.html':'हमारे बारे में — धत्तरवाल सुहाग भंडार',
@@ -120,6 +140,8 @@
   const normalize=s=>String(s||'').replace(/\s+/g,' ').trim();
   function dynamicHi(s){
     let m;
+    if((m=s.match(/^Delivery: (.+) below (.+) after discounts; free at or above that amount\. Cash on Delivery: (.+) extra\.$/)))return `छूट के बाद ${m[2]} से कम पर डिलीवरी ${m[1]}; इस राशि या अधिक पर मुफ़्त। कैश ऑन डिलीवरी: ${m[3]} अतिरिक्त।`;
+    if((m=s.match(/^Photo (\d+) of (\d+)$/)))return `फ़ोटो ${m[1]} / ${m[2]}`;
     if ((m=s.match(/^Size: (.+)$/))) return `साइज़: ${m[1]}`;
     const emojiLead=s.match(/^([\p{Extended_Pictographic}\uFE0F\s]+)(.+)$/u);
     if(emojiLead && HI[emojiLead[2]]) return emojiLead[1]+HI[emojiLead[2]];

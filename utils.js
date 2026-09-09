@@ -49,9 +49,13 @@ function renderStars(rating, size){
 }
 
 /* ---------------- Product sharing (Web Share API, with fallbacks) ---------------- */
+function preferredProductPath(id){
+  if(window.DSB_PUBLISHED_PRODUCTS?.has(String(id))){const hex=Array.from(new TextEncoder().encode(String(id)),b=>b.toString(16).padStart(2,'0')).join('');return `products/p-${hex}.html`;}
+  return `product.html?id=${encodeURIComponent(id)}`;
+}
 function productUrl(p){
   const base = (typeof CONFIG !== 'undefined' && CONFIG.SITE_URL) ? CONFIG.SITE_URL : location.origin;
-  return `${base}/product.html?id=${encodeURIComponent(p.id)}`;
+  return `${base}/${preferredProductPath(p.id)}`;
 }
 
 async function shareProduct(p){
@@ -116,7 +120,10 @@ function newCheckoutId(){
 function productImageUrl(src,width){
   try {
     const url = new URL(src,location.href);
-    if (url.hostname === 'res.cloudinary.com' && /\/image\/upload\/(?:v\d+\/|[^/,]+$)/.test(url.pathname)) {
+    const assetPath=url.pathname.split('/image/upload/')[1];
+    const first=assetPath?.split('/')[0] || '';
+    const alreadyTransformed=/^(?:[a-z]{1,4}_|\$)/.test(first) && !/^v\d+$/.test(first);
+    if (url.hostname === 'res.cloudinary.com' && assetPath && !alreadyTransformed) {
       url.pathname = url.pathname.replace('/image/upload/',`/image/upload/f_auto,q_auto,c_limit,w_${width}/`);
       return url.href;
     }
@@ -125,6 +132,7 @@ function productImageUrl(src,width){
 }
 const dialogStack = [];
 function openDialogFocus(root,onClose){
+  document.querySelector('.install-banner')?.classList.remove('show');
   if (!root || dialogStack.some(x=>x.root===root)) return;
   root.setAttribute('role','dialog'); root.setAttribute('aria-modal','true'); root.tabIndex=-1;
   const entry={root,onClose,previous:document.activeElement,siblings:[]};

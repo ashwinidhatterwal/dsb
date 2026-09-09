@@ -14,7 +14,7 @@ function escapeHtml(str){
 }
 
 // Kept in memory only for this tab — not persisted, so it's re-entered
-// each time the page is opened. See SETUP-GUIDE.md for how to deploy
+// each time the page is opened. See UPDATE-STEPS.txt for how to deploy
 // the Apps Script backend that this talks to.
 // Deployed Apps Script Web App URL for this shop's Google Sheet.
 // Pre-filled so the admin only has to enter the password below.
@@ -24,7 +24,7 @@ const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbybavfXBC-5CNst
 // Image hosting (Cloudinary "unsigned upload") — lets the admin upload a
 // photo straight from the browser and get back a permanent link, no server
 // needed. Fill these in after creating a free Cloudinary account and an
-// unsigned upload preset — see SETUP-GUIDE.md. Safe to leave the preset
+// unsigned upload preset — see UPDATE-STEPS.txt. Safe to leave the preset
 // unsigned/public since it only allows uploads, not account access.
 const CLOUDINARY_CLOUD_NAME = 'malfl6xv';
 const CLOUDINARY_UPLOAD_PRESET = 'dhatterwal suhag bhandar';
@@ -34,6 +34,8 @@ let ADMIN_KEY = '';
 let PRODUCTS = [];
 let editingProductId = null; // set while editing an existing product; null when adding a new one
 let ORDERS = [];
+let orderPage = 0, orderFilterKey = "", orderResponse=null, orderRequestSequence=0;
+const ORDER_PAGE_SIZE = 40;
 
 
 async function adminFetch(url,options={}){
@@ -49,11 +51,11 @@ async function adminFetch(url,options={}){
   } finally {clearTimeout(timer);}
 }
 
-async function adminRead(action){
+async function adminRead(action,options){
   const res = await adminFetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ key: ADMIN_KEY, action })
+    body: JSON.stringify({ key: ADMIN_KEY, action, options })
   });
   const data = await res.json();
   if (data && data.error) throw new Error(data.error);
@@ -97,14 +99,19 @@ function formatDateTime(value){
 }
 
 async function loadOrders(){
-  const wrap = $('#orderList');
+  const wrap = $('#orderList'),sequence=++orderRequestSequence;
   try{
-    const data = await adminRead('adminOrders');
-    ORDERS = data;
+    const options={query:$('#orderFilterInput').value.trim(),status:$('#orderStatusFilter').value,sort:$('#orderSort').value,page:orderPage};
+    const data = await adminRead('adminOrders',options);
+    if(sequence!==orderRequestSequence)return;
+    orderResponse=Array.isArray(data)?null:data;
+    if(orderResponse && !Array.isArray(data.orders))throw new Error('Invalid order response');
+    if(orderResponse)orderPage=data.page;
+    ORDERS = orderResponse?data.orders:data;
     renderOrderList();
     if (LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
   } catch(err){
-    wrap.innerHTML = `<p class="hint">Could not load orders: ${escapeHtml(err.message)}</p>`;
+    if(sequence===orderRequestSequence)wrap.innerHTML = `<p class="hint">Could not load orders: ${escapeHtml(err.message)}</p>`;
   }
 }
 
@@ -126,7 +133,13 @@ function renderOrderList(){
     return new Date(b.date) - new Date(a.date); // date-desc default
   });
 
-  $('#orderCountLabel').textContent = ORDERS.length;
+  const filterKey=JSON.stringify([q,statusFilter,sortMode]);
+  if(filterKey!==orderFilterKey){if(!orderResponse)orderPage=0;orderFilterKey=filterKey;}
+  const pageCount=Math.max(1,Math.ceil((orderResponse?orderResponse.total:list.length)/ORDER_PAGE_SIZE));
+  orderPage=Math.min(orderPage,pageCount-1);
+  const filteredCount=orderResponse?orderResponse.total:list.length;
+  if(!orderResponse)list=list.slice(orderPage*ORDER_PAGE_SIZE,(orderPage+1)*ORDER_PAGE_SIZE);
+  $('#orderCountLabel').textContent = orderResponse?orderResponse.allCount:ORDERS.length;
 
   if (!list.length){
     wrap.innerHTML = `<p class="hint">No orders match.</p>`;
@@ -164,6 +177,12 @@ function renderOrderList(){
       </div>
     </div>`;
   }).join('');
+
+  if(pageCount>1){
+    wrap.insertAdjacentHTML('beforeend',`<nav class="order-pagination" aria-label="Order pages"><button class="ghost-btn" data-order-page="prev" ${orderPage===0?'disabled':''}>Previous</button><span>Page ${orderPage+1} of ${pageCount} · ${filteredCount} orders</span><button class="ghost-btn" data-order-page="next" ${orderPage===pageCount-1?'disabled':''}>Next</button></nav>`);
+    $('[data-order-page="prev"]',wrap).onclick=()=>{orderPage--;loadOrders();};
+    $('[data-order-page="next"]',wrap).onclick=()=>{orderPage++;loadOrders();};
+  }
 
   $$('.orow', wrap).forEach(row => {
     const orderId = row.dataset.id;
@@ -282,7 +301,7 @@ function clearForm(){
 // section use this, so there's exactly one place that talks to Cloudinary.
 async function uploadFileToCloudinary(file){
   if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET){
-    throw new Error('Image hosting isn\'t set up yet — see SETUP-GUIDE.md, or paste an image URL instead.');
+    throw new Error('Image hosting isn\'t set up yet — see UPDATE-STEPS.txt, or paste an image URL instead.');
   }
   const form = new FormData();
   const upload = await resizeUpload(file);
@@ -409,7 +428,14 @@ async function saveProduct(){
     return;
   }
 
+  let saveRequest=null;
+  if(!isUpdate){
+    const fingerprint=JSON.stringify(product);
+    try{saveRequest=JSON.parse(sessionStorage.getItem('dsb_admin_add_attempt') || 'null');if(!saveRequest || saveRequest.fingerprint!==fingerprint){saveRequest={requestId:crypto.randomUUID(),fingerprint};sessionStorage.setItem('dsb_admin_add_attempt',JSON.stringify(saveRequest));}}
+    catch(_){status(statusEl,'Enable browser storage before adding products safely.',false);return;}
+  }
   const payload = {
+    requestId:saveRequest?.requestId,
     key: ADMIN_KEY,
     action: isUpdate ? 'update' : 'add',
     product
@@ -425,6 +451,7 @@ async function saveProduct(){
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    if(!isUpdate)sessionStorage.removeItem('dsb_admin_add_attempt');
     status(statusEl, isUpdate ? 'Product updated.' : `Product added as ${data.id}.`, true);
     showToast(isUpdate ? 'Product updated' : 'Product added');
     clearForm();
@@ -503,6 +530,11 @@ function renderDashboard(d){
   const critical=(d.lowStock||[]).filter(p=>Number(p.qty)<=2).length; if(critical) attention.push({icon:'📦',title:`${critical} product${critical===1?'':'s'} critically low`,sub:'Stock is at 2 or below',action:'products'});
   $('#dashAttention').innerHTML=attention.map(a=>`<button class="dash-alert" data-dash-action="${a.action}"><span class="alert-icon">${a.icon}</span><span class="alert-copy"><strong>${a.title}</strong><small>${a.sub}</small></span><span class="alert-arrow">›</span></button>`).join('');
 
+  if(d.telegram){
+    const t=d.telegram,notice=document.createElement('p');notice.className='hint';
+    notice.textContent=`Telegram: ${t.pending} awaiting delivery. ${t.lastRun?'Last queue run: '+formatDateTime(t.lastRun):'No queue run recorded yet. Check the background trigger if orders are waiting.'}${t.lastSuccess?' Last successful notification: '+formatDateTime(t.lastSuccess):''}`;
+    $('#dashAttention').appendChild(notice);
+  }
   const top=d.topProducts||[], max=Math.max(1,...top.map(p=>Number(p.revenue)||0));
   $('#dashTopProducts').innerHTML=top.length?top.map((p,i)=>`<div class="dash-product-row"><span class="dash-rank">${i+1}</span><div class="dash-product-name"><strong>${escapeHtml(p.name||'(unknown)')}</strong><div class="dash-product-meta">${Number(p.qty)||0} sold</div></div><div class="dash-product-bar-track"><div class="dash-product-bar-fill" style="width:${Math.round((Number(p.revenue)||0)/max*100)}%"></div></div><div class="dash-product-value">${moneyShort(p.revenue)}</div></div>`).join(''):'<p class="hint">No sales recorded yet this month.</p>';
 
@@ -512,11 +544,11 @@ function renderDashboard(d){
 
   const low=d.lowStock||[]; $('#dashLowStock').innerHTML=low.length?low.map(p=>`<div class="dash-lowstock-item"><div><div class="lowstock-name">${escapeHtml(p.name)}</div><div class="lowstock-state">${Number(p.qty)<=2?'Critical — restock soon':'Low stock'}</div></div><span class="qty">${p.qty} left</span></div>`).join(''):'<p class="hint">All tracked products have healthy stock.</p>';
 
-  const recent=recentOrders().slice(0,5); $('#dashRecentOrders').innerHTML=recent.length?recent.map(o=>{const st=o.status||'Pending';return `<div class="dash-recent-row"><div class="dash-recent-icon">🧾</div><div class="dash-recent-copy"><strong>${escapeHtml(o.customername||o.orderid||'Order')}</strong><span>${escapeHtml(o.orderid||'')} · ${escapeHtml(formatDateTime(o.date))}</span></div><div class="dash-recent-total">${moneyShort(o.total)}<br><span class="status-pill ${escapeHtml(st.toLowerCase())}">${escapeHtml(st)}</span></div></div>`;}).join(''):'<p class="hint">No recent orders yet.</p>';
+  const recent=d.recentOrders || recentOrders().slice(0,5); $('#dashRecentOrders').innerHTML=recent.length?recent.map(o=>{const st=o.status||'Pending';return `<div class="dash-recent-row"><div class="dash-recent-icon">🧾</div><div class="dash-recent-copy"><strong>${escapeHtml(o.customername||o.orderid||'Order')}</strong><span>${escapeHtml(o.orderid||'')} · ${escapeHtml(formatDateTime(o.date))}</span></div><div class="dash-recent-total">${moneyShort(o.total)}<br><span class="status-pill ${escapeHtml(st.toLowerCase())}">${escapeHtml(st)}</span></div></div>`;}).join(''):'<p class="hint">No recent orders yet.</p>';
 
-  const days=buildSevenDaySales(), maxDay=Math.max(1,...days.map(x=>x.total)), week=days.reduce((a,x)=>a+x.total,0); $('#dashWeekTotal').textContent=moneyShort(week); $('#dashSalesChart').innerHTML=days.some(x=>x.total)?days.map(x=>`<div class="dash-bar-wrap"><span class="dash-bar-value">${x.total?moneyShort(x.total):''}</span><div class="dash-bar" style="height:${Math.max(6,Math.round(x.total/maxDay*82))}%"></div><span class="dash-bar-label">${x.label}</span></div>`).join(''):'<p class="hint dash-chart-empty">No sales activity in the last 7 days.</p>';
+  const days=d.sevenDaySales || buildSevenDaySales(), maxDay=Math.max(1,...days.map(x=>x.total)), week=days.reduce((a,x)=>a+x.total,0); $('#dashWeekTotal').textContent=moneyShort(week); $('#dashSalesChart').innerHTML=days.some(x=>x.total)?days.map(x=>`<div class="dash-bar-wrap"><span class="dash-bar-value">${x.total?moneyShort(x.total):''}</span><div class="dash-bar" style="height:${Math.max(6,Math.round(x.total/maxDay*82))}%"></div><span class="dash-bar-label">${x.label}</span></div>`).join(''):'<p class="hint dash-chart-empty">No sales activity in the last 7 days.</p>';
 
-  $$('[data-dash-action]').forEach(btn=>btn.onclick=()=>{const a=btn.dataset.dashAction;if(a==='pending'){switchTab('orders');$('#orderStatusFilter').value='Pending';renderOrderList();}else if(a==='orders')switchTab('orders');else if(a==='products')switchTab('products');});
+  $$('[data-dash-action]').forEach(btn=>btn.onclick=()=>{const a=btn.dataset.dashAction;if(a==='pending'){switchTab('orders');$('#orderStatusFilter').value='Pending';orderPage=0;loadOrders();}else if(a==='orders')switchTab('orders');else if(a==='products')switchTab('products');});
   $$('.dash-quick[data-tab]').forEach(btn=>btn.onclick=()=>switchTab(btn.dataset.tab));
 }
 
@@ -549,9 +581,11 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#uploadExtraBtn').addEventListener('click', uploadExtraImage);
   $('#addExtraUrlBtn').addEventListener('click', addExtraImageUrl);
   $('#f-image').addEventListener('input', (e) => updateImagePreview(e.target.value.trim()));
-  $('#orderSort').addEventListener('change', renderOrderList);
-  $('#orderStatusFilter').addEventListener('change', renderOrderList);
-  $('#orderFilterInput').addEventListener('input', renderOrderList);
+  let orderSearchTimer;
+  const reloadOrders=()=>{clearTimeout(orderSearchTimer);orderPage=0;loadOrders();};
+  $('#orderSort').addEventListener('change',reloadOrders);
+  $('#orderStatusFilter').addEventListener('change',reloadOrders);
+  $('#orderFilterInput').addEventListener('input',()=>{clearTimeout(orderSearchTimer);orderSearchTimer=setTimeout(reloadOrders,250);});
   $('#dashRefreshBtn').addEventListener('click', async () => { await Promise.all([loadOrders(), loadDashboard()]); showToast('Dashboard refreshed'); });
 });
 

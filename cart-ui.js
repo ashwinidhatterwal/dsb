@@ -40,6 +40,7 @@ const checkoutState = {
 };
 
 let lastReceipt = null;
+let cartAdjustments={removed:[],adjusted:[]};
 
 function updateCartBadge(){
   const badge = $('#cartBadge');
@@ -165,8 +166,7 @@ async function submitTrackOrder(){
 
   try{
     const url = `${CONFIG.SHEET_API_URL}?action=trackOrder&orderId=${encodeURIComponent(orderId)}&phone=${encodeURIComponent(phone)}`;
-    const res = await fetch(url, { cache: 'no-store' });
-    const data = await res.json();
+    const data = await requestJson(url);
     if (!data || !data.success){
       showTrackError("We couldn't find a matching order. Double-check the Order ID and phone number, or message us on WhatsApp.");
       return;
@@ -188,17 +188,11 @@ function renderTrackResult(o){
   const status = String(o.status || 'Pending').trim();
   const statusLower = status.toLowerCase();
   const isCancelled = statusLower === 'cancelled';
-  const isFulfilled = statusLower === 'fulfilled';
-
-  const stepsHtml = isCancelled ? `
-    <div class="track-steps cancelled">
-      <div class="track-step done"><span class="dot"></span>Order received</div>
-      <div class="track-step cancel"><span class="dot"></span>Cancelled</div>
-    </div>` : `
-    <div class="track-steps">
-      <div class="track-step done"><span class="dot"></span>Order received</div>
-      <div class="track-step ${isFulfilled ? 'done' : 'active'}"><span class="dot"></span>Packed &amp; fulfilled</div>
-    </div>`;
+  const stages=['Pending','Confirmed','Packed','Shipped','Delivered'];
+  const current=status==='Fulfilled' ? 4 : stages.indexOf(status);
+  const labels=['Order received','Confirmed','Packed','Shipped','Delivered'];
+  const stepsHtml=isCancelled ? '<div class="track-steps cancelled"><div class="track-step done"><span class="dot"></span>Order received</div><div class="track-step cancel"><span class="dot"></span>Cancelled</div></div>' :
+    `<ol class="track-steps track-timeline">${labels.map((label,i)=>`<li class="track-step ${i<=current?'done':''} ${i===current && current<4?'active':''}" ${i===current?'aria-current="step"':''}><span class="dot"></span>${label}</li>`).join('')}</ol>`;
 
   const waText = encodeURIComponent(`Hi, I have a question about my order ${o.orderId}`);
 
@@ -263,9 +257,9 @@ function unlockPageFromCart(){
 async function openCart(){
   // Reconcile against the live catalog if one is loaded on this page (it
   // won't be on About/Contact, which never fetch products — safe no-op there).
-  if (typeof ALL_PRODUCTS !== 'undefined' && ALL_PRODUCTS.length){
-    const { removed } = await CartStore.syncSafe(ALL_PRODUCTS);
-    if (removed.length) showToast(`${removed.join(', ')} ${removed.length > 1 ? 'are' : 'is'} no longer available and ${removed.length > 1 ? 'were' : 'was'} removed from your cart`);
+  if (typeof ALL_PRODUCTS !== 'undefined' && ALL_PRODUCTS.length && (typeof CATALOG_META==='undefined' || CATALOG_META.source==='live')){
+    const changes = await CartStore.syncSafe(ALL_PRODUCTS);
+    if(changes.removed.length || changes.adjusted.length) cartAdjustments=changes;
   }
   renderCartDrawer();
   if(CartStore.takeRepairNotice()) showToast('Some saved cart data was damaged and has been removed.');
@@ -288,11 +282,11 @@ async function fetchPromosIfNeeded(){
   if (checkoutState.availablePromos !== null) return; // already fetched this page load
   if (!CONFIG.SHEET_API_URL) { checkoutState.availablePromos = []; return; }
   try{
-    const res = await fetch(`${CONFIG.SHEET_API_URL}?action=promos`, { cache: 'no-store' });
-    const data = await res.json();
-    checkoutState.availablePromos = Array.isArray(data) ? data : [];
+    const data = await requestJson(`${CONFIG.SHEET_API_URL}?action=promos`);
+    if(!Array.isArray(data))throw new Error('Invalid promo response');
+    checkoutState.availablePromos = data;
   } catch(err){
-    checkoutState.availablePromos = [];
+    checkoutState.availablePromos = null;
   }
 }
 
@@ -300,6 +294,7 @@ async function applyPromoCode(){
   if (checkoutState.availablePromos === null){
     await fetchPromosIfNeeded();
   }
+  if(checkoutState.availablePromos===null){checkoutState.promoStatus='Could not check promo codes. Please try again.';renderCartDrawer();return;}
   const typed = checkoutState.promoInput.trim();
   if (!typed){
     checkoutState.promoStatus = 'Enter a code first.';
@@ -325,14 +320,14 @@ function computeDiscount(subtotal){
   const promo = checkoutState.appliedPromo;
   if (!promo) return 0;
   const raw = promo.type === 'percent' ? subtotal * (promo.value / 100) : promo.value;
-  return Math.min(Math.max(raw, 0), subtotal);
+  return Math.round(Math.min(Math.max(raw, 0), subtotal)*100)/100;
 }
 
 async function fetchCheckoutConfigIfNeeded(){
   if (checkoutState.feeConfig !== null) return checkoutState.feeConfig;
   if (!CONFIG.SHEET_API_URL) return null;
   try {
-    const data = await requestJson(`${CONFIG.SHEET_API_URL}?action=checkoutConfig`);
+    const data = await (typeof cachedPublicJson==='function' ? cachedPublicJson('checkout-config',`${CONFIG.SHEET_API_URL}?action=checkoutConfig`,60000) : requestJson(`${CONFIG.SHEET_API_URL}?action=checkoutConfig`));
     if (data.checkoutVersion !== 2) throw new Error('Checkout update required.');
     if (!['deliveryFreeAbove','deliveryCharge','codCharge'].every(k=>Number.isFinite(Number(data[k])) && Number(data[k])>=0)) throw new Error('Invalid checkout settings.');
     checkoutState.feeConfig = data;
@@ -342,11 +337,11 @@ async function fetchCheckoutConfigIfNeeded(){
 
 function computeCheckoutTotals(subtotal){
   const discount = computeDiscount(subtotal);
-  const merchandiseTotal = Math.max(0, subtotal - discount);
+  const merchandiseTotal = Math.round(Math.max(0, subtotal - discount)*100)/100;
   const cfg = checkoutState.feeConfig || { deliveryFreeAbove: 0, deliveryCharge: 0, codCharge: 0 };
-  const deliveryCharge = cfg.deliveryCharge > 0 && cfg.deliveryFreeAbove > 0 && merchandiseTotal < cfg.deliveryFreeAbove ? cfg.deliveryCharge : 0;
+  const deliveryCharge = cfg.deliveryCharge > 0 && merchandiseTotal < cfg.deliveryFreeAbove ? cfg.deliveryCharge : 0;
   const codCharge = checkoutState.paymentMethod === 'COD' ? cfg.codCharge : 0;
-  return { discount, merchandiseTotal, deliveryCharge, codCharge, grandTotal: merchandiseTotal + deliveryCharge + codCharge };
+  return { discount, merchandiseTotal, deliveryCharge, codCharge, grandTotal: Math.round((merchandiseTotal + deliveryCharge + codCharge)*100)/100 };
 }
 
 /* ---------------- UPI ---------------- */
@@ -379,7 +374,7 @@ function renderCartDrawer(){
         <div><span class="cart-eyebrow">SHOPPING BAG</span><h2>Your cart</h2></div>
         <button class="closebtn" id="cartClose" aria-label="Close cart">✕</button>
       </div>
-      <div class="cart-main" id="cartMain">
+      <div class="cart-main" id="cartMain">${cartAdjustmentHtml()}
         <div class="cart-empty"><div class="cart-empty-icon">🛍️</div><strong>Your cart is empty</strong><br><span>Add a few things from the shop and they will appear here.</span></div>
       </div>`;
     $('#cartClose').addEventListener('click', closeCart);
@@ -396,13 +391,13 @@ function renderCartDrawer(){
       <div><span class="cart-eyebrow">SHOPPING BAG · ${CartStore.count()} ITEM${CartStore.count() === 1 ? '' : 'S'}</span><h2>Your cart</h2></div>
       <button class="closebtn" id="cartClose" aria-label="Close cart">✕</button>
     </div>
-    <div class="cart-main" id="cartMain">
+    <div class="cart-main" id="cartMain">${cartAdjustmentHtml()}
       <section class="cart-items-section">
         <div class="cart-section-head"><span>Items in your cart</span><span>${CartStore.count()} item${CartStore.count() === 1 ? '' : 's'}</span></div>
         <div id="cartItems">
           ${items.map(({product, qty}) => `
             <div class="cart-item" data-id="${escapeHtml(product.id)}">
-              <img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}">
+              <img src="${escapeHtml(productImageUrl(product.image,160))}" decoding="async" alt="${escapeHtml(product.name)}">
               <div class="ci-info">
                 <div class="ci-name">${escapeHtml(product.name)}</div>
                 <div class="ci-id">${product.size ? `<span>Size: ${escapeHtml(product.size)}</span> · ` : ''}${money(product.price)} each</div>
@@ -422,15 +417,15 @@ function renderCartDrawer(){
         <div class="cart-checkout-title"><div><span class="cart-eyebrow">CHECKOUT</span><h3>Delivery details</h3></div></div>
         <div class="field">
           <label for="custName">Your name</label>
-          <input type="text" id="custName" placeholder="Full name" autocomplete="name" value="${escapeHtml(checkoutState.name)}">
+          <input type="text" id="custName" maxlength="100" placeholder="Full name" autocomplete="name" value="${escapeHtml(checkoutState.name)}">
         </div>
         <div class="field">
           <label for="custPhone">Phone number</label>
-          <input type="tel" id="custPhone" placeholder="10-digit mobile number" autocomplete="tel" inputmode="numeric" value="${escapeHtml(checkoutState.phone)}">
+          <input type="tel" id="custPhone" maxlength="25" placeholder="10-digit mobile number" autocomplete="tel" inputmode="numeric" value="${escapeHtml(checkoutState.phone)}">
         </div>
         <div class="field">
           <label for="custAddress">Delivery address</label>
-          <textarea id="custAddress" placeholder="House no, street, village/city, PIN code">${escapeHtml(checkoutState.address)}</textarea>
+          <textarea id="custAddress" maxlength="500" autocomplete="street-address" placeholder="House no, street, village/city, PIN code">${escapeHtml(checkoutState.address)}</textarea>
         </div>
         <div class="field">
           <label for="promoInput">Promo code <span class="optional">(optional)</span></label>
@@ -458,7 +453,7 @@ function renderCartDrawer(){
           <div class="row total"><span>${checkoutState.feeConfig ? 'Estimated total' : 'Subtotal — fees checked next'}</span><span>${money(grandTotal)}</span></div>
         </div>
         ${checkoutState.feeConfig && checkoutState.feeConfig.deliveryCharge > 0 ? `<p class="checkout-fee-note">Free delivery on orders of ${money(checkoutState.feeConfig.deliveryFreeAbove)} or more.</p>` : ''}
-        <p class="hint">Review the final total before confirming your order.</p><div class="checkout-honeypot" aria-hidden="true"><label>Website<input id="orderWebsite" tabindex="-1" autocomplete="off"></label></div><button class="primary-btn" id="orderWaBtn" type="button">Review order</button>
+        <div class="checkout-honeypot" aria-hidden="true"><label>Website<input id="orderWebsite" tabindex="-1" autocomplete="off"></label></div><button class="primary-btn" id="orderWaBtn" type="button">Review order</button>
         <button class="ghost-btn cart-clear" id="clearCartBtn" type="button">Clear cart</button>
       </div>
     </div>`;
@@ -470,13 +465,13 @@ function renderCartDrawer(){
     if (!entry) return;
     $('[data-act="inc"]', stepper).addEventListener('click', async () => {
       if (entry.product.stockQty !== null && CartStore.qtyForProduct(entry.product.productId || entry.product.id) >= entry.product.stockQty){ showToast(`Only ${entry.product.stockQty} in stock`); return; }
-      await CartStore.addSafe(entry.product, 1); updateCartBadge(); renderCartDrawer(); if (typeof renderGrid === 'function') renderGrid(); if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard();
+      await CartStore.addSafe(entry.product, 1); updateCartBadge(); renderCartDrawer(); 
     });
-    $('[data-act="dec"]', stepper).addEventListener('click', async () => { await CartStore.addSafe(entry.product, -1); updateCartBadge(); renderCartDrawer(); if (typeof renderGrid === 'function') renderGrid(); if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard(); });
+    $('[data-act="dec"]', stepper).addEventListener('click', async () => { await CartStore.addSafe(entry.product, -1); updateCartBadge(); renderCartDrawer();  });
   });
   $$('.cart-remove', wrap).forEach(btn => btn.addEventListener('click', async () => {
     const entry = cart[btn.dataset.id]; if (!entry) return;
-    await CartStore.addSafe(entry.product, -entry.qty); updateCartBadge(); renderCartDrawer(); if (typeof renderGrid === 'function') renderGrid(); if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard();
+    await CartStore.addSafe(entry.product, -entry.qty); updateCartBadge(); renderCartDrawer(); 
   }));
 
   $('#custName').addEventListener('input', e => { checkoutState.name = e.target.value; saveCheckoutInfo(); });
@@ -497,24 +492,28 @@ function renderOrderConfirmation(receipt){
     <button class="closebtn" id="cartClose" aria-label="Close">✕</button>
     <div class="order-confirm" data-i18n-skip>
       <div class="confirm-icon">✓</div>
-      <h2>Your order is confirmed</h2>
+      <h2>Your order has been received</h2>
       ${orderId ? `<p class="confirm-id">Order ID: <strong>${escapeHtml(orderId)}</strong></p>` : ''}
-      <p class="confirm-message">Your order has been received successfully. You will get a confirmation message on WhatsApp shortly.</p>
+      <p class="confirm-message">Your order is saved. The shop will contact you on WhatsApp to confirm delivery details.</p>
       <p><strong>Order total: ${money(receipt.total)}</strong></p>
-      ${receipt.paymentMethod === 'UPI' && CONFIG.UPI_ID ? `<div class="upi-box"><p>Payment is not yet verified. Pay ${money(receipt.total)} using the link below. If you have already paid for this order, do not pay again.</p><img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&amp;data=${encodeURIComponent(buildUpiLink(receipt.total,orderId))}" alt="UPI payment QR code" width="140" height="140"><a class="primary-btn" href="${escapeHtml(buildUpiLink(receipt.total,orderId))}">Open UPI app</a><p>UPI ID: ${escapeHtml(CONFIG.UPI_ID)} · Reference: ${escapeHtml(orderId)}</p></div>` : ''}
+      ${receipt.paymentMethod === 'UPI' && CONFIG.UPI_ID ? `<div class="upi-box"><p>Payment is not yet verified. Pay ${money(receipt.total)} using the link below. If you have already paid for this order, do not pay again.</p><div class="upi-qr" id="upiQr" role="img" aria-label="UPI payment QR code">Preparing payment QR…</div><a class="primary-btn" href="${escapeHtml(buildUpiLink(receipt.total,orderId))}">Open UPI app</a><p>UPI ID: ${escapeHtml(CONFIG.UPI_ID)} · Reference: ${escapeHtml(orderId)}</p></div>` : ''}
       <div class="confirm-actions">
         <button class="primary-btn" id="downloadReceiptBtn" type="button">⬇ Download order slip</button>
+        <button class="ghost-btn" id="printReceiptBtn" type="button">Print / Save as PDF</button>
         <button class="ghost-btn" id="confirmCloseBtn" type="button">Continue shopping</button>
       </div>
     </div>`;
   const close = () => closeCart();
   $('#cartClose').addEventListener('click', close);
   $('#confirmCloseBtn').addEventListener('click', close);
-  $('#downloadReceiptBtn').addEventListener('click', async () => downloadReceipt(receipt));
+  $('#downloadReceiptBtn').addEventListener('click', () => downloadReceipt(receipt));
+  $('#printReceiptBtn').addEventListener('click', () => downloadReceipt(receipt,true));
+  document.dispatchEvent(new CustomEvent('dsb:ordercomplete'));
   $('#downloadReceiptBtn').focus();
+  if(receipt.paymentMethod==='UPI' && CONFIG.UPI_ID)renderPaymentQr(buildUpiLink(receipt.total,orderId));
 }
 
-function downloadReceipt(receipt){
+function downloadReceipt(receipt,print=false){
   if (!receipt) return;
   const isUpi = receipt.paymentMethod === 'UPI';
   const paymentNote = isUpi
@@ -526,6 +525,13 @@ function downloadReceipt(receipt){
     ${receipt.deliveryCharge > 0 ? `<tr><td colspan="3">Delivery</td><td>${money(receipt.deliveryCharge)}</td></tr>` : ''}
     ${receipt.codCharge > 0 ? `<tr><td colspan="3">Cash on Delivery fee</td><td>${money(receipt.codCharge)}</td></tr>` : ''}`;
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Order Confirmation ${escapeHtml(receipt.orderId)}</title><style>body{font-family:Arial,sans-serif;color:#222;max-width:760px;margin:40px auto;padding:0 20px}h1{margin:0 0 6px}p{line-height:1.5}.muted{color:#666}.notice{margin:16px 0;padding:12px 14px;border:1px solid #ddd;border-radius:10px;background:#fff8e8;line-height:1.5}table{width:100%;border-collapse:collapse;margin:24px 0}th,td{padding:10px 8px;border-bottom:1px solid #ddd;text-align:left}th:nth-child(n+2),td:nth-child(n+2){text-align:right}.total td{font-size:18px;font-weight:700;border-top:2px solid #222}.box{background:#f7f7f7;padding:14px;border-radius:10px;margin:16px 0}@media print{body{margin:0}.no-print{display:none}}</style></head><body><h1>${escapeHtml(CONFIG.SHOP_NAME)}</h1><p class="muted"><strong>Order Confirmation Slip</strong></p><div class="box"><strong>Order ID:</strong> ${escapeHtml(receipt.orderId)}<br><strong>Date:</strong> ${escapeHtml(formatDateTime(receipt.orderDate || new Date()))}<br><strong>Customer:</strong> ${escapeHtml(receipt.name)}<br><strong>Phone:</strong> ${escapeHtml(receipt.phone)}<br><strong>Address:</strong> ${escapeHtml(receipt.address)}<br><strong>Payment method:</strong> ${escapeHtml(receipt.paymentMethod)}</div>${paymentNote}<table><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead><tbody>${itemRows}<tr><td colspan="3">Subtotal</td><td>${money(receipt.subtotal)}</td></tr>${feeRows}<tr class="total"><td colspan="3">Order total</td><td>${money(receipt.total)}</td></tr></tbody></table><p>Thank you for shopping with ${escapeHtml(CONFIG.SHOP_NAME)}.</p><p class="muted">This document confirms the order details recorded by the store website.</p></body></html>`;
+  if(print){
+    const frame=document.createElement('iframe'); frame.title='Order slip';frame.className='receipt-print-frame';
+    frame.onload=()=>{frame.contentWindow.focus();frame.contentWindow.print();};
+    frame.srcdoc=html;document.body.appendChild(frame);
+    frame.contentWindow?.addEventListener('afterprint',()=>frame.remove(),{once:true});
+    setTimeout(()=>frame.remove(),120000);return;
+  }
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -546,11 +552,20 @@ async function postCheckout(action,body){
 function checkoutOrderFromForm(){
   return {customerName:checkoutState.name.trim(),phone:checkoutState.phone.trim(),address:checkoutState.address.trim(),paymentMethod:checkoutState.paymentMethod==='UPI'?'UPI':'Cash on Delivery',promoCode:checkoutState.appliedPromo?.code || '',itemsDetail:Object.values(CartStore.getAll()).map(({product,qty})=>({id:product.productId || product.id,qty,...(product.size ? {size:product.size} : {})})),website:$('#orderWebsite')?.value || ''};
 }
+function validateCheckoutDetails(order){
+  if(order.customerName.length<2 || order.customerName.length>100) return {field:'custName',message:'Enter a name of 2–100 characters.'};
+  const digits=order.phone.replace(/\D/g,'');
+  if(!/^[+\d\s()-]+$/.test(order.phone) || !/^\d{10,15}$/.test(digits)) return {field:'custPhone',message:'Enter a valid phone number with 10–15 digits.'};
+  if(order.address.length<5 || order.address.length>500) return {field:'custAddress',message:'Enter a complete delivery address of 5–500 characters.'};
+  if(order.itemsDetail.length>50) return {field:'cartItems',message:'Please place a smaller order with up to 50 different items.'};
+  return null;
+}
 async function submitOrder(){
   if (checkoutBusy) return;
   const order = checkoutOrderFromForm();
   if (!order.itemsDetail.length) return;
-  if (order.customerName.length<2 || !/^\+?[\d\s()-]{10,20}$/.test(order.phone) || order.address.length<5){showToast('Please fill in a valid name, phone number and delivery address.');return;}
+  const problem=validateCheckoutDetails(order);
+  if(problem){showCheckoutError(problem.message);document.getElementById(problem.field)?.focus();return;}
   if(checkoutState.feeConfig){
     const subtotal=CartStore.total(), totals=computeCheckoutTotals(subtotal);
     const items=Object.values(CartStore.getAll()).map(({product,qty})=>({id:product.productId || product.id,name:product.name,qty,...(product.size?{size:product.size}:{}),unitPrice:Number(product.price),lineTotal:Math.round(Number(product.price)*qty*100)/100}));
@@ -607,7 +622,7 @@ async function sendPendingCheckout(){
       clearPendingCheckout();checkoutQuote={order:p.order,quote:data.quote};renderCheckoutReview(data.error);return;
     }
     // Only explicit pre-commit validation failures let the shopper edit immediately.
-    if(['invalid_promo','invalid_size','insufficient_stock','upgrade_required','validation_failed'].includes(data.code)){
+    if(['invalid_promo','invalid_size','insufficient_stock','upgrade_required','validation_failed','rate_limited'].includes(data.code)){
       clearPendingCheckout();checkoutQuote=null;renderCartDrawer();showCheckoutError(data.error);return;
     }
     renderPendingCheckout(data.error || 'Please check this order before trying again.');
@@ -642,15 +657,52 @@ async function completeCheckout(data,order){
   try { localStorage.setItem('dsb_last_receipt_v2',JSON.stringify(lastReceipt)); } catch(_){}
   // Clear only quantities actually ordered. Items added in another tab are preserved.
   await CartStore.consumeSafe(order.itemsDetail,data.orderId);
-  clearPendingCheckout();checkoutQuote=null;checkoutState.promoInput='';checkoutState.appliedPromo=null;checkoutState.promoStatus='';
+  cartAdjustments={removed:[],adjusted:[]};clearPendingCheckout();checkoutQuote=null;checkoutState.promoInput='';checkoutState.appliedPromo=null;checkoutState.promoStatus='';
   try{sessionStorage.removeItem(CATALOG_SESSION_KEY);}catch(_){}
   updateCartBadge();renderOrderConfirmation(lastReceipt);
-  if(typeof renderGrid==='function')renderGrid();
+  if(typeof updateVisibleCartActions==='function')updateVisibleCartActions();
   if(typeof refreshCurrentProductCard==='function')refreshCurrentProductCard();
   if(typeof loadAllProducts==='function') loadAllProducts({force:true}).then(()=>{
     if(typeof CURRENT_PRODUCT!=='undefined' && CURRENT_PRODUCT) CURRENT_PRODUCT=ALL_PRODUCTS.find(p=>p.id===CURRENT_PRODUCT.id) || null;
-    if(typeof renderGrid==='function')renderGrid();
+    if(typeof updateVisibleCartActions==='function')updateVisibleCartActions();
     if(typeof renderHomeCarousels==='function')renderHomeCarousels();
     if(typeof refreshCurrentProductCard==='function')refreshCurrentProductCard();
   }).catch(()=>{});
+}
+
+function cartAdjustmentHtml(){
+  const {removed,adjusted}=cartAdjustments;
+  if(!removed.length && !adjusted.length)return '';
+  return `<section class="cart-change-notice" role="status"><strong>Your cart was updated</strong><ul>${removed.map(name=>`<li>${escapeHtml(name)} — <span>No longer available</span>.</li>`).join('')}${adjusted.map(x=>`<li>${escapeHtml(x.name)}${x.size?' ('+escapeHtml(x.size)+')':''}: ${x.oldQty!==x.qty?`<span>Quantity updated</span>: ${x.oldQty} → ${x.qty}. `:''}${x.oldPrice!==x.price?`<span>Price updated</span>: ${money(x.oldPrice)} → ${money(x.price)}.`:''}</li>`).join('')}</ul></section>`;
+}
+document.addEventListener('dsb:cartchange',()=>{
+  updateCartBadge();
+  if(typeof updateVisibleCartActions==='function')updateVisibleCartActions();
+  if(typeof refreshCurrentProductCard==='function')refreshCurrentProductCard();
+});
+window.addEventListener('storage',event=>{
+  if(event.key!==CART_STORAGE_KEY && event.key!==PENDING_CHECKOUT_KEY && event.key!==null)return;
+  notifyCartChanged();
+  if(checkoutBusy)return;
+  try{pendingCheckout=JSON.parse(localStorage.getItem(PENDING_CHECKOUT_KEY)||'null');}catch(_){}
+  if($('#cartOverlay')?.classList.contains('open') && !$('#downloadReceiptBtn'))renderCartDrawer();
+});
+
+let paymentQrScript=null;
+function loadPaymentQr(){
+  if(typeof window.qrcode==='function')return Promise.resolve();
+  if(paymentQrScript)return paymentQrScript;
+  paymentQrScript=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');script.src='qr-code.js?v=20260909experience1';script.async=true;
+    const fail=()=>{clearTimeout(timer);script.remove();paymentQrScript=null;reject(new Error('QR could not load'));};
+    const timer=setTimeout(fail,10000);
+    script.onload=()=>{clearTimeout(timer);if(typeof window.qrcode==='function')resolve();else fail();};script.onerror=fail;
+    document.head.appendChild(script);
+  });
+  return paymentQrScript;
+}
+async function renderPaymentQr(link){
+  const target=$('#upiQr');if(!target)return;
+  try{await loadPaymentQr();if(!target.isConnected)return;const qr=window.qrcode(0,'M');qr.addData(link);qr.make();target.innerHTML=qr.createSvgTag({cellSize:4,margin:16,scalable:true});target.querySelector('svg')?.setAttribute('aria-hidden','true');}
+  catch(_){if(target.isConnected){target.removeAttribute('role');target.removeAttribute('aria-label');target.textContent='Use the Open UPI app button or the UPI ID below to pay.';}}
 }

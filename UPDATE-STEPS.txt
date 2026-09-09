@@ -1,13 +1,87 @@
-EFFICIENCY UPDATE
+DSB CUSTOMER EXPERIENCE UPDATE — 9 September 2026
+Version: 20260909experience1
 
-1. Replace code.gs in the existing Apps Script project. Preserve Script Properties. Save and deploy a New version of the EXISTING web-app deployment so the URL stays the same.
-2. Keep the processTelegramQueue timer enabled. If background Telegram was never set up, run setupTelegramBackground once and authorize it. No extra timer is needed for this update. Old notification history migrates gradually; new orders enter the pending queue directly.
-3. Upload the website files AND the updated .github/scripts files to your existing website repository. Keep .github/workflows/update-product-sitemap.yml. Do not upload the Android app.
-4. Let GitHub Actions finish its sitemap and Pages deployment. The workflow uses one catalogue fetch to generate both the sitemap and product HTML. If the API fails, it stops rather than deploying empty pages.
-5. Open the shop and refresh. Check the cart, sizes, admin pagination and a generated product link from the sitemap. Existing product.html?id= links continue to work.
+INSTALL IN THIS ORDER
 
-Generated product pages live under products/ and are generated during deployment, not bundled as an outdated catalogue in this ZIP. New/changed product pages update when the workflow runs (daily, manual or after repository changes). Final price and stock remain server-verified at checkout.
+1. Back up the existing Apps Script code and website repository.
+2. Replace code.gs in your EXISTING Apps Script project with the code.gs in this ZIP.
+   Keep your existing Script Properties, including ADMIN_KEY, Telegram credentials
+   and CHECKOUT_SIGNING_KEY. Do not create a new Google Sheet.
+3. Save, then use Deploy > Manage deployments > Edit > New version > Deploy.
+   Update the EXISTING web-app deployment so its URL remains the same.
+4. If processTelegramQueue already has a time trigger, leave it in place.
+   If it has never been configured, run setupTelegramBackground once and authorize
+   it. Do not create duplicate triggers. Queue health now appears in the admin dashboard.
+5. Extract this ZIP and replace the matching files in your website repository.
+   Include the .github folder and the new qr-code.js file. Upload the CONTENTS
+   of the extracted ZIP, not an extra enclosing directory.
+6. Keep GitHub Pages configured to deploy with GitHub Actions. Let the
+   "Update sitemap and deploy shop" workflow finish. If necessary, run it manually.
+7. Refresh the website. Existing cart entries and order links remain compatible.
+   Review a product, change a cart quantity, try search and check an existing order.
+   When ready, place one normal order and verify it in the Orders sheet and Telegram.
 
-Changes: admin timeouts and saved-versus-refresh feedback; 40-product admin pages; specific-order accounting lookup; pending-only Telegram delivery with bounded legacy migration; validated saved cart; browser Web Locks for supported browsers and idempotent cart cleanup; in-place review ratings; batched translation with dynamic text support; clearer long-wait checkout status; quieter homepage accents and aligned card content; removed 47 overridden CSS declarations; static product content and metadata; corrected outdated WhatsApp ordering copy.
+WHAT CHANGED
 
-Validation: 24 backend + 13 frontend regression scenarios passed. Admin response/timeout checks and an isolated full publish-preparation test also passed. Live timings and phone/browser visual checks could not be performed in this environment. Web Locks coordinate tabs where supported; other browsers retain the existing synchronous fallback.
+Customer flow
+- Invalid checkout details return to an editable form rather than a retry loop.
+- Uncertain order attempts retain their request IDs and duplicate-safe recovery.
+- All copies of a product and the cart badge update together after cart changes.
+- Cart quantity edits no longer discard catalogue pages already loaded.
+- Cart removals, quantity reductions and price changes are explained in the drawer.
+- Search no longer silently filters category browsing; browsing filters persist in the URL.
+- Search buttons on product/information pages open homepage search directly.
+- Tracking supports Pending, Confirmed, Packed, Shipped, Delivered, Fulfilled and Cancelled.
+
+Appearance and information
+- Compact brand-only hero, followed immediately by categories and products.
+- Full-product photos in listing cards; portrait images are no longer cropped to squares.
+- Desktop product image/details layout; preserved adaptive gallery on phones.
+- Delivery/COD charges are shown on product pages when live fee settings are available.
+- Gallery dots and keyboard arrows select photos.
+- Hindi switching preserves review drafts and does not reload reviews unnecessarily.
+- Order acknowledgement distinguishes receipt of the order from payment verification.
+- Order slip can be downloaded as HTML or printed/saved as PDF through the browser.
+- UPI QR codes are generated locally. The QR library loads only for UPI confirmation;
+  the UPI-app link and UPI ID remain available if it cannot load.
+- Automatic install suggestions wait for a return visit and avoid open dialogs.
+  An explicit Add shop to Home Screen control remains available in the footer.
+
+Efficiency and operations
+- Same-origin catalogue snapshots can display before a slow live catalogue response.
+- Cached/snapshot availability is clearly distinguished from live checkout validation.
+- Live data replaces the saved catalogue in the background; expired snapshots are rejected.
+- Review summaries, product reviews and checkout settings reuse short-lived session data.
+- Cloudinary resizing supports versioned and versionless folder URLs.
+- Admin product edits batch adjacent changed cells without rewriting unrelated formulas.
+- Stock updates reuse validated product data and batch consecutive changed rows.
+- Admin order responses return 40 filtered records per page; dashboard charts use server totals.
+- Older admin clients can still request the original unpaged order response.
+- Admin dashboard displays Telegram queue count and last-run/success information.
+- Public product responses explicitly allow customer fields only, including in build snapshots.
+- Publishing can reuse a validated catalogue snapshot up to 24 hours old during an API outage.
+  Snapshot timestamps are preserved; an outage does not falsely make old data fresh.
+- Static catalogue links remain visible if live availability cannot load.
+
+UNCHANGED BUSINESS RULES
+
+No new required Sheet columns or manual schema migration.
+Existing products, orders, request history, accounts, stock locks and recovery are retained.
+Delivery fee remains Rs 40 below Rs 499 after discounts; COD adds Rs 20, as in the supplied code.
+UPI is not automatically verified. Telegram notification delivery remains separate from checkout.
+Stock remains shared across sizes for each product; this update does not introduce variant stock.
+No delivery coverage or delivery-time promise has been invented. Customers can ask the shop.
+No paid service, customer account, wishlist, recently viewed or back-in-stock feature was added.
+
+VALIDATION AND LIMITS
+
+30 isolated frontend/backend regression checks passed. See TEST-RESULTS.txt.
+The isolated publishing checks passed, including private-field exclusion and outage recovery.
+All 18 JavaScript/module/Apps Script files passed syntax checks; local HTML asset references exist.
+These checks used fixtures and simulated failures, not your live Orders sheet.
+No live order was submitted, no remote repository was changed, and no deployment was performed here.
+Phone/browser visual QA and real network/performance measurements remain to be done after deployment.
+Admin paging reduces transferred data and rendering; complete accounting and recovery still inspect
+historical rows for accuracy. Retain the transaction journal and do not manually delete recovery records.
+Catalogue snapshots and product pages are generated during publishing, not bundled with stale products
+in this ZIP. They refresh on workflow runs: repository changes, daily schedule or a manual run.

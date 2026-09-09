@@ -4,9 +4,11 @@
 let CURRENT_PRODUCT = null;
 let selectedRating = 5;
 let selectedSize = '';
+let CURRENT_REVIEWS=[];
+let galleryResizeObserver=null;
 
 function getProductIdFromUrl(){
-  return new URLSearchParams(location.search).get('id') || document.documentElement.dataset.productId || '';
+  return document.documentElement.dataset.productId || new URLSearchParams(location.search).get('id') || '';
 }
 
 // renderStars() lives in utils.js now — shared with product cards.
@@ -61,10 +63,15 @@ async function init(){
     renderRelated(product);
     loadReviews(product.id);
     reviewsPromise.then(() => {
-      if (CURRENT_PRODUCT && CURRENT_PRODUCT.id === product.id) renderRelated(product);
+      if (CURRENT_PRODUCT && CURRENT_PRODUCT.id === product.id) updateVisibleRatings();
     });
   } catch(err){
     console.error('Product page failed to initialise', err);
+    if(root.querySelector('[data-prerendered]')){
+      const status=root.querySelector('[role="status"]');
+      if(status){status.textContent='Live availability is temporarily unavailable. Please retry before ordering.';if(!root.querySelector('#pdRetryBtn')){const button=document.createElement('button');button.id='pdRetryBtn';button.className='ghost-btn';button.textContent='Try again';button.onclick=init;status.after(button);}}
+      return;
+    }
     root.innerHTML = `
       <div class="empty-state" style="padding:60px 16px;">
         Couldn't load this product right now.<br>
@@ -93,9 +100,10 @@ function renderProduct(p){
         </div>
         ${p.gallery.length > 1 ? `
         <div class="pd-dots" id="pdDots">
-          ${p.gallery.map((_, i) => `<span class="pd-dot ${i===0?'active':''}"></span>`).join('')}
+          ${p.gallery.map((_, i) => `<button type="button" class="pd-dot ${i===0?'active':''}" data-slide="${i}" aria-label="Photo ${i+1} of ${p.gallery.length}" aria-pressed="${i===0}"></button>`).join('')}
         </div>` : ''}
       </div>
+      <div class="pd-info">
       <h1 class="pd-title">${escapeHtml(customerProductName(p))}</h1>
       ${customerProductSecondaryName(p) ? `<div class="pd-title-hindi">${escapeHtml(customerProductSecondaryName(p))}</div>` : ''}
       <div class="pd-prices">
@@ -115,10 +123,12 @@ function renderProduct(p){
           Size guide
         </button>` : ''}
       </div>
-      <p class="pd-desc">${escapeHtml(p.description || 'No description added yet.')}</p>
+      <p class="pd-desc">${escapeHtml(p.description || 'Contact the shop for product details before ordering.')}</p>
       <div class="pd-id">Product ID: ${escapeHtml(p.id)}</div>
       ${p.sizes?.length ? `<fieldset class="product-sizes"><legend>Choose size</legend><div class="size-options">${p.sizes.map(size=>`<button type="button" class="size-option" data-size="${escapeHtml(size)}" aria-pressed="${selectedSize===size}">${escapeHtml(size)}</button>`).join('')}</div><p class="hint" id="sizeHelp">Select a size before adding to cart.</p></fieldset>` : ''}
       <div class="pd-actions" id="pdActions"></div>
+      <div class="pd-delivery" id="pdDelivery"><p>Delivery charges are shown before you confirm your order.</p><a href="contact.html">Ask about delivery to your area</a> · <a href="returns.html">Returns &amp; exchanges</a></div>
+      </div>
     </div>
     <div class="related-section" id="relatedSection" style="display:none;">
       <div class="section-title"><h2>You may also like</h2></div>
@@ -148,12 +158,7 @@ function renderProduct(p){
     </div>
   `;
   bindGallerySwipe();
-  if(!p.sizes?.includes(selectedSize)) selectedSize='';
-  $$('.size-option').forEach(btn=>btn.addEventListener('click',()=>{
-    selectedSize=btn.dataset.size;
-    $$('.size-option').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.size===selectedSize)));
-    renderPdActions(p);
-  }));
+  updateSizeOptions(p);
   renderPdActions(p);
   renderStarInput();
   $('#submitReviewBtn').addEventListener('click', submitReview);
@@ -162,6 +167,11 @@ function renderProduct(p){
   if (sizeBtn) sizeBtn.addEventListener('click', openSizeGuide);
   updateSeoTags(p);
   updateStructuredData(p, []);
+  fetchCheckoutConfigIfNeeded().then(cfg=>{
+    const el=$('#pdDelivery');if(!cfg || !el)return;
+    const line=document.createElement('p');line.textContent=`Delivery: ${money(cfg.deliveryCharge)} below ${money(cfg.deliveryFreeAbove)} after discounts; free at or above that amount. Cash on Delivery: ${money(cfg.codCharge)} extra.`;
+    el.querySelector('p').replaceWith(line);
+  });
 }
 
 /* ---------------- Size guide ---------------- */
@@ -230,6 +240,7 @@ function bindGallerySwipe(){
       const width = track.clientWidth || gallery.clientWidth;
       if (!width || !img.naturalWidth || !img.naturalHeight) return;
       gallery.style.height = `${Math.round(width * (img.naturalHeight / img.naturalWidth))}px`;
+      gallery.style.minHeight='0';
     };
     if (img.complete && img.naturalWidth) apply();
     else img.addEventListener('load', apply, { once: true });
@@ -239,7 +250,7 @@ function bindGallerySwipe(){
     const width = track.clientWidth;
     if (!width) return;
     activeIndex = Math.max(0, Math.min(slides.length - 1, Math.round(track.scrollLeft / width)));
-    dots.forEach((d, i) => d.classList.toggle('active', i === activeIndex));
+    dots.forEach((d,i)=>{d.classList.toggle('active',i===activeIndex);d.setAttribute('aria-pressed',String(i===activeIndex));});
     setGalleryHeight(activeIndex);
   };
 
@@ -256,18 +267,24 @@ function bindGallerySwipe(){
       raf = requestAnimationFrame(updateActive);
     }, { passive: true });
   }
-  window.addEventListener('resize', () => setGalleryHeight(activeIndex), { passive: true });
+  galleryResizeObserver?.disconnect();
+  if('ResizeObserver' in window){galleryResizeObserver=new ResizeObserver(()=>setGalleryHeight(activeIndex));galleryResizeObserver.observe(track);}
+  track.tabIndex=0;track.setAttribute('aria-label','Product photos. Use left and right arrow keys.');
+  const goTo=i=>track.scrollTo({left:Math.max(0,Math.min(slides.length-1,i))*track.clientWidth,behavior:prefersReducedMotion()?'instant':'smooth'});
+  dots.forEach((dot,i)=>dot.addEventListener('click',()=>goTo(i)));
+  track.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();goTo(activeIndex+(e.key==='ArrowRight'?1:-1));}});
+
 }
 
 /* ---------------- SEO: per-product tags + structured data ---------------- */
 function updateSeoTags(p){
   document.getElementById('staticProductLd')?.remove();
-  const url = document.documentElement.dataset.productId ? location.origin+location.pathname : `${CONFIG.SITE_URL}/product.html?id=${encodeURIComponent(p.id)}`;
+  const url = productUrl(p);
   const imageUrl = (() => { try { return new URL(p.image, CONFIG.SITE_URL + '/').href; } catch (_) { return p.image; } })();
   const title = `${p.name} — ${CONFIG.SHOP_NAME}`;
   const desc = (p.description && p.description.trim())
     ? p.description.trim().slice(0, 155)
-    : `Buy ${p.name} from ${CONFIG.SHOP_NAME} in Goluwala, Rajasthan — order on WhatsApp.`;
+    : `Buy ${p.name} from ${CONFIG.SHOP_NAME} in Goluwala, Rajasthan — order online.`;
 
   document.title = title;
   const setMeta = (id, attr, value) => { const el = document.getElementById(id); if (el) el.setAttribute(attr, value); };
@@ -291,7 +308,7 @@ function updateSeoTags(p){
 // one genuine review, since Google disallows rating markup with no basis).
 function updateStructuredData(p, reviews){
   document.getElementById('staticProductLd')?.remove();
-  const url = document.documentElement.dataset.productId ? location.origin+location.pathname : `${CONFIG.SITE_URL}/product.html?id=${encodeURIComponent(p.id)}`;
+  const url = productUrl(p);
   const images = (p.gallery && p.gallery.length ? p.gallery : [p.image]).map(src => {
     try { return new URL(src, CONFIG.SITE_URL + '/').href; } catch (_) { return src; }
   });
@@ -428,7 +445,7 @@ function renderStarInput(){
   draw();
 }
 
-async function loadReviews(productId){
+async function loadReviews(productId,force=false){
   const summaryEl = $('#reviewSummary');
   const listEl = $('#reviewList');
   if (!CONFIG.SHEET_API_URL){
@@ -437,9 +454,10 @@ async function loadReviews(productId){
     return;
   }
   try{
-    const res = await fetch(`${CONFIG.SHEET_API_URL}?action=reviews&productId=${encodeURIComponent(productId)}`, { cache: 'no-store' });
-    const reviews = await res.json();
-    if (reviews.error) throw new Error(reviews.error);
+    const reviews = await cachedPublicJson('reviews-'+productId,`${CONFIG.SHEET_API_URL}?action=reviews&productId=${encodeURIComponent(productId)}`,180000,force);
+    if (!Array.isArray(reviews)) throw new Error('Invalid review response');
+    if(CURRENT_PRODUCT?.id!==productId)return;
+    CURRENT_REVIEWS=reviews;
     renderReviews(reviews);
   } catch(err){
     summaryEl.innerHTML = `<p class="hint">Couldn't load reviews right now.</p>`;
@@ -492,7 +510,7 @@ async function submitReview(){
   btn.disabled = true;
   btn.textContent = 'Submitting…';
   try{
-    const res = await fetch(CONFIG.SHEET_API_URL, {
+    const data = await requestJson(CONFIG.SHEET_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
@@ -500,14 +518,14 @@ async function submitReview(){
         review: { productId: CURRENT_PRODUCT.id, name, rating: selectedRating, comment,clientId:reviewClientId(),website:$('#reviewWebsite')?.value || '' }
       })
     });
-    const data = await res.json();
     if (data.error) throw new Error(data.error);
     status_(statusEl, 'Thanks for your feedback!', true);
     $('#revName').value = '';
     $('#revComment').value = '';
     selectedRating = 5;
     renderStarInput();
-    loadReviews(CURRENT_PRODUCT.id);
+    invalidateReviewCache(CURRENT_PRODUCT.id);
+    loadReviews(CURRENT_PRODUCT.id,true);
   } catch(err){
     status_(statusEl, 'Could not submit feedback: ' + err.message, false);
   } finally {
@@ -521,10 +539,30 @@ function status_(el, msg, ok){
   el.className = 'statusline ' + (ok ? 'ok' : 'err');
 }
 
-document.addEventListener('dsb:languagechange', () => { if (CURRENT_PRODUCT) { renderProduct(CURRENT_PRODUCT); renderRelated(CURRENT_PRODUCT); loadReviews(CURRENT_PRODUCT.id); } });
+document.addEventListener('dsb:languagechange',()=>{
+  const p=CURRENT_PRODUCT;if(!p)return;
+  $('#pdRoot .pd-title').textContent=customerProductName(p);
+  document.querySelectorAll('.pd-slide img').forEach(img=>img.alt=customerProductName(p));
+  const secondary=$('#pdRoot .pd-title-hindi');if(secondary)secondary.textContent=customerProductSecondaryName(p);
+  document.querySelectorAll('.card[data-id]').forEach(card=>{
+    const product=ALL_PRODUCTS.find(x=>x.id===card.dataset.id);if(!product)return;
+    card.querySelector('.name').textContent=customerProductName(product);
+    const sub=card.querySelector('.name-hindi');if(sub)sub.textContent=customerProductSecondaryName(product);
+  });
+});
+document.addEventListener('dsb:catalogchange',()=>{
+  if(!CURRENT_PRODUCT)return;
+  const updated=ALL_PRODUCTS.find(p=>p.id===CURRENT_PRODUCT.id);
+  if(!updated){CURRENT_PRODUCT={...CURRENT_PRODUCT,stock:'out of stock'};renderPdActions(CURRENT_PRODUCT);return;}
+  CURRENT_PRODUCT=updated;updateSizeOptions(updated);renderPdActions(updated);
+  const title=$('#pdRoot .pd-title');if(title)title.textContent=customerProductName(updated);
+  const prices=$('#pdRoot .pd-prices');if(prices)prices.innerHTML=`<span class="price">${money(updated.price)}</span>${updated.mrp>updated.price?`<span class="mrp">${money(updated.mrp)}</span>`:''}`;
+  const stock=$('#pdRoot .pd-stock');if(stock){stock.textContent=isOutOfStock(updated)?'Out of stock':(lowStockLabel(updated)||'In stock');stock.className='pd-stock '+(isOutOfStock(updated)?'out':'in');}
+  updateSeoTags(updated);updateStructuredData(updated,CURRENT_REVIEWS);
+});
 
 document.addEventListener('DOMContentLoaded', () => {
-  $('#searchTrigger').addEventListener('click', async () => { location.href = 'index.html'; });
+  $('#searchTrigger').addEventListener('click', async () => { location.href = 'index.html?search=1'; });
   $('#cartTrigger').addEventListener('click', openCart);
   $('#cartOverlay').addEventListener('click', (e) => { if (e.target.id === 'cartOverlay') closeCart(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ closeCart(); closeSizeGuide(); } });
@@ -536,4 +574,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function reviewClientId(){
   try{let id=localStorage.getItem('dsb_review_client');if(!id){id=newCheckoutId();localStorage.setItem('dsb_review_client',id);}return id;}catch(_){return 'storage-unavailable';}
+}
+
+function updateSizeOptions(p){
+  let field=$('#pdRoot .product-sizes');
+  if(!p.sizes?.length){selectedSize='';field?.remove();return;}
+  if(!p.sizes.includes(selectedSize))selectedSize='';
+  if(!field){field=document.createElement('fieldset');field.className='product-sizes';$('#pdActions').before(field);}
+  field.innerHTML=`<legend>Choose size</legend><div class="size-options">${p.sizes.map(size=>`<button type="button" class="size-option" data-size="${escapeHtml(size)}" aria-pressed="${selectedSize===size}">${escapeHtml(size)}</button>`).join('')}</div><p class="hint" id="sizeHelp">Select a size before adding to cart.</p>`;
+  field.querySelectorAll('.size-option').forEach(btn=>btn.addEventListener('click',()=>{selectedSize=btn.dataset.size;field.querySelectorAll('.size-option').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.size===selectedSize)));renderPdActions(CURRENT_PRODUCT||p);}));
 }

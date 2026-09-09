@@ -20,7 +20,7 @@
 <!-- Open Graph (WhatsApp / Facebook / Instagram link previews) -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Dhatterwal Suhag Bhandar">
-<meta property="og:title" content="Dhatterwal Suhag Bhandar — Shop Online, Order on WhatsApp">
+<meta property="og:title" content="Dhatterwal Suhag Bhandar — Shop Online in Goluwala">
 <meta property="og:description" content="Lingerie, cosmetics, hair care, snacks, stationery and more — browse the shop and place your order online.">
 <meta property="og:url" content="https://suhagbhandar.in/">
 <meta property="og:image" content="https://placehold.co/1200x630/C81163/FFF6E9?text=Dhatterwal%20Suhag%20Bhandar">
@@ -28,14 +28,14 @@
 
 <!-- Twitter card (falls back to the same image/text as Open Graph) -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Dhatterwal Suhag Bhandar — Shop Online, Order on WhatsApp">
+<meta name="twitter:title" content="Dhatterwal Suhag Bhandar — Shop Online in Goluwala">
 <meta name="twitter:description" content="Lingerie, cosmetics, hair care, snacks, stationery and more — browse the shop and place your order online.">
 <meta name="twitter:image" content="https://placehold.co/1200x630/C81163/FFF6E9?text=Dhatterwal%20Suhag%20Bhandar">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Hind:wght@400;500;600;700&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260909efficiency1">
+<link rel="stylesheet" href="style.css?v=20260909experience1">
 <link rel="manifest" href="manifest.json">
 
 <!-- Local business structured data — fill in the marked fields with your
@@ -90,50 +90,13 @@
   </button>
 </div>
 
-<!-- ===== Hero (thesis: bazaar's warmth, not a corporate banner) ===== -->
-<div class="hero" id="shop-top">
-  <div class="hero-glow glow-a"></div><div class="hero-glow glow-b"></div>
-  <div class="hero-kicker"><span class="live-dot"></span> Dhatterwal Suhag Bhandar · GOLUWALA</div>
-  <h1 class="hero-title">Everything you need.<br><span>At reasonable Price.</span></h1>
-  <p class="hero-subtitle">Discover daily essentials, beauty, Bangles, fashion and more - original products</p>
-  <div class="hero-stats"><div><strong>✨</strong><span>Fresh picks</span></div><div><strong>⚡</strong><span>Fast ordering</span></div><div><strong>💬</strong><span>WhatsApp support</span></div></div>
-  <div class="hero-tiles">
-    <button type="button" class="hero-tile" id="heroTrackBtn">
-      <span class="hero-tile-icon">📦</span>
-      <span class="hero-tile-label">Track Order</span>
-    </button>
-    <a href="contact.html" class="hero-tile">
-      <span class="hero-tile-icon">💬</span>
-      <span class="hero-tile-label">Contact</span>
-    </a>
-    <a href="about.html" class="hero-tile">
-      <span class="hero-tile-icon">🏬</span>
-      <span class="hero-tile-label">About</span>
-    </a>
-    <a href="returns.html" class="hero-tile">
-      <span class="hero-tile-icon">↩️</span>
-      <span class="hero-tile-label">Returns</span>
-    </a>
-  </div>
-</div>
-<svg class="lehariya" viewBox="0 0 400 16" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M0 8 Q 25 0 50 8 T 100 8 T 150 8 T 200 8 T 250 8 T 300 8 T 350 8 T 400 8" stroke="#C81163" stroke-width="3" fill="none"/>
-  <path d="M0 12 Q 25 4 50 12 T 100 12 T 150 12 T 200 12 T 250 12 T 300 12 T 350 12 T 400 12" stroke="#F2A93B" stroke-width="3" fill="none"/>
-  <path d="M0 4 Q 25 -4 50 4 T 100 4 T 150 4 T 200 4 T 250 4 T 300 4 T 350 4 T 400 4" stroke="#FFC93C" stroke-width="2" fill="none"/>
-</svg>
-
-<!-- ===== Popular Picks ===== -->
-<div class="carousel-section reveal" id="popularPicksSection" style="display:none;">
-  <div class="section-title"><h2>🔥 Popular picks</h2><div class="carousel-controls"><button class="carousel-nav" data-rail="popularPicksRail" data-dir="-1" aria-label="Previous">‹</button><button class="carousel-nav" data-rail="popularPicksRail" data-dir="1" aria-label="Next">›</button></div></div>
-  <div class="related-rail" id="popularPicksRail"></div>
-</div>
-
-<!-- ===== New Arrivals ===== -->
-<div class="carousel-section reveal" id="newArrivalsSection" style="display:none;">
-  <div class="section-title"><h2>✨ New arrivals</h2><div class="carousel-controls"><button class="carousel-nav" data-rail="newArrivalsRail" data-dir="-1" aria-label="Previous">‹</button><button class="carousel-nav" data-rail="newArrivalsRail" data-dir="1" aria-label="Next">›</button></div></div>
-  <div class="related-rail" id="newArrivalsRail"></div>
-</div>
-
+<header class="hero hero-compact" id="shop-top">
+  <p class="hero-kicker">GOLUWALA · RAJASTHAN</p>
+  <h1 class="hero-title">Dhatterwal<br><span>Suhag Bhandar</span></h1>
+  <nav class="hero-links" aria-label="Shop information"><a href="contact.html">Contact</a><a href="about.html">About</a><a href="returns.html">Returns</a></nav>
+</header>
+<main id="shopMain">
+<p class="catalog-notice" id="catalogNotice" role="status" hidden></p>
 <!-- ===== Category rail ===== -->
 <div class="cat-rail-outer">
   <div class="cat-rail" id="catRail"></div>
@@ -142,11 +105,11 @@
 
 <!-- ===== Product grid ===== -->
 <div class="section-title" id="shop-top-grid">
-  <h2>Shop the bazaar</h2>
+  <h2>Shop by category</h2>
   <small id="resultCount"></small>
 </div>
 <div class="sort-filter-row">
-  <select id="sortSelect">
+  <select id="sortSelect" aria-label="Sort products">
     <option value="featured">Featured</option>
     <option value="newest">Newest first</option>
     <option value="price-asc">Price: Low to High</option>
@@ -157,11 +120,24 @@
 <div class="grid" id="productGrid">
   <div class="empty-state">Loading products…</div>
 </div>
-<div class="loadmore-sentinel" id="gridSentinel">Loading more products…</div>
+<div class="loadmore-sentinel" id="gridSentinel" role="status">Loading more products…</div>
+<!-- ===== Popular Picks ===== -->
+<div class="carousel-section reveal" id="popularPicksSection" style="display:none;">
+  <div class="section-title"><h2>Selected deals</h2><div class="carousel-controls"><button class="carousel-nav" data-rail="popularPicksRail" data-dir="-1" aria-label="Previous">‹</button><button class="carousel-nav" data-rail="popularPicksRail" data-dir="1" aria-label="Next">›</button></div></div>
+  <div class="related-rail" id="popularPicksRail"></div>
+</div>
+
+<!-- ===== New Arrivals ===== -->
+<div class="carousel-section reveal" id="newArrivalsSection" style="display:none;">
+  <div class="section-title"><h2>More to explore</h2><div class="carousel-controls"><button class="carousel-nav" data-rail="newArrivalsRail" data-dir="-1" aria-label="Previous">‹</button><button class="carousel-nav" data-rail="newArrivalsRail" data-dir="1" aria-label="Next">›</button></div></div>
+  <div class="related-rail" id="newArrivalsRail"></div>
+</div>
+
+</main>
 
 <footer>
   <div class="fname">Dhatterwal Suhag Bhandar</div>
-  Goluwala &nbsp;•&nbsp; WhatsApp confirmation follows shortly after ordering<br>
+  Goluwala &nbsp;•&nbsp; Order online · Shop support on WhatsApp<br>
   <a href="catalog.html">All products</a> &nbsp;•&nbsp; <a href="about.html">About</a> &nbsp;•&nbsp; <a href="contact.html">Contact</a><br>
   <a href="privacy.html">Privacy</a> &nbsp;•&nbsp; <a href="returns.html">Returns</a> &nbsp;•&nbsp; <a href="admin.html" data-i18n-skip>Shop admin</a>
 </footer>
@@ -179,7 +155,7 @@
     </button>
     <div class="searchwrap" style="flex:1;">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="text" id="searchInput2" placeholder="Search products…" autocomplete="off">
+      <input type="text" id="searchInput2" aria-label="Search products" placeholder="Search products…" autocomplete="off">
     </div>
   </div>
   <div class="results" id="searchResultsWrap">
@@ -200,11 +176,11 @@
     <div id="trackForm">
       <p class="track-intro">Enter your Order ID and the phone number you used at checkout to see the latest status.</p>
       <div class="field">
-        <label>Order ID</label>
-        <input type="text" id="trackOrderId" placeholder="e.g. ORD-0001" autocomplete="off">
+        <label for="trackOrderId">Order ID</label>
+        <input type="text" id="trackOrderId" placeholder="Order ID from your order slip" autocomplete="off">
       </div>
       <div class="field">
-        <label>Phone number</label>
+        <label for="trackPhone">Phone number</label>
         <input type="tel" id="trackPhone" placeholder="10-digit mobile number" autocomplete="off">
       </div>
       <p class="track-error" id="trackError"></p>
@@ -218,16 +194,16 @@
   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
 </a>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="config.js?v=20260909efficiency1"></script>
-<script src="i18n.js?v=20260909efficiency1"></script>
-<script src="utils.js?v=20260909efficiency1"></script>
-<script src="cart.js?v=20260909efficiency1"></script>
-<script src="products-data.js?v=20260909efficiency1"></script>
-<script src="render-helpers.js?v=20260909efficiency1"></script>
-<script src="cart-ui.js?v=20260909efficiency1"></script>
-<script src="app.js?v=20260909efficiency1"></script>
+<script src="config.js?v=20260909experience1"></script>
+<script src="i18n.js?v=20260909experience1"></script>
+<script src="utils.js?v=20260909experience1"></script>
+<script src="cart.js?v=20260909experience1"></script>
+<script src="products-data.js?v=20260909experience1"></script>
+<script src="render-helpers.js?v=20260909experience1"></script>
+<script src="cart-ui.js?v=20260909experience1"></script>
+<script src="app.js?v=20260909experience1"></script>
 <script>
 (function(){
   const started=performance.now();
@@ -242,6 +218,6 @@
 </script>
 <div class="toast-v5" id="toastV5" role="status" aria-live="polite"></div>
 <script>document.addEventListener("click",function(e){const b=e.target.closest(".carousel-nav");if(b){const r=document.getElementById(b.dataset.rail);if(r)r.scrollBy({left:Number(b.dataset.dir)*Math.min(520,r.clientWidth*.85),behavior:"smooth"})}});</script>
-<script src="pwa-install.js?v=20260909efficiency1" defer></script>
+<script src="pwa-install.js?v=20260909experience1" defer></script>
 </body>
 </html>

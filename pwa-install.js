@@ -46,7 +46,7 @@
   }
 
   function ensureBanner(mode){
-    if (banner || dismissedRecently() || isStandalone) return;
+    if (banner || dismissedRecently() || isStandalone || document.querySelector('.overlay.open,.search-overlay.open')) return;
     ensureInstallStyles();
     var nativeReady = mode === 'native' && !!deferredPrompt;
     var manualIOS = mode === 'ios';
@@ -88,7 +88,7 @@
       var btn = banner.querySelector('[data-install]');
       if (btn) btn.textContent = 'Install';
     } else {
-      window.setTimeout(function(){ ensureBanner('native'); }, 900);
+      if(isReturnVisit)window.setTimeout(function(){ ensureBanner('native'); },15000);
     }
   });
 
@@ -105,13 +105,14 @@
     }).catch(function(){});
   }
 
-  // Never leave mobile users with no visible route to installation. Native Chromium
-  // prompting is preferred; this is only the fallback when that event has not fired.
-  if (!dismissedRecently()){
-    if (isSafari){
-      window.setTimeout(function(){ ensureBanner('ios'); }, 2200);
-    } else if (isAndroid && isChromium){
-      window.setTimeout(function(){ ensureBanner(deferredPrompt ? 'native' : 'fallback'); }, 3200);
-    }
+  let isReturnVisit=false;
+  try{const first=Number(localStorage.getItem('dsbFirstVisit'));isReturnVisit=!!first && Date.now()-first>86400000;if(!first)localStorage.setItem('dsbFirstVisit',String(Date.now()));}catch(_){}
+  const mode=()=>deferredPrompt?'native':isSafari?'ios':'fallback';
+  if(!dismissedRecently() && isReturnVisit && (isSafari || (isAndroid&&isChromium)))setTimeout(()=>ensureBanner(mode()),15000);
+  function installEntry(){
+    const footer=document.querySelector('footer');if(!footer)return;
+    const button=document.createElement('button');button.type='button';button.className='install-menu-entry';button.textContent='Add shop to Home Screen';
+    button.onclick=async()=>{if(deferredPrompt){const event=deferredPrompt;deferredPrompt=null;try{await event.prompt();await event.userChoice;}catch(_){fallbackInstructions();}}else fallbackInstructions();};footer.appendChild(button);
   }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installEntry,{once:true});else installEntry();
 })();

@@ -1,0 +1,37 @@
+ISOLATED REGRESSION RESULTS — 20260909experience1
+
+30 checks passed:
+1. Homepage renders 24 products and categories precede products
+2. Adding one product synchronizes duplicate cards and badge
+3. Cart edits and clear preserve loaded grid pages
+4. Search does not silently filter categories; filters are stored in URL
+5. Delivered and Fulfilled timelines are complete; shipped has current step
+6. Frontend rejects invalid and overlong details
+7. Typed validation failures unlock the pending form; network failure preserves request ID
+8. Cart reconciliation reports quantity and price adjustments
+9. Versioned and versionless Cloudinary folders resize; existing transforms remain intact
+10. Review summaries use one request across repeated loads
+11. Product page renders desktop detail grouping and delivery charges
+12. Switching Hindi preserves review draft and avoids another reviews request
+13. Fresh size options invalidate removed selections without losing review text
+14. UPI confirmation generates a local QR and retains unverified-payment wording
+15. No uncaught frontend exceptions in scripted scenarios
+16. Snapshot renders before a slow API, then live data replaces it
+17. Saved catalogue does not destructively reconcile a newer cart
+18. Admin paged response displays page two without slicing it twice
+19. Out-of-order admin responses cannot replace newer filter results
+20. Backend validation errors have safe pre-commit codes
+21. Authoritative checkout saves one order, stock and exact totals
+22. Replaying the same checkout does not decrement stock or duplicate accounting
+23. Changed prices require consent and do not create an order
+24. Combined sizes cannot oversell shared stock
+25. Cancellation restores stock; reactivation consumes it again
+26. Stock-safe admin update batches edits while preserving unrelated formulas
+27. Order write failure rolls stock back and can retry the same ID
+28. Public catalogue exposes no private or future internal columns
+29. Admin pagination filters and limits responses while preserving legacy reads
+30. Post-commit bookkeeping failure recovers the same saved order without a second stock decrement
+
+Publishing checks passed: sanitized snapshot; static product escaping; optimized images; backend/private files excluded; current script versions; fresh outage fallback; expired fallback rejected.
+
+All 18 JavaScript/module/Apps Script files passed syntax checks. Local HTML asset references were checked. These were fixture-based tests, not live checkout or visual browser testing.

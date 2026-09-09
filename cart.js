@@ -6,6 +6,13 @@
    is unavailable for any reason, so the site still works either way.
    ========================================================= */
 const CART_STORAGE_KEY = 'dsb_cart_v1';
+let cartChangeQueued=false;
+function notifyCartChanged(){
+  if(cartChangeQueued)return;
+  cartChangeQueued=true;
+  queueMicrotask(()=>{cartChangeQueued=false;document.dispatchEvent(new CustomEvent('dsb:cartchange'));});
+}
+
 
 function sizeCartKey(id,size){ return size ? String(id)+'::size:'+encodeURIComponent(size) : String(id); }
 function sizedCartProduct(product,size){
@@ -32,9 +39,16 @@ const CartStore = (function(){
     if (usingFallback) return memoryFallback;
     try{
       const raw = localStorage.getItem(CART_STORAGE_KEY);
-      return raw ? sanitize(JSON.parse(raw)) : {};
+      if(!raw)return {};
+      const parsed=JSON.parse(raw),clean=sanitize(parsed);
+      const expectedKeys=parsed && typeof parsed==='object' ? Object.keys(parsed).filter(k=>k!=='__dsbApplied').length : -1;
+      if(expectedKeys!==Object.keys(clean).length || !parsed || Array.isArray(parsed)){
+        try{localStorage.setItem(CART_STORAGE_KEY,JSON.stringify({...clean,__dsbApplied:appliedOrders()}));}catch(_){}
+      }
+      return clean;
     } catch(e){
       repaired=true;
+      try{localStorage.setItem(CART_STORAGE_KEY,JSON.stringify(memoryFallback));}catch(_){}
       return memoryFallback;
     }
   }
@@ -44,6 +58,7 @@ const CartStore = (function(){
     try {const value=JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || '{}').__dsbApplied;return Array.isArray(value)?value:[];} catch(_){return [];}
   }
   function writeAll(cart,applied=appliedOrders()){
+    notifyCartChanged();
     if (usingFallback){ memoryFallback = cart;consumedFallback=applied; return; }
     try{
       localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({...cart,__dsbApplied:applied.slice(-100)}));
@@ -84,7 +99,7 @@ const CartStore = (function(){
     },
     clear(){ writeAll({}); },
     count(){ return Object.values(readAll()).reduce((s,c) => s + c.qty, 0); },
-    total(){ return Object.values(readAll()).reduce((s,c) => s + c.qty * c.product.price, 0); },
+    total(){ return Math.round(Object.values(readAll()).reduce((s,c) => s + Math.round(c.qty * c.product.price * 100), 0))/100; },
 
     // Refreshes every cart line against the latest catalog (current price,
     // image, stock) instead of trusting the snapshot taken when it was
@@ -95,15 +110,16 @@ const CartStore = (function(){
     // (e.g. on pages that never loaded product data) — never treats "no
     // catalog" as "no products exist".
     syncWithCatalog(catalog){
-      if (!catalog || !catalog.length) return { removed: [] };
+      if (!catalog || !catalog.length) return { removed: [], adjusted: [] };
       const cart = readAll();
-      const removed = [];
+      const removed = [], adjusted = [];
       let changed = false;
       const used = {};
       Object.keys(cart).forEach(id => {
         const old=cart[id].product, baseId=old.productId || old.id;
         const fresh=catalog.find(p=>p.id===baseId);
-        if(!fresh || fresh.stock==='out of stock' || ((fresh.sizes || []).length ? !fresh.sizes.includes(old.size) : !!old.size)){
+        const oldQty=cart[id].qty, oldPrice=old.price;
+        if(!fresh || !Number.isFinite(fresh.price) || fresh.price<=0 || fresh.stock==='out of stock' || ((fresh.sizes || []).length ? !fresh.sizes.includes(old.size) : !!old.size)){
           removed.push(old.name + (old.size ? ' ('+old.size+')' : ''));delete cart[id];changed=true;return;
         }
         cart[id].product=sizedCartProduct(fresh,old.size || '');
@@ -112,10 +128,11 @@ const CartStore = (function(){
           cart[id].qty=Math.min(cart[id].qty,available);
           if(!cart[id].qty){removed.push(old.name);delete cart[id];changed=true;return;}
         }
+        if(oldQty!==cart[id].qty || oldPrice!==fresh.price) adjusted.push({name:old.name,size:old.size || '',oldQty,qty:cart[id].qty,oldPrice,price:fresh.price});
         used[baseId]=(used[baseId] || 0)+cart[id].qty;changed=true;
       });
       if (changed) writeAll(cart);
-      return { removed };
+      return { removed, adjusted };
     }
   };
 })();

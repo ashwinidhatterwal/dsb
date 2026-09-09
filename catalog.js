@@ -1,8 +1,8 @@
 /* Search-friendly live catalogue. Uses the same source as the storefront. */
 (function(){
   function absoluteImage(src){ try { return new URL(src, CONFIG.SITE_URL + '/').href; } catch (_) { return src; } }
-  function productHref(p){ return `product.html?id=${encodeURIComponent(p.id)}`; }
-  function productUrl(p){ return `${CONFIG.SITE_URL}/product.html?id=${encodeURIComponent(p.id)}`; }
+  function productHref(p){ return preferredProductPath(p.id); }
+  function productUrl(p){ return `${CONFIG.SITE_URL}/${preferredProductPath(p.id)}`; }
 
   function injectItemList(products){
     const old = document.getElementById('catalogItemListLd');
@@ -58,11 +58,14 @@
     injectItemList(products);
   }
 
+  document.addEventListener('dsb:catalogchange',()=>render(ALL_PRODUCTS));
   document.addEventListener('DOMContentLoaded', async () => {
     try { render(await loadAllProducts()); }
     catch (err) {
       console.error('Catalogue load failed', err);
-      document.getElementById('catalogRoot').innerHTML = 'Could not load the catalogue right now. <a href="index.html">Return to the shop</a>.';
+      const root=document.getElementById('catalogRoot');
+      if(root.querySelector('a.catalog-item'))root.insertAdjacentHTML('afterbegin','<p class="catalog-status" role="status">Showing saved products. Current availability is checked before ordering.</p>');
+      else root.innerHTML='Could not load the catalogue right now. <a href="index.html">Return to the shop</a>';
     }
   });
 })();
