@@ -32,8 +32,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Restore last validated catalogue
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .catalog-build.json
+            .catalog-build-meta.json
+          key: dsb-catalog-v4-${{ github.run_id }}
+          restore-keys: dsb-catalog-v4-
       - name: Generate sitemap from live products
         run: node .github/scripts/generate-sitemap.mjs
+      - name: Keep validated catalogue for temporary API outages
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .catalog-build.json
+            .catalog-build-meta.json
+          key: dsb-catalog-v4-${{ github.run_id }}
       - name: Save updated sitemap
         shell: bash
         run: |
