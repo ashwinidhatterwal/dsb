@@ -1,3 +1,9 @@
+CATEGORY FOLLOW-UP: focused DOM fixture checks passed for category/subcategory
+clicks updating both rails, All restoring products, out-of-stock exclusion, empty
+selections hiding/clearing rails, and selection changes resetting horizontal
+position and engagement. JavaScript syntax passed. Backend byte comparison passed.
+No live browser or visual testing was performed for this follow-up.
+
 COSMETIC FOLLOW-UP: static section/order and CSS sizing checks passed; updated app.js and i18n.js syntax checks passed. Backend matches the prior version. Previous regression results follow; they were not repeated for this cosmetic update.
 
 ISOLATED REGRESSION RESULTS — 20260909experience1

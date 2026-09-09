@@ -1,3 +1,14 @@
+CATEGORY AND COMPACT CARD FOLLOW-UP — 20260909category3
+
+Replace the website files and let GitHub Actions publish. If you installed the
+previous experience update, no Apps Script redeployment is needed: code.gs is unchanged.
+
+- Popular picks and New arrivals now show only the selected category/subcategory.
+- All restores the full selection; empty selections hide the sliders.
+- A new selection starts each slider at its first product.
+- Shorter image frames and tighter spacing make cards more compact. Photos remain
+  uncropped; the next-card preview and stable 44px action rows are retained.
+
 COSMETIC FOLLOW-UP — 20260909cosmetic2
 
 If you already installed the previous experience update, replace only the website

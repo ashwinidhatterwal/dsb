@@ -52,26 +52,40 @@ async function loadProductsForShop(){
 // "Popular" ranks by review volume × average rating (real signal, once
 // reviews exist). Until then it quietly falls back to the biggest discounts,
 // so the rail is never empty on a brand-new store.
+function carouselProducts(){
+  return ALL_PRODUCTS.filter(p => !isOutOfStock(p)
+    && (activeCategory === 'All' || p.category === activeCategory)
+    && (activeSubcategory === 'All' || p.subcategory === activeSubcategory));
+}
+
 function popularProducts(limit){
-  const available=ALL_PRODUCTS.filter(p=>!isOutOfStock(p));
+  const available=carouselProducts();
   const score=p=>{const r=reviewSummaryFor(p.id);return r?.count?r.avg*Math.log1p(r.count):0;};
   return available.slice().sort((a,b)=>score(b)-score(a)||discountPct(b)-discountPct(a)).slice(0,limit);
 }
 
 function newArrivalProducts(limit){
-  return ALL_PRODUCTS.filter(p => !isOutOfStock(p)).slice(-limit).reverse();
+  return carouselProducts().slice(-limit).reverse();
 }
 
 function renderHomeCarousels(){
   renderCarousel('popularPicksSection', 'popularPicksRail', popularProducts(10));
   renderCarousel('newArrivalsSection', 'newArrivalsRail', newArrivalProducts(10));
+  initScrollReveal();
 }
 
 function renderCarousel(sectionId, railId, list){
   const section = document.getElementById(sectionId);
   const rail = document.getElementById(railId);
   if (!section || !rail) return;
+  const selection = JSON.stringify([activeCategory, activeSubcategory]);
+  if (rail.dataset.selection !== selection){
+    rail.scrollLeft = 0;
+    delete rail.dataset.engaged;
+    rail.dataset.selection = selection;
+  }
   if (!list.length){
+    rail.innerHTML = '';
     section.style.display = 'none';
     return;
   }
@@ -113,8 +127,8 @@ function renderCategoryRail(){
     activeCategory = btn.dataset.cat;
     activeSubcategory = 'All';
     renderCategoryRail();
-    renderSubchipRow();
     renderGrid();
+    renderHomeCarousels();
     // Keep the shopper's scroll position stable when switching categories.
     // The previous auto-scroll made category browsing feel broken on mobile.
   }));
@@ -137,6 +151,7 @@ function renderSubchipRow(){
     activeSubcategory = btn.dataset.sub;
     renderSubchipRow();
     renderGrid();
+    renderHomeCarousels();
   }));
 }
 
@@ -301,7 +316,7 @@ function saveBrowseUrl(){
   }
   history.replaceState(null,'',url);
 }
-window.addEventListener('popstate',()=>{if(!gridPager)return;applyCategoryFromUrl();renderCategoryRail();renderGrid();});
+window.addEventListener('popstate',()=>{if(!gridPager)return;applyCategoryFromUrl();renderCategoryRail();renderGrid();renderHomeCarousels();});
 
 function updateCatalogNotice(){
   const el=$('#catalogNotice');if(!el)return;

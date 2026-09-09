@@ -1405,3 +1405,13 @@ html[lang="hi"] .hero-compact .hero-title{line-height:1.4;padding-block:2px;}
 .shop-specialty{margin:10px 0 0;color:#ffe5ef;font-size:14px;line-height:1.5;}
 @media(min-width:640px){.related-rail{grid-auto-columns:calc((100% - 36px)/3.15);}}
 @media(min-width:1000px){.related-rail{grid-auto-columns:calc((100% - 48px)/4.15);}}
+
+/* More compact tiles, retaining uncropped photos and stable 44px action rows. */
+.card .imgwrap{aspect-ratio:6/5;}
+.card .body{padding:8px 9px;gap:3px;}
+.card .name{line-height:1.3;min-height:2.6em;}
+.card .name-hindi{min-height:0;}
+.card .price{font-size:18px;}
+.card .card-actions{gap:6px;}
+.card-rating-slot:empty{display:none;min-height:0;}
+.related-rail{align-items:start;}
