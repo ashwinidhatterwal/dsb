@@ -8,7 +8,7 @@ await fs.rm(destination,{recursive:true,force:true});
 await fs.mkdir(destination,{recursive:true});
 for(const entry of await fs.readdir('.', {withFileTypes:true})){
   if(!entry.isFile()) continue;
-  if(entry.name === '.catalog-build.json' || entry.name === 'sample-products.json' || (entry.name.endsWith('.txt') && entry.name!=='robots.txt')) continue;
+  if(entry.name.startsWith('.') || entry.name === 'sample-products.json' || (entry.name.endsWith('.txt') && entry.name!=='robots.txt')) continue;
   if(entry.name !== 'CNAME' && !/\.(?:html|css|js|png|ico|json|txt|xml|svg|webp|jpg|jpeg)$/i.test(entry.name)) continue;
   await fs.copyFile(entry.name,path.join(destination,entry.name));
 }
@@ -20,5 +20,9 @@ const api=config.match(/SHEET_API_URL:\s*['"]([^'"]+)/)?.[1];
 const site=config.match(/SITE_URL:\s*['"]([^'"]+)/)?.[1]?.replace(/\/$/,'');
 if(!api || !site)throw new Error('Missing build configuration');
 const rows=JSON.parse(await fs.readFile('.catalog-build.json','utf8'));
+const meta=JSON.parse(await fs.readFile('.catalog-build-meta.json','utf8'));
+if(meta.api!==api || !Number.isFinite(meta.generatedAt) || Date.now()-meta.generatedAt>86400000)throw new Error('Build snapshot expired or does not match this API');
+await fs.writeFile(path.join(destination,'catalog-snapshot.json'),JSON.stringify({...meta,rows}));
 const count=await generateStaticProducts(destination,rows,await fs.readFile('product.html','utf8'),site);
+await fs.appendFile(path.join(destination,'config.js'),'\nwindow.DSB_PUBLISHED_PRODUCTS=new Set('+JSON.stringify(rows.map(p=>String(p.id))).replaceAll('<','\\u003c')+');\n');
 console.log(`Generated ${count} static product pages.`);

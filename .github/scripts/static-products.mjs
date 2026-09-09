@@ -14,8 +14,8 @@ export async function generateStaticProducts(destination, rows, template, siteBa
     const title=`${p.name || id} | Dhatterwal Suhag Bhandar`;
     const description=String(p.description || `Shop ${p.name || id} at Dhatterwal Suhag Bhandar.`).slice(0,180);
     const price=Number(p.price), validPrice=Number.isFinite(price)&&price>0;
-    const image=/^https:\/\//i.test(String(p.image)) ? String(p.image) : '';
-    const content=`<article class="pd-wrap" data-prerendered><h1 class="pd-title">${esc(p.name || id)}</h1>${image?`<img src="${esc(image)}" alt="${esc(p.name)}" style="max-width:100%;max-height:60vh;object-fit:contain" fetchpriority="high">`:''}<p>${esc(p.description)}</p>${validPrice?`<p class="pd-prices">₹${price.toFixed(2)}</p>`:''}<p>${esc(p.category)}</p><p>Price and availability are checked before ordering.</p><p role="status">Connecting to the shop for current availability…</p><noscript>Enable JavaScript to choose sizes and place an order.</noscript></article>`;
+    const image=/^https:\/\//i.test(String(p.image)) ? optimizeImage(String(p.image)) : '';
+    const content=`<article class="pd-wrap" data-prerendered><div class="pd-breadcrumb"><a href="index.html">Shop</a> / ${esc(p.category)}</div>${image?`<div class="pd-gallery"><div class="pd-gallery-track"><div class="pd-slide"><img src="${esc(image)}" alt="${esc(p.name)}" decoding="async" fetchpriority="high"></div></div></div>`:''}<div class="pd-info"><h1 class="pd-title">${esc(p.name || id)}</h1>${validPrice?`<div class="pd-prices"><span class="price">₹${price.toFixed(2)}</span></div>`:''}<p class="pd-desc">${esc(p.description)}</p><div class="pd-id">Product ID: ${esc(id)}</div><p class="hint">Price and availability are checked before ordering.</p><div class="pd-actions"><p role="status">Connecting to the shop for current availability…</p></div><noscript>Enable JavaScript to choose sizes and place an order.</noscript></div></article>`;
     const schema={'@context':'https://schema.org','@type':'Product',name:String(p.name || id),description,sku:id,url,...(image?{image:[image]}:{}),...(validPrice?{offers:{'@type':'Offer',priceCurrency:'INR',price:price.toFixed(2),url,availability:p.stock==='out of stock'||(String(p.stockqty??'')!==''&&Number(p.stockqty)<=0)?'https://schema.org/OutOfStock':'https://schema.org/InStock'}}:{})};
     let html=template.replace('<html lang="en">',()=>`<html lang="en" data-product-id="${esc(id)}">`).replace('<head>',()=>`<head>\n<base href="${esc(siteBase)}/">`);
     html=html.replace(/<title>[\s\S]*?<\/title>/,()=>`<title>${esc(title)}</title>`)
@@ -36,4 +36,10 @@ export async function generateStaticProducts(destination, rows, template, siteBa
   catalog=catalog.replace(/(<div[^>]*id="catalogRoot"[^>]*>)[\s\S]*?(<\/div>)/,(_,prefix,suffix)=>prefix+links.join('\n')+suffix);
   await fs.writeFile(catalogFile,catalog);
   return products.length;
+}
+
+function optimizeImage(src){
+  try{const u=new URL(src),asset=u.pathname.split('/image/upload/')[1],first=asset?.split('/')[0]||'';
+    if(u.hostname==='res.cloudinary.com' && asset && !(/^(?:[a-z]{1,4}_|\$)/.test(first)&&!/^v\d+$/.test(first)))u.pathname=u.pathname.replace('/image/upload/','/image/upload/f_auto,q_auto,c_limit,w_1200/');return u.href;
+  }catch(_){return src;}
 }

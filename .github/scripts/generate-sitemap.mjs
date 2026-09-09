@@ -67,7 +67,16 @@ async function main() {
 
   const apiUrl = new URL(apiBase);
   apiUrl.searchParams.set('action', 'products');
-  const payload=await fetchJson(apiUrl);
+  let payload,generatedAt=Date.now();
+  try{payload=await fetchJson(apiUrl);}
+  catch(error){
+    try{
+      const meta=JSON.parse(await fs.readFile('.catalog-build-meta.json','utf8'));
+      if(meta.api!==apiBase || !Number.isFinite(meta.generatedAt) || Date.now()-meta.generatedAt>86400000 || meta.generatedAt>Date.now()+60000)throw error;
+      payload=JSON.parse(await fs.readFile('.catalog-build.json','utf8'));generatedAt=meta.generatedAt;
+      console.warn('Live catalogue unavailable; preserving the validated snapshot from '+new Date(generatedAt).toISOString());
+    }catch(_){throw error;}
+  }
   const productIds = uniqueProductIds(payload);
 
   // A zero-product response can be legitimate, but it can also mean a broken
@@ -81,7 +90,10 @@ async function main() {
     }
   }
 
-  await fs.writeFile('.catalog-build.json',JSON.stringify(Array.isArray(payload)?payload:payload.products),'utf8');
+  const allowed=['id','name','namehindi','category','subcategory','price','mrp','image','images','description','stock','stockqty','tags','sizes'];
+  const rows=(Array.isArray(payload)?payload:payload.products).map(row=>Object.fromEntries(allowed.filter(k=>row[k]!==undefined).map(k=>[k,row[k]])));
+  await fs.writeFile('.catalog-build.json',JSON.stringify(rows),'utf8');
+  await fs.writeFile('.catalog-build-meta.json',JSON.stringify({api:apiBase,generatedAt}),'utf8');
 
   const staticEntries = [
     entry(`${siteBase}/`, 'daily', '1.0'),
