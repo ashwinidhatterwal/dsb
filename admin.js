@@ -32,8 +32,21 @@ const CLOUDINARY_UPLOAD_PRESET = 'dhatterwal suhag bhandar';
 let API_URL = '';
 let ADMIN_KEY = '';
 let PRODUCTS = [];
+let editingSnapshot = null;
 let editingProductId = null; // set while editing an existing product; null when adding a new one
 let ORDERS = [];
+let productRequestSequence=0, dashboardRequestSequence=0, editorBusy=false;
+const pendingDeletes=new Set(), pendingOrderUpdates=new Set();
+async function withEditorLock(task){
+  if(editorBusy){showToast('Please wait for the current save or upload.');return;}
+  editorBusy=true;
+  const fields=$$('input,select,textarea,button',$('#tab-add'));
+  const previous=fields.map(el=>el.disabled);
+  fields.forEach(el=>el.disabled=true);
+  try{return await task();}finally{editorBusy=false;fields.forEach((el,i)=>el.disabled=previous[i]);}
+}
+function reducedMotion(){return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;}
+
 let orderPage = 0, orderFilterKey = "", orderResponse=null, orderRequestSequence=0;
 const ORDER_PAGE_SIZE = 40;
 
@@ -75,19 +88,26 @@ function showToast(msg){
 }
 
 async function loadProducts(refreshRelated=true){
-  const statusEl = $('#connectStatus');
+  const statusEl = $('#connectStatus'), sequence=++productRequestSequence;
+  $('#productsStatus').textContent='Refreshing products…';
+  $('#refreshProductsBtn').disabled=true;
   try{
     const data = await adminRead('adminProducts');
+    if(sequence!==productRequestSequence)return false;
+    if(!Array.isArray(data))throw new Error('Invalid product response');
     PRODUCTS = data;
+    $('#productsStatus').textContent='Products up to date';
     renderProductList();
     renderCategoryOptions();
     // First successful connect swaps the connect screen for the real app.
     $('#connectScreen').style.display = 'none';
     $('#adminApp').style.display = 'block';
   } catch(err){
+    if(sequence!==productRequestSequence)return false;
     status(statusEl, 'Could not load products: ' + err.message, false);
+    status($('#productsStatus'),'Could not refresh products: '+err.message,false);
     return false;
-  }
+  } finally {if(sequence===productRequestSequence)$('#refreshProductsBtn').disabled=false;}
   if(refreshRelated){loadOrders();loadDashboard();}
   return true;
 }
@@ -100,6 +120,7 @@ function formatDateTime(value){
 
 async function loadOrders(){
   const wrap = $('#orderList'),sequence=++orderRequestSequence;
+  $$('button,select',wrap).forEach(el=>el.disabled=true);
   try{
     const options={query:$('#orderFilterInput').value.trim(),status:$('#orderStatusFilter').value,sort:$('#orderSort').value,page:orderPage};
     const data = await adminRead('adminOrders',options);
@@ -109,9 +130,10 @@ async function loadOrders(){
     if(orderResponse)orderPage=data.page;
     ORDERS = orderResponse?data.orders:data;
     renderOrderList();
-    if (LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
+    return true;
   } catch(err){
-    if(sequence===orderRequestSequence)wrap.innerHTML = `<p class="hint">Could not load orders: ${escapeHtml(err.message)}</p>`;
+    if(sequence===orderRequestSequence){wrap.innerHTML = `<p class="hint">Could not load orders: ${escapeHtml(err.message)}</p><button type="button" class="ghost-btn" id="retryOrders">Retry</button>`;$('#retryOrders').onclick=loadOrders;}
+    return false;
   }
 }
 
@@ -194,6 +216,11 @@ function renderOrderList(){
 }
 
 async function updateOrderStatus(orderId, newStatus){
+  if(pendingOrderUpdates.has(orderId))return;
+  pendingOrderUpdates.add(orderId);
+  const row=$$('.orow').find(el=>el.dataset.id===String(orderId));
+  const controls=row ? $$('button,select',row) : [];
+  controls.forEach(el=>el.disabled=true);
   try{
     const res = await adminFetch(API_URL, {
       method: 'POST',
@@ -203,10 +230,10 @@ async function updateOrderStatus(orderId, newStatus){
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     showToast('Order updated');
-    await loadOrders();
+    await Promise.all([loadOrders(),loadDashboard(),loadProducts(false)]);
   } catch(err){
     alert('Could not update order: ' + err.message);
-  }
+  } finally {pendingOrderUpdates.delete(orderId);controls.forEach(el=>el.disabled=false);}
 }
 
 function renderCategoryOptions(){
@@ -222,13 +249,16 @@ function renderProductList(){
   const wrap = $('#productList');
   const q = $('#filterInput').value.trim().toLowerCase();
   if(q!==productFilter){productPage=0;productFilter=q;}
-  const matches=PRODUCTS.filter(p => !q || `${p.name} ${p.category} ${p.subcategory} ${p.id}`.toLowerCase().includes(q));
+  const matches=PRODUCTS.filter(p => !q || `${p.name} ${p.namehindi||''} ${p.category} ${p.subcategory} ${p.id} ${p.tags||''}`.toLowerCase().includes(q));
   productPage=Math.min(productPage,Math.max(0,Math.ceil(matches.length/ADMIN_PAGE_SIZE)-1));
   const list=matches.slice(productPage*ADMIN_PAGE_SIZE,(productPage+1)*ADMIN_PAGE_SIZE);
-  let pager=$('#adminProductPager');
-  if(!pager){pager=document.createElement('div');pager.id='adminProductPager';wrap.after(pager);}
-  pager.innerHTML=`<button type="button" id="productsPrev" ${productPage===0?'disabled':''}>Previous</button> <span>${matches.length ? productPage*ADMIN_PAGE_SIZE+1 : 0}–${Math.min((productPage+1)*ADMIN_PAGE_SIZE,matches.length)} of ${matches.length}</span> <button type="button" id="productsNext" ${(productPage+1)*ADMIN_PAGE_SIZE>=matches.length?'disabled':''}>Next</button>`;
-  $('#productsPrev').onclick=()=>{productPage--;renderProductList();};$('#productsNext').onclick=()=>{productPage++;renderProductList();};
+  const pageCount=Math.max(1,Math.ceil(matches.length/ADMIN_PAGE_SIZE));
+  const range=`${matches.length ? productPage*ADMIN_PAGE_SIZE+1 : 0}–${Math.min((productPage+1)*ADMIN_PAGE_SIZE,matches.length)} of ${matches.length} products`;
+  $$('.product-pagination').forEach(pager=>{
+    const pages=[...new Set([0,productPage-1,productPage,productPage+1,pageCount-1])].filter(n=>n>=0&&n<pageCount).sort((a,b)=>a-b);
+    pager.innerHTML=`<div class="pager-summary"><strong>Page ${productPage+1} <span>/ ${pageCount}</span></strong><small>${range}</small></div><div class="pager-controls"><button type="button" class="pager-arrow" data-page="${productPage-1}" ${productPage===0?'disabled':''} aria-label="Previous product page">‹ <span>Previous</span></button><div class="pager-numbers">${pages.map((n,i)=>`${i&&n>pages[i-1]+1?'<span class="pager-gap" aria-hidden="true">…</span>':''}<button type="button" data-page="${n}" ${n===productPage?'aria-current="page"':''} aria-label="Product page ${n+1}">${n+1}</button>`).join('')}</div><button type="button" class="pager-arrow" data-page="${productPage+1}" ${productPage===pageCount-1?'disabled':''} aria-label="Next product page"><span>Next</span> ›</button></div>`;
+    pager.onclick=e=>{const button=e.target.closest('button[data-page]');if(!button||button.disabled)return;const next=Number(button.dataset.page);if(next===productPage)return;productPage=Math.max(0,Math.min(pageCount-1,next));renderProductList();const top=$('#productsPagerTop');top.scrollIntoView({block:'start',behavior:reducedMotion()?'instant':'smooth'});top.querySelector('[aria-current="page"]').focus({preventScroll:true});};
+  });
   $('#countLabel').textContent = PRODUCTS.length;
   if (!list.length){
     wrap.innerHTML = `<p class="hint">No products match.</p>`;
@@ -252,6 +282,8 @@ function renderProductList(){
 }
 
 function fillForm(p){
+  if(editorBusy){showToast('Please wait for the current save or upload.');return;}
+  editingSnapshot={...p};
   editingProductId = p.id || null;
   $('#f-id').value = p.id || '';
   $('#f-id').readOnly = true;
@@ -259,8 +291,8 @@ function fillForm(p){
   $('#f-nameHindi').value = p.namehindi || '';
   $('#f-category').value = p.category || '';
   $('#f-subcategory').value = p.subcategory || '';
-  $('#f-price').value = p.price || '';
-  $('#f-mrp').value = p.mrp || '';
+  $('#f-price').value = p.price ?? '';
+  $('#f-mrp').value = p.mrp ?? '';
   $('#f-costprice').value = (p.costprice === undefined || p.costprice === null || p.costprice === '') ? '' : p.costprice;
   $('#f-image').value = p.image || '';
   $('#f-description').value = p.description || '';
@@ -275,10 +307,11 @@ function fillForm(p){
   renderExtraImagesPreview();
   $('#addTabTitle').textContent = `Edit ${p.name || 'product'}`;
   switchTab('add');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top: 0, behavior: reducedMotion()?'instant':'smooth' });
 }
 
 function clearForm(){
+  editingSnapshot=null;
   editingProductId = null;
   $('#f-id').readOnly = false;
   ['f-id','f-name','f-nameHindi','f-category','f-subcategory','f-price','f-mrp','f-costprice','f-image','f-description','f-stockqty','f-tags']
@@ -316,7 +349,8 @@ async function uploadFileToCloudinary(file){
   return data.secure_url;
 }
 
-async function uploadImage(){
+async function uploadImage(){return withEditorLock(uploadImageTask);}
+async function uploadImageTask(){
   const statusEl = $('#uploadStatus');
   const fileInput = $('#f-imagefile');
   const file = fileInput.files[0];
@@ -358,7 +392,8 @@ function renderExtraImagesPreview(){
   }));
 }
 
-async function uploadExtraImage(){
+async function uploadExtraImage(){return withEditorLock(uploadExtraImageTask);}
+async function uploadExtraImageTask(){
   const statusEl = $('#extraUploadStatus');
   const fileInput = $('#f-extraimagefile');
   const file = fileInput.files[0];
@@ -387,7 +422,8 @@ function addExtraImageUrl(){
   input.value = '';
 }
 
-async function saveProduct(){
+async function saveProduct(){return withEditorLock(saveProductTask);}
+async function saveProductTask(){
   const statusEl = $('#saveStatus');
   const stockqty = $('#f-stockqty').value.trim() === '' ? '' : Number($('#f-stockqty').value);
   const product = {
@@ -397,7 +433,7 @@ async function saveProduct(){
     category: $('#f-category').value.trim() || 'Other',
     subcategory: $('#f-subcategory').value.trim() || 'General',
     price: Number($('#f-price').value) || 0,
-    mrp: Number($('#f-mrp').value) || Number($('#f-price').value) || 0,
+    mrp: $('#f-mrp').value.trim()==='' ? Number($('#f-price').value) : Number($('#f-mrp').value),
     costprice: $('#f-costprice').value.trim() === '' ? '' : Number($('#f-costprice').value),
     image: $('#f-image').value.trim(),
     images: currentExtraImages.join(','),
@@ -417,8 +453,12 @@ async function saveProduct(){
   }
 
   if(!Number.isFinite(product.price) || product.price<=0){status(statusEl,'Price must be a positive number.',false);return;}
+  for(const key of ['mrp','costprice','stockqty']){
+    const value=product[key];
+    if(value!=='' && (!Number.isFinite(value)||value<0||(key==='stockqty'&&!Number.isInteger(value)))){status(statusEl,`Enter a valid non-negative ${key==='stockqty'?'whole stock quantity':key==='mrp'?'MRP':'cost price'}.`,false);return;}
+  }
   const isUpdate = !!editingProductId;
-  if(isUpdate){const original=PRODUCTS.find(p=>String(p.id)===String(editingProductId));product.expected_stockqty=original?.stockqty ?? '';product.expected_stock=original?.stock ?? '';}
+  if(isUpdate){const original=editingSnapshot;product.expected_stockqty=original?.stockqty ?? '';product.expected_stock=original?.stock ?? '';}
 
   // Only relevant when adding a new product — editing an existing one keeps
   // its ID locked (the field is read-only during edit) so this situation
@@ -458,6 +498,7 @@ async function saveProduct(){
     btn.disabled=false;btn.textContent='Save product';
     switchTab('products');
     if(!await loadProducts(false)) showToast('Product saved. List refresh failed; refresh before editing again.');
+    loadDashboard();
   } catch(err){
     status(statusEl, 'Save could not be confirmed: ' + err.message + ' Check the product list before retrying.', false);
   } finally {
@@ -467,7 +508,11 @@ async function saveProduct(){
 }
 
 async function deleteProduct(id, name){
+  if(pendingDeletes.has(id))return;
   if (!confirm(`Delete "${name || id}"? This cannot be undone.`)) return;
+  pendingDeletes.add(id);
+  const row=$$('.arow').find(el=>el.dataset.id===String(id));
+  const buttons=row?$$('button',row):[];buttons.forEach(el=>el.disabled=true);
   try{
     const res = await adminFetch(API_URL, {
       method: 'POST',
@@ -477,17 +522,17 @@ async function deleteProduct(id, name){
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     showToast('Product deleted');
-    await loadProducts();
+    await Promise.all([loadProducts(false),loadDashboard()]);
   } catch(err){
     alert('Delete failed: ' + err.message);
-  }
+  } finally {pendingDeletes.delete(id);buttons.forEach(el=>el.disabled=false);}
 }
 
 function switchTab(name){
   $$('.admin-tab').forEach(el => el.classList.toggle('active', el.id === 'tab-' + name));
-  $$('[data-tab]').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === name));
+  $$('[data-tab]').forEach(btn => {const active=btn.dataset.tab===name;btn.classList.toggle('active',active);if(active)btn.setAttribute('aria-current','page');else btn.removeAttribute('aria-current');});
   if (name === 'dashboard' && LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
-  window.scrollTo({ top:0, behavior:'smooth' });
+  window.scrollTo({ top:0, behavior:reducedMotion()?'instant':'smooth' });
 }
 
 /* ---------------- Dashboard ---------------- */
@@ -495,17 +540,21 @@ let LAST_DASHBOARD = null;
 
 function animateNumber(el, target, prefix){
   if (!el) return;
+  cancelAnimationFrame(el._numberFrame);
+  if(reducedMotion()){el.textContent=(prefix||'')+target.toLocaleString('en-IN');return;}
   const duration = 500, start = performance.now();
   const from = Number(String(el.textContent || '0').replace(/[^0-9.-]/g,'')) || 0;
-  function step(now){ const p=Math.min(1,(now-start)/duration), eased=1-Math.pow(1-p,3), value=Math.round(from+(target-from)*eased); el.textContent=(prefix||'')+value.toLocaleString('en-IN'); if(p<1) requestAnimationFrame(step); }
-  requestAnimationFrame(step);
+  function step(now){ const p=Math.min(1,(now-start)/duration), eased=1-Math.pow(1-p,3), value=Math.round(from+(target-from)*eased); el.textContent=(prefix||'')+value.toLocaleString('en-IN'); if(p<1) el._numberFrame=requestAnimationFrame(step); }
+  el._numberFrame=requestAnimationFrame(step);
 }
 
 async function loadDashboard(){
+  const sequence=++dashboardRequestSequence;
   try{
     const data = await adminRead('adminDashboard');
-    LAST_DASHBOARD = data; renderDashboard(data);
-  } catch(err){ $('#dashTopProducts').innerHTML=`<p class="hint">Could not load dashboard: ${escapeHtml(err.message)}</p>`; }
+    if(sequence!==dashboardRequestSequence)return false;
+    LAST_DASHBOARD = data; renderDashboard(data);return true;
+  } catch(err){if(sequence===dashboardRequestSequence)$('#dashTopProducts').innerHTML=`<p class="hint">Could not load dashboard: ${escapeHtml(err.message)}</p>`;return false;}
 }
 
 function moneyShort(n){ return '₹'+Math.round(Number(n)||0).toLocaleString('en-IN'); }
@@ -521,7 +570,7 @@ function renderDashboard(d){
   const pending=(d.statusCounts&&d.statusCounts.Pending)||0, monthOrders=Number(d.monthOrders)||0;
   animateNumber($('#statTodayRevenue'),Math.round(d.todayRevenue||0),'₹'); $('#statTodayOrders').textContent=`${d.todayOrders||0} order${d.todayOrders===1?'':'s'} today`;
   animateNumber($('#statMonthRevenue'),Math.round(d.monthRevenue||0),'₹'); $('#statMonthOrders').textContent=`${monthOrders} order${monthOrders===1?'':'s'} this month`;
-  if(d.accountingIncomplete) $('#statMonthProfit').textContent='Incomplete';
+  if(d.accountingIncomplete){cancelAnimationFrame($('#statMonthProfit')._numberFrame);$('#statMonthProfit').textContent='Incomplete';}
   else animateNumber($('#statMonthProfit'),Math.round(d.monthProfit||0),'₹');
   const avg=monthOrders ? (Number(d.monthRevenue)||0)/monthOrders : 0; animateNumber($('#statAverageOrder'),Math.round(avg),'₹'); $('#statPending').textContent=`${pending} pending${pending===1?'':' orders'}`;
   $('#dashGreetingSub').textContent = pending ? `${pending} order${pending===1?'':'s'} need${pending===1?'s':''} your attention.` : 'Everything looks under control today.';
@@ -542,14 +591,14 @@ function renderDashboard(d){
   if(!total){$('#dashStatusBar').style.display='none';$('#dashStatusLegend').innerHTML='';$('#dashStatusEmpty').style.display='block';}
   else { $('#dashStatusBar').style.display='flex';$('#dashStatusEmpty').style.display='none'; $('#dashStatusBar').innerHTML=statuses.map(s=>{const c=sc[s]||0;if(!c)return '';return `<div class="dash-status-seg ${s.toLowerCase()}" style="width:${(c/total*100)}%">${c}</div>`;}).join(''); $('#dashStatusLegend').innerHTML=statuses.map(s=>`<span class="dash-legend"><b>${sc[s]||0}</b> ${s}</span>`).join(''); }
 
-  const low=d.lowStock||[]; $('#dashLowStock').innerHTML=low.length?low.map(p=>`<div class="dash-lowstock-item"><div><div class="lowstock-name">${escapeHtml(p.name)}</div><div class="lowstock-state">${Number(p.qty)<=2?'Critical — restock soon':'Low stock'}</div></div><span class="qty">${p.qty} left</span></div>`).join(''):'<p class="hint">All tracked products have healthy stock.</p>';
+  const low=d.lowStock||[]; $('#dashLowStock').innerHTML=low.length?low.map(p=>`<div class="dash-lowstock-item"><div><div class="lowstock-name">${escapeHtml(p.name)}</div><div class="lowstock-state">${Number(p.qty)<=2?'Critical — restock soon':'Low stock'}</div></div><span class="qty">${escapeHtml(p.qty)} left</span></div>`).join(''):'<p class="hint">All tracked products have healthy stock.</p>';
 
   const recent=d.recentOrders || recentOrders().slice(0,5); $('#dashRecentOrders').innerHTML=recent.length?recent.map(o=>{const st=o.status||'Pending';return `<div class="dash-recent-row"><div class="dash-recent-icon">🧾</div><div class="dash-recent-copy"><strong>${escapeHtml(o.customername||o.orderid||'Order')}</strong><span>${escapeHtml(o.orderid||'')} · ${escapeHtml(formatDateTime(o.date))}</span></div><div class="dash-recent-total">${moneyShort(o.total)}<br><span class="status-pill ${escapeHtml(st.toLowerCase())}">${escapeHtml(st)}</span></div></div>`;}).join(''):'<p class="hint">No recent orders yet.</p>';
 
-  const days=d.sevenDaySales || buildSevenDaySales(), maxDay=Math.max(1,...days.map(x=>x.total)), week=days.reduce((a,x)=>a+x.total,0); $('#dashWeekTotal').textContent=moneyShort(week); $('#dashSalesChart').innerHTML=days.some(x=>x.total)?days.map(x=>`<div class="dash-bar-wrap"><span class="dash-bar-value">${x.total?moneyShort(x.total):''}</span><div class="dash-bar" style="height:${Math.max(6,Math.round(x.total/maxDay*82))}%"></div><span class="dash-bar-label">${x.label}</span></div>`).join(''):'<p class="hint dash-chart-empty">No sales activity in the last 7 days.</p>';
+  const days=d.sevenDaySales || buildSevenDaySales(), maxDay=Math.max(1,...days.map(x=>x.total)), week=days.reduce((a,x)=>a+x.total,0); $('#dashWeekTotal').textContent=moneyShort(week); $('#dashSalesChart').innerHTML=days.some(x=>x.total)?days.map(x=>`<div class="dash-bar-wrap"><span class="dash-bar-value">${x.total?moneyShort(x.total):''}</span><div class="dash-bar" style="height:${Math.max(6,Math.round(x.total/maxDay*82))}%"></div><span class="dash-bar-label">${escapeHtml(x.label)}</span></div>`).join(''):'<p class="hint dash-chart-empty">No sales activity in the last 7 days.</p>';
 
   $$('[data-dash-action]').forEach(btn=>btn.onclick=()=>{const a=btn.dataset.dashAction;if(a==='pending'){switchTab('orders');$('#orderStatusFilter').value='Pending';orderPage=0;loadOrders();}else if(a==='orders')switchTab('orders');else if(a==='products')switchTab('products');});
-  $$('.dash-quick[data-tab]').forEach(btn=>btn.onclick=()=>switchTab(btn.dataset.tab));
+
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -575,8 +624,15 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.textContent = 'Connect';
   });
   $('#saveBtn').addEventListener('click', saveProduct);
-  $('#clearFormBtn').addEventListener('click', clearForm);
-  $('#filterInput').addEventListener('input', renderProductList);
+  $('#clearFormBtn').addEventListener('click',()=>{if(!editorBusy)clearForm();});
+  let productSearchTimer;
+  $('#filterInput').addEventListener('input',()=>{clearTimeout(productSearchTimer);productSearchTimer=setTimeout(renderProductList,150);});
+  $('#refreshProductsBtn').addEventListener('click',()=>loadProducts(false));
+  const workspaceSearch=$('.topbar-search input');
+  workspaceSearch.placeholder='Find products…';
+  workspaceSearch.addEventListener('keydown',e=>{if(e.key==='Enter'){switchTab('products');$('#filterInput').value=workspaceSearch.value;renderProductList();$('#filterInput').focus();}});
+  document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'&&$('#adminApp').style.display==='block'){e.preventDefault();switchTab('products');$('#filterInput').focus();}});
+  $('#adminKey').addEventListener('keydown',e=>{if(e.key==='Enter'&&!$('#connectBtn').disabled)$('#connectBtn').click();});
   $('#uploadBtn').addEventListener('click', uploadImage);
   $('#uploadExtraBtn').addEventListener('click', uploadExtraImage);
   $('#addExtraUrlBtn').addEventListener('click', addExtraImageUrl);
@@ -586,7 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#orderSort').addEventListener('change',reloadOrders);
   $('#orderStatusFilter').addEventListener('change',reloadOrders);
   $('#orderFilterInput').addEventListener('input',()=>{clearTimeout(orderSearchTimer);orderSearchTimer=setTimeout(reloadOrders,250);});
-  $('#dashRefreshBtn').addEventListener('click', async () => { await Promise.all([loadOrders(), loadDashboard()]); showToast('Dashboard refreshed'); });
+  $('#dashRefreshBtn').addEventListener('click', async () => {const btn=$('#dashRefreshBtn');if(btn.disabled)return;btn.disabled=true;try{const ok=await loadDashboard();showToast(ok?'Dashboard refreshed':'Dashboard refresh failed. Try again.');}finally{btn.disabled=false;}});
 });
 
 async function resizeUpload(file){
