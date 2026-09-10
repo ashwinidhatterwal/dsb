@@ -2,16 +2,14 @@
 
 ## Update an existing shop
 
-**Already on admin v9:** upload `admin.html`, `admin.js`, `admin-workspace.js`
-and the new `admin-base.css`. Keep `admin-theme.css`. No Apps Script redeployment
-is needed for this cleanup; backend behavior is unchanged.
+**Deploy the included code.gs first**, as a new version of your existing Apps
+Script deployment. Back up your Spreadsheet/source and retain existing shop
+settings and Script Properties. Use **Deploy → Manage deployments → Edit → New
+version → Deploy** to keep the URL.
 
-**On an older version:** back up your Spreadsheet and Apps Script source. Replace
-Apps Script code with `code.gs`, keeping your existing shop settings and Script
-Properties. Choose **Deploy → Manage deployments → Edit → New version → Deploy**
-to retain the existing deployment URL. Then upload the website files, including
-all admin JavaScript/CSS files and the `.github` folder, and wait for GitHub Actions
-to finish. The admin requires backend version 9.
+Then upload the website files, including `admin.html`, `admin.js`,
+`admin-workspace.js`, `admin-base.css` and `admin-theme.css`, and wait for GitHub
+Actions to publish. This admin requires backend version 11.
 
 If the deployment URL changes, update `SHEET_API_URL` in `config.js` and the admin
 connection URL. Keep the current web-app access settings so customers can order.
@@ -21,16 +19,23 @@ from the public website. Keep actual credentials out of GitHub.
 ## Google Sheets and payments
 
 Keep the existing Spreadsheet, sheet names and headers. Admin tools automatically
-add `archived` to Products, payment verification columns to Orders, and an
-AdminActivity sheet. Existing order/transaction tracking tabs remain in use.
+add `archived` to Products and manual payment verification columns to Orders.
+Existing order/transaction tracking tabs remain in use.
+Activity logging and its API are removed. The old AdminActivity sheet, if present,
+is no longer read or written; you may delete it manually if you do not want the
+old records. Do not delete the OrderTransactions recovery/Telegram sheet.
 
-- **Archive/restore:** hides products without deleting stock or order history.
-  Checkout rejects archived products. Static product pages/search results update
-  after publishing and search-engine refreshes.
-- **Bulk editing:** select up to 20 products, choose a fixed price or stock quantity,
-  review and apply. Each result is independent; some can succeed while others fail.
-  If a request times out, refresh and check values before retrying. Setting quantity
-  to zero marks out of stock; positive quantities retain the existing stock status.
+- **Products:** shows active products only; product ID ascending is selected by
+  default. Individual price and stock editing remains available through Edit.
+- **Archive:** open the separate Archive section in the top bar to search and
+  restore archived products. Admin users can permanently delete them by typing
+  the product ID. Editors can restore; viewers can only read. Active products
+  must be archived before deletion. Existing order records are not deleted.
+  Cancelled orders containing a deleted product cannot be reactivated.
+- **Retired IDs:** deletion automatically creates an ID-only DeletedProductIds
+  sheet to prevent reuse. It contains no product details or activity history.
+  Keep it to prevent old order records from affecting replacement products.
+- **Bulk price/quantity edits:** removed from the interface and backend.
 - **Conflicting edits:** refresh and reopen a product if saving reports a newer edit.
   Restored drafts retain their original revision and cannot bypass this check.
 - **Drafts:** recoverable within the browser tab session, not a permanent backup.
@@ -40,9 +45,6 @@ AdminActivity sheet. Existing order/transaction tracking tabs remain in use.
   Refunded. Enter a reference or note. This records a manual check only; it cannot
   collect money, verify a bank transfer automatically or issue a refund. Delivery
   status is separate; old orders default to Unverified.
-- **Activity:** records admin requests and outcomes from this update onward.
-  A Started entry without completion needs checking. Direct Spreadsheet edits are
-  not logged, and the history is not a tamper-proof accounting ledger.
 
 Product sorting/filtering happens in Apps Script before sending 40 rows per page.
 Apps Script still scans the sheet; this is not an indexed database.
@@ -67,8 +69,8 @@ remove an entry to revoke access.
 
 | Role | Access |
 | --- | --- |
-| admin | Products, orders, payment verification and activity history |
-| editor | Product and delivery-status changes, including bulk editing and archive/restore |
+| admin | Products, orders, payment verification and permanent archive deletion |
+| editor | Individual product and delivery-status changes, archive/restore |
 | viewer | Read-only admin data, including costs and customer details |
 
 Apps Script enforces these permissions per request. Direct Spreadsheet/Apps Script

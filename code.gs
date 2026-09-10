@@ -295,6 +295,8 @@ function getAllProducts(includeCost) {
 function addProduct(p,requestId) {
   return withWriteLock_(function() {
     validateProductFields_(p, true);
+    const retired=SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeletedProductIds');
+    if(p.id&&retired&&findRow_(retired,'id',String(p.id).trim()))throw new Error('This product ID was retired. Choose a new ID.');
     if(p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizes');
     const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet);
     let reservation=null;
@@ -306,14 +308,16 @@ function addProduct(p,requestId) {
       if(row){const values=requests.getRange(row,1,1,3).getValues()[0];if(values[2]!==fingerprint)throw new Error('This save attempt belongs to different product details.');reservation={requests,id:String(values[1]),existing:true};}
       else{
         let candidate=String(p.id || '').trim() || nextId_(sheet,'DSB');
-        if(!p.id){while(findRow_(requests,'productid',candidate)){const n=Number(candidate.replace(/^DSB-?/,''))+1;candidate='DSB-'+String(n).padStart(4,'0');}}
+        if(!p.id){while(findRow_(requests,'productid',candidate)||(retired&&findRow_(retired,'id',candidate))){const n=Number(candidate.replace(/^DSB-?/,''))+1;candidate='DSB-'+String(n).padStart(4,'0');}}
         if(findRow_(sheet,'id',candidate) || findRow_(requests,'productid',candidate))throw new Error('That product ID is already used or reserved.');
         if (!/^[A-Za-z0-9_-]{1,80}$/.test(candidate)) throw new Error('Use letters, numbers, hyphens or underscores for product IDs.');
         requests.appendRow([requestId,candidate,fingerprint]);SpreadsheetApp.flush();reservation={requests,id:candidate};
       }
       if(reservation.existing && findRow_(sheet,'id',reservation.id))return {success:true,id:reservation.id,replayed:true};
     }
-    const id = reservation ? reservation.id : (String(p.id || '').trim() || nextId_(sheet, 'DSB'));
+    let id = reservation ? reservation.id : (String(p.id || '').trim() || nextId_(sheet, 'DSB'));
+    if(!p.id&&!reservation&&retired){while(findRow_(retired,'id',id)){const n=Number(id.replace(/^DSB-?/,''))+1;id='DSB-'+String(n).padStart(4,'0');}}
+    if(retired&&findRow_(retired,'id',id))throw new Error('This product ID was retired. Choose a new ID.');
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) throw new Error('Use letters, numbers, hyphens or underscores for product IDs.');
     if (findRow_(sheet, 'id', id)) throw new Error('That product ID already exists.');
     sheet.appendRow(heads.map(h => sheetText_(h === 'id' ? id : (p[h] !== undefined ? p[h] : ''))));
@@ -347,13 +351,19 @@ function updateProduct(p) {
 }
 
 
-function deleteProduct(id) {
+function deleteProduct(id,expectedRevision) {
+  id=String(id||'').trim();
   return withWriteLock_(function() {
-    const sheet = getSheet_(PRODUCTS_SHEET), row = findRow_(sheet, 'id', String(id || '').trim());
-    if (!row) throw new Error('Product not found.');
-    sheet.deleteRow(row);
-    invalidatePublicCaches_();
-    return {success:true};
+    const sheet=getSheet_(PRODUCTS_SHEET),row=findRow_(sheet,'id',String(id||'').trim());
+    if(!row)throw new Error('Product not found. Refresh the archive.');
+    const heads=headers_(sheet),product={};sheet.getRange(row,1,1,heads.length).getValues()[0].forEach((v,i)=>product[heads[i]]=v);
+    if(!isArchived_(product))throw new Error('Archive this product before deleting it.');
+    if(!expectedRevision||productRevision_(product)!==expectedRevision)throw new Error('Product changed. Refresh the archive before deleting.');
+    // Reserve only the ID so historical orders cannot affect a new product with the same ID.
+    const ss=SpreadsheetApp.getActiveSpreadsheet();let reserved=ss.getSheetByName('DeletedProductIds');
+    if(!reserved){reserved=ss.insertSheet('DeletedProductIds');reserved.appendRow(['id']);}
+    if(!findRow_(reserved,'id',String(id)))reserved.appendRow([sheetText_(String(id))]);
+    sheet.deleteRow(row);invalidatePublicCaches_();return {success:true};
   });
 }
 
@@ -1235,7 +1245,7 @@ function getTelegramHealth_(){
 }
 
 
-/* Admin workspace v7: staff permissions, paging, archive, payment and activity. */
+/* Admin workspace v7: staff permissions, paging, archive and payment. */
 function authenticateAdmin_(key){
   const owner=secret_('ADMIN_KEY',ADMIN_KEY);
   if(owner && owner!=='change-this-secret-key' && key===owner)return {name:'Owner',role:'admin'};
@@ -1246,62 +1256,27 @@ function authenticateAdmin_(key){
 }
 function assertAdminPermission_(actor,action){
   const reads=['adminSession','adminProducts','adminProductsPage','adminOrders','adminDashboard'];
-  const edits=['add','update','archiveProduct','bulkProducts','updateOrderStatus'];
+  const edits=['add','update','archiveProduct','updateOrderStatus'];
   if(actor.role==='admin'||reads.includes(action)||(actor.role==='editor'&&edits.includes(action)))return;
   throw new Error('Your staff role does not allow this action.');
 }
-function activitySheet_(){
-  const ss=SpreadsheetApp.getActiveSpreadsheet();let sheet=ss.getSheetByName('AdminActivity');
-  if(!sheet){sheet=ss.insertSheet('AdminActivity');sheet.appendRow(['date','actor','role','action','target','outcome','detail']);}
-  return sheet;
-}
-function logAdminActivity_(actor,action,target,outcome,detail){
-  const lock=LockService.getScriptLock();
-  if(!lock.tryLock(10000))throw new Error('Activity history is busy. Retry shortly.');
-  try{activitySheet_().appendRow([new Date(),actor.name,actor.role,action,String(target||''),outcome,String(detail||'').slice(0,1200)].map(sheetText_));}
-  finally{lock.releaseLock();}
-}
 function dispatchAdmin_(body,actor){
   const action=String(body.action||'');assertAdminPermission_(actor,action);
-  if(action==='adminSession')return {version:9,name:actor.name,role:actor.role};
+  if(action==='adminSession')return {version:11,name:actor.name,role:actor.role};
   if(action==='adminProducts')return getAllProducts(true);
   if(action==='adminProductsPage')return adminProductsPage_(body.options||{});
   if(action==='adminOrders')return getAllOrders(body.options);
   if(action==='adminDashboard')return getDashboardData();
-  if(action==='adminActivity'){
-    const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName('AdminActivity');
-    if(!sheet)return {entries:[],page:0,total:0};
-    const total=Math.max(0,sheet.getLastRow()-1),page=Math.min(Math.max(0,Math.floor(Number(body.options?.page)||0)),Math.max(0,Math.ceil(total/40)-1)),end=total-page*40,count=Math.min(40,end),heads=headers_(sheet);
-    return {entries:count?sheet.getRange(end-count+2,1,count,heads.length).getValues().reverse().map(row=>{const o={};heads.forEach((h,i)=>o[h]=row[i]);return o;}):[],page,total};
+  if(action==='add')return addProduct(body.product||{},body.requestId);
+  if(action==='update'){
+    if(!body.product?.expected_revision && body.clientVersion>=7)throw new Error('Refresh and reopen the product before saving.');
+    return updateProduct(body.product||{});
   }
-  if(action==='bulkProducts'){
-    if(!Array.isArray(body.items)||!body.items.length||body.items.length>20)throw new Error('Select between 1 and 20 products.');
-    return {results:body.items.map(item=>{
-      try{if(!item.expected_revision)throw new Error('Refresh before bulk editing.');if(Object.keys(item).some(k=>!['id','price','stockqty','stock','expected_revision','expected_stockqty','expected_stock'].includes(k)))throw new Error('Unsupported bulk field.');return {id:item.id,...dispatchAdmin_({action:'update',clientVersion:7,product:item},actor)};}catch(err){return {id:item.id,error:String(err.message||err)};}
-    })};
-  }
-  const allowed=['add','update','delete','archiveProduct','updateOrderStatus','verifyPayment'];
-  if(!allowed.includes(action))throw new Error('unknown action');
-  if(action==='update' && !body.product?.expected_revision && body.clientVersion===7)throw new Error('Refresh and reopen the product before saving.');
-  const target=body.product?.id||body.id||body.orderId||'new product';
-  const change={};['name','category','subcategory','price','mrp','costprice','stock','stockqty','sizes'].forEach(k=>{if(body.product&&body.product[k]!==undefined)change[k]=String(body.product[k]).slice(0,120);});
-  if(action==='archiveProduct')change.archived=body.archived===true;
-  if(action==='updateOrderStatus')change.status=body.status;
-  if(action==='verifyPayment')change.paymentStatus=body.paymentStatus;
-  const detail=JSON.stringify(change);
-  logAdminActivity_(actor,action,target,'Started',detail);
-  let result;
-  try{
-    if(action==='add')result=addProduct(body.product||{},body.requestId);
-    if(action==='update')result=updateProduct(body.product||{});
-    if(action==='delete')throw new Error('Permanent deletion is disabled. Archive the product instead.');
-    if(action==='archiveProduct')result=archiveProduct_(body);
-    if(action==='updateOrderStatus')result=updateOrderStatus(body.orderId,body.status);
-    if(action==='verifyPayment')result=verifyPayment_(body,actor);
-  }catch(err){try{logAdminActivity_(actor,action,target,'Failed',String(err.message||err));}catch(_){}throw err;}
-  try{logAdminActivity_(actor,action,result.id||target,result.success===false?'Failed':'Completed',result.error||detail);}
-  catch(_){result.activityWarning='Change saved, but the completion history could not be recorded.';}
-  return result;
+  if(action==='delete')return deleteProduct(body.id,body.expected_revision);
+  if(action==='archiveProduct')return archiveProduct_(body);
+  if(action==='updateOrderStatus')return updateOrderStatus(body.orderId,body.status);
+  if(action==='verifyPayment')return verifyPayment_(body,actor);
+  throw new Error('unknown action');
 }
 function isArchived_(p){return String(p.archived||'').toLowerCase()==='yes';}
 function productRevision_(p){
@@ -1311,10 +1286,11 @@ function adminProductsPage_(options){
   const all=getAllProducts(true),q=String(options.query||'').trim().toLowerCase().slice(0,120),category=String(options.category||''),stock=String(options.stock||'all');
   let list=all.filter(p=>isArchived_(p)===(options.archived===true)&&(!category||p.category===category)&&(!q||[p.id,p.name,p.namehindi,p.category,p.subcategory,p.tags].join(' ').toLowerCase().includes(q)));
   list=list.filter(p=>{const tracked=p.stockqty!==''&&p.stockqty!==undefined&&p.stockqty!==null,out=p.stock==='out of stock'||(tracked&&Number(p.stockqty)<=0);return stock==='all'||(stock==='out'?out:stock==='low'?tracked&&Number(p.stockqty)>0&&Number(p.stockqty)<=5:!out);});
+  const sort=options.sort||'id-asc';
   const compareId=(a,b)=>String(a.id||'').localeCompare(String(b.id||''),'en',{numeric:true,sensitivity:'base'})||String(a.id||'').localeCompare(String(b.id||''),'en');
-  list.sort((a,b)=>options.sort==='id-asc'?compareId(a,b):options.sort==='id-desc'?compareId(b,a):(options.sort==='price-asc'?Number(a.price)-Number(b.price):options.sort==='price-desc'?Number(b.price)-Number(a.price):String(a.name||'').localeCompare(String(b.name||'')))||compareId(a,b));
+  list.sort((a,b)=>sort==='id-asc'?compareId(a,b):sort==='id-desc'?compareId(b,a):(options.sort==='price-asc'?Number(a.price)-Number(b.price):options.sort==='price-desc'?Number(b.price)-Number(a.price):String(a.name||'').localeCompare(String(b.name||'')))||compareId(a,b));
   const total=list.length,page=Math.min(Math.max(0,Math.floor(Number(options.page)||0)),Math.max(0,Math.ceil(total/40)-1));
-  return {products:list.slice(page*40,(page+1)*40).map(p=>({...p,_revision:productRevision_(p)})),page,total,allCount:all.length,categories:[...new Set(all.map(p=>p.category).filter(Boolean))].sort()};
+  return {products:list.slice(page*40,(page+1)*40).map(p=>({...p,_revision:productRevision_(p)})),page,total,allCount:all.filter(p=>isArchived_(p)===(options.archived===true)).length,categories:[...new Set(all.filter(p=>isArchived_(p)===(options.archived===true)).map(p=>p.category).filter(Boolean))].sort()};
 }
 function archiveProduct_(body){
   return withWriteLock_(function(){

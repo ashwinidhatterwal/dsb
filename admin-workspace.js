@@ -1,6 +1,5 @@
 /* Progressive admin tools. Credentials stay in memory; product drafts stay in this tab. */
-const selectedProducts=new Map();
-let activityPage=0, activitySequence=0, bulkBusy=false;
+let archivePage=0, archiveSequence=0, archivedProducts=[];
 let cleanEditor='', draftTimer;
 const editorFields=()=>$$('#tab-add input:not([type=file]),#tab-add select,#tab-add textarea');
 function editorState(){return editorFields().map(el=>({id:el.id,value:el.type==='checkbox'?el.checked:el.value}));}
@@ -47,46 +46,23 @@ withEditorLock=async function(task){
 };
 function applyStaffRole(){
   const profile=ADMIN_PROFILE;if(!profile)return;
-  $('#activityTabBtn').hidden=profile.role!=='admin';
   $('.live-pill').textContent=profile.name+' · '+profile.role;
   if(profile.role==='viewer'){
-    $$('[data-tab="add"],.bulk-tools').forEach(el=>el.hidden=true);
+    $$('[data-tab="add"]').forEach(el=>el.hidden=true);
     $('#tab-add').querySelectorAll('button,input,select,textarea').forEach(el=>el.disabled=true);
   }
 }
 async function adminWrite(action,payload){
-  const response=await adminFetch(API_URL,{timeoutMs:action==='bulkProducts'?120000:30000,method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:ADMIN_KEY,clientVersion:7,action,...payload})});
-  const data=await response.json();if(data.error||data.success===false)throw new Error(data.error||'Change was not saved.');if(data.activityWarning)showToast(data.activityWarning);return data;
-}
-function updateBulkCount(){
-  $('#bulkCount').textContent=selectedProducts.size+' selected';$('#bulkApply').disabled=bulkBusy||selectedProducts.size===0||selectedProducts.size>20||ADMIN_PROFILE?.role==='viewer';
-  $('#selectPage').checked=PRODUCTS.length>0&&selectedProducts.size===Math.min(20,PRODUCTS.length);
-  $('#selectPage').indeterminate=selectedProducts.size>0&&selectedProducts.size<PRODUCTS.length;
-  if(ADMIN_PROFILE?.role==='viewer')$$('.arow-actions button').forEach(el=>el.disabled=true);
+  const response=await adminFetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:ADMIN_KEY,clientVersion:7,action,...payload})});
+  const data=await response.json();if(data.error||data.success===false)throw new Error(data.error||'Change was not saved.');return data;
 }
 async function archiveProduct(product){
   if(pendingDeletes.has(product.id))return;
   const archive=product.archived!=='yes';
   if(!confirm(`${archive?'Archive':'Restore'} "${product.name}"? ${archive?'It will be hidden from the shop. Existing order history is kept.':'It will be visible in the shop with its current stock settings.'}`))return;
   pendingDeletes.add(product.id);
-  try{await adminWrite('archiveProduct',{id:product.id,archived:archive,expected_revision:product._revision});showToast(archive?'Product archived — restore it from Archived.':'Product restored');await loadProducts(false);}
+  try{await adminWrite('archiveProduct',{id:product.id,archived:archive,expected_revision:product._revision});showToast(archive?'Product archived — restore it from Archived.':'Product restored');await Promise.all([loadProducts(false),loadArchive()]);}
   catch(err){showToast(err.message);}finally{pendingDeletes.delete(product.id);}
-}
-async function applyBulk(){
-  if(bulkBusy||selectedProducts.size===0||selectedProducts.size>20)return;
-  const field=$('#bulkField').value,value=Number($('#bulkValue').value);
-  if(!$('#bulkValue').value||!Number.isFinite(value)||value<0||(field==='stockqty'&&!Number.isInteger(value))||(field==='price'&&value<=0)){showToast('Enter a valid value; stock must be a whole number.');return;}
-  const products=[...selectedProducts.values()];
-  const summary=products.map(p=>`${p.name}: ${p[field]??'untracked'} → ${value}`).join('\n');
-  if(!confirm(`Set ${field==='price'?'selling price':'stock quantity'} for ${products.length} products?\n\n${summary}`))return;
-  bulkBusy=true;updateBulkCount();$('#bulkApply').textContent='Applying…';
-  const items=products.map(p=>({id:p.id,[field]:value,expected_revision:p._revision,...(field==='stockqty'?{expected_stockqty:p.stockqty??'',expected_stock:p.stock??'',stock:value===0?'out of stock':p.stock}: {})}));
-  try{
-    const data=await adminWrite('bulkProducts',{items});
-    $('#bulkResults').innerHTML=data.results.map(r=>`<p class="${r.error?'bulk-error':'hint'}">${escapeHtml(r.id)}: ${escapeHtml(r.error||r.activityWarning||'Saved')}</p>`).join('');
-    await loadProducts(false);loadDashboard();
-  }catch(err){$('#bulkResults').textContent='Batch outcome could not be confirmed. Refresh products before retrying. '+err.message;}
-  finally{bulkBusy=false;updateBulkCount();$('#bulkApply').textContent='Review & apply';}
 }
 function renderPaymentControls(){
   $$('.orow').forEach(row=>{
@@ -105,26 +81,42 @@ function renderPaymentControls(){
     };
   });
 }
-async function loadActivity(){
-  if(ADMIN_PROFILE?.role!=='admin')return;
-  const sequence=++activitySequence;$('#activityList').textContent='Loading activity…';
+async function loadArchive(){
+  const sequence=++archiveSequence;
+  $('#archiveStatus').textContent='Loading archive…';
+  $('#archivePrev').disabled=true;$('#archiveNext').disabled=true;
   try{
-    const data=await adminRead('adminActivity',{page:activityPage});if(sequence!==activitySequence)return;
-    activityPage=data.page;$('#activityList').innerHTML=data.entries.length?data.entries.map(x=>`<div class="activity-row"><strong>${escapeHtml(x.actor)} · ${escapeHtml(x.action)} · ${escapeHtml(x.outcome)}</strong><div>${escapeHtml(x.target)} · ${escapeHtml(formatDateTime(x.date))}</div><small>${escapeHtml(x.detail)}</small></div>`).join(''):'<p class="hint">No admin activity recorded yet.</p>';
-    $('#activityPage').textContent=`Page ${activityPage+1} of ${Math.max(1,Math.ceil(data.total/40))}`;$('#activityPrev').disabled=activityPage===0;$('#activityNext').disabled=(activityPage+1)*40>=data.total;
-  }catch(err){if(sequence===activitySequence)$('#activityList').textContent=err.message;}
+    const data=await adminRead('adminProductsPage',{archived:true,query:$('#archiveSearch').value.trim(),sort:'id-asc',page:archivePage});
+    if(sequence!==archiveSequence)return;
+    archivePage=data.page;archivedProducts=data.products;
+    $('#archiveStatus').textContent=`${data.total} archived products`;
+    $('#archiveList').innerHTML=data.products.length?data.products.map(p=>`<div class="archive-card"><img src="${escapeHtml(p.image||'')}" alt="" loading="lazy"><div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.id)} · ${escapeHtml(p.category)} · ₹${Number(p.price)||0}</small></div><div class="archive-actions"><button class="ghost-btn" data-restore="${escapeHtml(p.id)}" ${ADMIN_PROFILE?.role==='viewer'?'disabled':''}>Restore</button>${ADMIN_PROFILE?.role==='admin'?`<button class="ghost-btn archive-delete" data-delete="${escapeHtml(p.id)}">Delete permanently</button>`:''}</div></div>`).join(''):'<p class="hint">No archived products.</p>';
+    $('#archivePage').textContent=`${archivePage+1} / ${Math.max(1,Math.ceil(data.total/40))}`;
+    $('#archivePrev').disabled=archivePage===0;$('#archiveNext').disabled=(archivePage+1)*40>=data.total;
+  }catch(err){if(sequence===archiveSequence)$('#archiveStatus').textContent=err.message;}
+}
+async function permanentlyDeleteProduct(product){
+  if(pendingDeletes.has(product.id))return;
+  const typed=prompt(`Permanently delete "${product.name}"? This cannot be undone. Existing order records stay. Type ${product.id} to confirm.`);
+  if(typed!==String(product.id))return;
+  pendingDeletes.add(product.id);
+  try{await adminWrite('delete',{id:product.id,expected_revision:product._revision});showToast('Product permanently deleted');await Promise.all([loadArchive(),loadProducts(false)]);}
+  catch(err){$('#archiveStatus').textContent=err.message;}finally{pendingDeletes.delete(product.id);}
 }
 document.addEventListener('DOMContentLoaded',()=>{
   cleanEditor=editorFingerprint();
-  ['productCategory','productStock','productSort','showArchived'].forEach(id=>$('#'+id).addEventListener('change',()=>loadProducts(false)));
+  ['productCategory','productStock','productSort'].forEach(id=>$('#'+id).addEventListener('change',()=>loadProducts(false)));
   $('#tab-add').addEventListener('input',()=>{clearTimeout(draftTimer);draftTimer=setTimeout(persistDraft,300);});
   $('#tab-add').addEventListener('change',persistDraft);
   // Gallery edits are rendered in place rather than firing input events.
   new MutationObserver(()=>{clearTimeout(draftTimer);draftTimer=setTimeout(persistDraft,300);}).observe($('#extraImagesPreview'),{childList:true});
   window.addEventListener('beforeunload',e=>{if(editorDirty()||editorBusy){persistDraft();e.preventDefault();e.returnValue='';}});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)persistDraft();});
-  $('#selectPage').onchange=e=>{selectedProducts.clear();if(e.target.checked)PRODUCTS.slice(0,20).forEach(p=>selectedProducts.set(String(p.id),p));$$('[data-select]').forEach(el=>el.checked=selectedProducts.has(el.dataset.select));updateBulkCount();};
-  $('#bulkApply').onclick=applyBulk;
-  $('#activityRefresh').onclick=loadActivity;$('#activityPrev').onclick=()=>{activityPage=Math.max(0,activityPage-1);loadActivity();};$('#activityNext').onclick=()=>{activityPage++;loadActivity();};
+  let archiveSearchTimer;
+  $('#archiveSearch').oninput=()=>{clearTimeout(archiveSearchTimer);archiveSearchTimer=setTimeout(()=>{archivePage=0;loadArchive();},250);};
+  $('#archiveRefresh').onclick=loadArchive;
+  $('#archivePrev').onclick=()=>{archivePage=Math.max(0,archivePage-1);loadArchive();};
+  $('#archiveNext').onclick=()=>{archivePage++;loadArchive();};
+  $('#archiveList').onclick=e=>{const button=e.target.closest('button');if(!button||button.disabled)return;const id=button.dataset.restore||button.dataset.delete;const product=archivedProducts.find(p=>String(p.id)===id);if(!product)return;if(button.dataset.restore)archiveProduct(product);else permanentlyDeleteProduct(product);};
   $('#signOutBtn').onclick=()=>{if(editorBusy)return showToast('Wait for the current operation to finish.');if(editorDirty()&&!confirm('Sign out? Your draft will remain in this tab for this staff key.'))return;persistDraft();cleanEditor=editorFingerprint();ADMIN_KEY='';$('#adminKey').value='';location.reload();};
 });

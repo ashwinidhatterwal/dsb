@@ -96,17 +96,17 @@ async function loadProducts(refreshRelated=true){
   try{
     if(!ADMIN_PROFILE){
       const profile=await adminRead('adminSession');
-      if(profile.version!==9)throw new Error('Deploy the new code.gs version before opening this admin update.');
+      if(profile.version!==11)throw new Error('Deploy the new code.gs version before opening this admin update.');
       ADMIN_PROFILE=profile;applyStaffRole();offerSavedDraft();
     }
-    const options={query:$('#filterInput').value.trim(),category:$('#productCategory').value,stock:$('#productStock').value,sort:$('#productSort').value,archived:$('#showArchived').checked};
+    const options={query:$('#filterInput').value.trim(),category:$('#productCategory').value,stock:$('#productStock').value,sort:$('#productSort').value,archived:false};
     const queryKey=JSON.stringify(options);if(queryKey!==productQueryKey){productPage=0;productQueryKey=queryKey;}
     options.page=productPage;
     const data = await adminRead('adminProductsPage',options);
     if(sequence!==productRequestSequence)return false;
     if(!Array.isArray(data.products))throw new Error('Invalid product response');
     productResponse=data;productPage=data.page;productFilter=$('#filterInput').value.trim().toLowerCase();
-    PRODUCTS = data.products;selectedProducts.clear();
+    PRODUCTS = data.products;
     const category=$('#productCategory').value;
     $('#productCategory').innerHTML='<option value="">All categories</option>'+data.categories.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
     $('#productCategory').value=category;
@@ -244,7 +244,6 @@ async function updateOrderStatus(orderId, newStatus){
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    if(data.activityWarning)showToast(data.activityWarning);
     showToast('Order updated');
     await Promise.all([loadOrders(),loadDashboard(),loadProducts(false)]);
   } catch(err){
@@ -282,14 +281,12 @@ function renderProductList(){
     pager.onclick=async e=>{const button=e.target.closest('button[data-page]');if(!button||button.disabled)return;const next=Number(button.dataset.page);if(next===productPage)return;productPage=Math.max(0,Math.min(pageCount-1,next));pager.querySelectorAll('button').forEach(el=>el.disabled=true);if(productResponse){if(!await loadProducts(false)){renderProductList();return;}}else renderProductList();const top=$('#productsPagerTop');top.scrollIntoView({block:'start',behavior:reducedMotion()?'instant':'smooth'});top.querySelector('[aria-current="page"]').focus({preventScroll:true});};
   });
   $('#countLabel').textContent = productResponse?productResponse.allCount:PRODUCTS.length;
-  updateBulkCount();
   if (!list.length){
     wrap.innerHTML = `<p class="hint">No products match.</p>`;
     return;
   }
   wrap.innerHTML = list.map(p => `
     <div class="arow" data-id="${escapeHtml(p.id)}">
-      <input class="product-select" type="checkbox" data-select="${escapeHtml(p.id)}" aria-label="Select ${escapeHtml(p.name)}" ${ADMIN_PROFILE?.role==='viewer'?'disabled':''}>
       <img class="arow-thumb" src="${escapeHtml(p.image)}" alt="" loading="lazy" decoding="async">
       <div class="arow-body">
         <div class="arow-title">${escapeHtml(p.name) || '(unnamed)'}</div>
@@ -301,10 +298,9 @@ function renderProductList(){
       </div>
     </div>
   `).join('');
+  if(ADMIN_PROFILE?.role==='viewer')$$('.arow-actions button',wrap).forEach(el=>el.disabled=true);
   const byId=new Map(list.map(p=>[String(p.id),p]));
-  wrap.onchange=e=>{if(!e.target.matches('[data-select]'))return;const p=byId.get(e.target.dataset.select);if(e.target.checked)selectedProducts.set(String(p.id),p);else selectedProducts.delete(String(p.id));updateBulkCount();};
-  updateBulkCount();
-  wrap.onclick=e=>{const button=e.target.closest('button[data-act]'),row=button?.closest('.arow');if(!row)return;const product=byId.get(row.dataset.id);if(!product)return;if(button.dataset.act==='edit')fillForm(product);else archiveProduct(product);};
+  wrap.onclick=e=>{const button=e.target.closest('button[data-act]'),row=button?.closest('.arow');if(!row||button.disabled)return;const product=byId.get(row.dataset.id);if(!product)return;if(button.dataset.act==='edit')fillForm(product);else archiveProduct(product);};
 }
 
 function fillForm(p){
@@ -519,7 +515,6 @@ async function saveProductTask(){
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    if(data.activityWarning)showToast(data.activityWarning);
     if(!isUpdate)sessionStorage.removeItem('dsb_admin_add_attempt');
     status(statusEl, isUpdate ? 'Product updated.' : `Product added as ${data.id}.`, true);
     showToast(isUpdate ? 'Product updated' : 'Product added');
@@ -539,7 +534,7 @@ async function saveProductTask(){
 function switchTab(name){
   $$('.admin-tab').forEach(el => el.classList.toggle('active', el.id === 'tab-' + name));
   $$('[data-tab]').forEach(btn => {const active=btn.dataset.tab===name;btn.classList.toggle('active',active);if(active)btn.setAttribute('aria-current','page');else btn.removeAttribute('aria-current');});
-  if(name==='activity')loadActivity();
+  if(name==='archive')loadArchive();
   if (name === 'dashboard' && LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
   window.scrollTo({ top:0, behavior:reducedMotion()?'instant':'smooth' });
 }
