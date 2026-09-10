@@ -1,3 +1,33 @@
+ADMIN V9 — PRODUCT ID SORTING AND COMPACT PAGE STRIP
+
+DEPLOY code.gs as a new version of your existing Apps Script deployment first.
+Then upload admin.html, admin.js and admin-theme.css. Keep admin-workspace.js
+from v7/v8 (also included). The new admin checks for backend version 9.
+
+Product ID ascending/descending uses natural numeric ordering across the full
+filtered catalogue, before pagination. Existing name/price sorts are retained.
+Both page controls are now slim, horizontally scrollable strips with fixed
+Previous/Next arrows at the ends. Nearby pages and first/last pages remain
+available for large catalogues. Search, filters and bulk controls are compact
+and aligned. No new sheet columns or external services are introduced by v9.
+
+See ADMIN-SETUP.md for general setup and staff permissions. Older notes below
+about theme-only updates not needing redeployment do NOT apply to this update.
+
+ADMIN VISUAL UPDATE — 20260910admin8
+
+If admin v7 is already deployed, upload admin.html and NEW admin-theme.css.
+No Apps Script redeployment is needed for this colour/theme-only update.
+The admin JavaScript and code.gs are byte-identical to v7.
+
+If upgrading from v6 or older, follow ADMIN-SETUP.md and deploy the included
+code.gs first, then upload all website files, including admin-workspace.js
+and admin-theme.css.
+
+Visual changes: calmer slate surfaces, muted teal accents, softer shadows,
+consistent pagination/forms/status styling, selected-row highlighting and
+matching checkbox checked/partial/disabled/focus states.
+
 ADMIN WORKSPACE V7 — 20260910admin7
 
 IMPORTANT: DEPLOY THE INCLUDED code.gs AS A NEW VERSION OF YOUR EXISTING

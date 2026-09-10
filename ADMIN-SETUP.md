@@ -1,4 +1,4 @@
-# Admin workspace v7 — setup and daily use
+# Admin workspace v9 — setup and daily use
 
 This update uses the existing GitHub Pages site, Apps Script deployment and Google
 Spreadsheet. It does not require a paid database or a payment gateway.
@@ -15,7 +15,7 @@ Spreadsheet. It does not require a paid database or a payment gateway.
 4. Upload the website files to GitHub, including **admin.html**, **admin.js** and
    the new **admin-workspace.js**. Let GitHub Actions finish publishing.
 5. Open admin.html and sign in with your existing admin key. The new admin checks
-   backend version 7 before loading. If you get a deployment message, complete
+   backend version 9 before loading. If you get a deployment message, complete
    step 3 and refresh. If you changed deployment URLs, update the admin URL field
    and the shop's existing API configuration as appropriate.
 
@@ -32,6 +32,11 @@ or to create these additions by hand. Existing add-request and transaction-recov
 tabs continue to work as before. No customer payment or Telegram logic is replaced.
 
 ## Inventory
+
+Product ID sorting supports ascending and descending natural numeric order
+(for example DSB-2 before DSB-10). Page controls appear above and below products
+as a narrow swipeable strip, with Previous/Next arrows at either end.
+
 
 - Search includes product IDs, English/Hindi names, category, subcategory and tags.
 - Filter by category, stock or low stock (1–5 units), and sort by name or price.

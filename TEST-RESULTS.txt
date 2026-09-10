@@ -1,3 +1,14 @@
+ADMIN V9: natural product-ID sort checks passed in both directions. Existing
+8 admin backend checks and integrated frontend/backend fixtures passed. Theme
+CSS parsing and sorting controls checked. No browser layout/device testing.
+Backend version is now 9 and redeployment is REQUIRED.
+
+ADMIN V8 VISUAL UPDATE: stylesheet parsed; theme link and checkbox state rules
+checked. Main text, muted text and primary/current-page button colour pairs
+exceed 4.5:1 contrast. admin.js, admin-workspace.js and code.gs byte comparisons
+confirm no functional changes from v7. No browser/device visual testing performed.
+Prior functional test results below were not repeated for this cosmetic update.
+
 V7 public-build fixture passed: new admin-workspace.js included; code.gs and
 private setup/review documents excluded from the published website output.
 
