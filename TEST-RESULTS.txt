@@ -1,3 +1,8 @@
+INSTALL FOLLOW-UP: syntax and focused DOM checks passed: first-visit popup, no
+footer button, native install action, close/cooldown, session suppression,
+standalone suppression and overlay deferral. Native device installation and
+browser visual appearance were not tested.
+
 SHOP FOLLOW-UP: focused DOM checks passed for category grid replacing sliders,
 late review render staying hidden, All restoring sliders, default UPI selection,
 COD choice surviving rerenders, actual fee savings matching totals, Hindi copy,

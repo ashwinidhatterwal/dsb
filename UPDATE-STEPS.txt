@@ -1,3 +1,14 @@
+INSTALL POPUP RESTORED — 20260910install5
+
+Replace website files and let GitHub Actions publish. No Apps Script redeployment
+is needed when updating from shop4.
+
+Removed the permanent footer install button. The slim, closable install popup
+appears after about eight seconds on supported mobile browsers (or when a native
+install event is available), including first visits. It appears once per tab
+session, respects the existing seven-day dismissal, and waits while cart/search
+is open. Already-installed standalone apps do not show the prompt.
+
 SHOP FOLLOW-UP — 20260909shop4 (supersedes category3 behavior below)
 
 Replace the website files, including .github, and let GitHub Actions publish.

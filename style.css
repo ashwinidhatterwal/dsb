@@ -1382,7 +1382,6 @@ body{background:#fffaf5;font-size:16px;}
 @media(max-width:640px){.hero.hero-compact{padding:22px 18px;}.hero-compact .hero-title{font-size:30px;}.hero-links{margin-top:12px;}.card .body{padding:10px 9px;}.card .card-actions{flex-direction:column;}.card .card-actions>*{width:100%;}.pd-title{font-size:24px;}.pd-desc{font-size:16px;}}
 html[lang="hi"] .hero-compact .hero-title{line-height:1.4;padding-block:2px;}
 
-.install-menu-entry{display:block;margin:16px auto 0;padding:10px 14px;border:1px solid #c81163;border-radius:12px;background:#fff;color:#970d4b;font:inherit;font-size:14px;}
 
 .upi-qr{width:180px;max-width:100%;min-height:180px;margin:12px auto;background:white;color:#201b3d;font-size:14px;}.upi-qr svg{display:block;width:100%;height:auto;}
 
