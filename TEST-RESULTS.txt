@@ -1,3 +1,13 @@
+V7 public-build fixture passed: new admin-workspace.js included; code.gs and
+private setup/review documents excluded from the published website output.
+
+ADMIN V7: existing 30 regression checks passed; 8 new backend checks passed;
+integrated frontend/backend fixtures passed for paging/filter resets, draft
+protection/recovery/save, bulk updates, archive/restore, manual payment recording,
+activity and viewer controls. JavaScript syntax checked.
+Backend changed in this version; deployment is REQUIRED.
+No live production writes or visual browser/device testing performed.
+
 ADMIN FOLLOW-UP: admin.js syntax and focused admin DOM/request fixtures passed.
 See ADMIN-REVIEW.md for tested cases and remaining limitations. Backend unchanged.
 No production writes or browser layout/visual testing were performed.

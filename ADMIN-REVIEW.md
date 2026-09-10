@@ -1,3 +1,30 @@
+# Admin workspace v7 follow-up — 10 September 2026
+
+Implemented the feasible gaps from the previous review: session draft recovery and
+unsaved-change prompts; category/stock/sort filters; server-side product paging;
+fixed-value bulk price/stock updates; reversible archive/restore; full product
+revision checks; separate manual payment verification with payment filters;
+optional individually keyed staff roles; and an admin activity view.
+
+Everything fits in the existing admin page. Read **ADMIN-SETUP.md** before updating:
+this version requires deploying the new code.gs before the new website files.
+It adds metadata columns/history automatically while preserving existing sheet data.
+
+Verified: the existing 30 regression checks, 8 new backend checks, and integrated
+frontend/backend fixtures for paging, filters, draft recovery, bulk updates,
+archive/restore, payment recording, activity and viewer controls. No live production
+writes or visual browser/device testing were performed.
+
+Remaining limits: Google Sheets still scans rows for server-side searches; bulk
+updates can partially succeed; UPI verification is manual; drafts live only in the
+tab session; staff configuration lives in Script Properties; history excludes direct
+sheet edits and is not tamper-proof. See the setup guide for details.
+
+---
+
+Historical v6 review below. Items it describes as remaining were assessed and
+addressed above where feasible; its v6-only installation instructions are superseded.
+
 # Admin review — 10 September 2026
 
 Reviewed the complete admin.html and admin.js files: navigation, connection,

@@ -32,6 +32,7 @@ const CLOUDINARY_UPLOAD_PRESET = 'dhatterwal suhag bhandar';
 let API_URL = '';
 let ADMIN_KEY = '';
 let PRODUCTS = [];
+let ADMIN_PROFILE=null, productResponse=null, productQueryKey="";
 let editingSnapshot = null;
 let editingProductId = null; // set while editing an existing product; null when adding a new one
 let ORDERS = [];
@@ -52,9 +53,10 @@ const ORDER_PAGE_SIZE = 40;
 
 
 async function adminFetch(url,options={}){
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+  const {timeoutMs=30000,...requestOptions}=options;
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
   try {
-    const response=await fetch(url,{...options,signal:controller.signal});
+    const response=await fetch(url,{...requestOptions,signal:controller.signal});
     if(!response.ok) throw new Error(`Server returned HTTP ${response.status}`);
     const data=await response.json();
     return {json:async()=>data};
@@ -92,10 +94,22 @@ async function loadProducts(refreshRelated=true){
   $('#productsStatus').textContent='Refreshing products…';
   $('#refreshProductsBtn').disabled=true;
   try{
-    const data = await adminRead('adminProducts');
+    if(!ADMIN_PROFILE){
+      const profile=await adminRead('adminSession');
+      if(profile.version!==7)throw new Error('Deploy the new code.gs version before opening this admin update.');
+      ADMIN_PROFILE=profile;applyStaffRole();offerSavedDraft();
+    }
+    const options={query:$('#filterInput').value.trim(),category:$('#productCategory').value,stock:$('#productStock').value,sort:$('#productSort').value,archived:$('#showArchived').checked};
+    const queryKey=JSON.stringify(options);if(queryKey!==productQueryKey){productPage=0;productQueryKey=queryKey;}
+    options.page=productPage;
+    const data = await adminRead('adminProductsPage',options);
     if(sequence!==productRequestSequence)return false;
-    if(!Array.isArray(data))throw new Error('Invalid product response');
-    PRODUCTS = data;
+    if(!Array.isArray(data.products))throw new Error('Invalid product response');
+    productResponse=data;productPage=data.page;productFilter=$('#filterInput').value.trim().toLowerCase();
+    PRODUCTS = data.products;selectedProducts.clear();
+    const category=$('#productCategory').value;
+    $('#productCategory').innerHTML='<option value="">All categories</option>'+data.categories.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    $('#productCategory').value=category;
     $('#productsStatus').textContent='Products up to date';
     renderProductList();
     renderCategoryOptions();
@@ -122,7 +136,7 @@ async function loadOrders(){
   const wrap = $('#orderList'),sequence=++orderRequestSequence;
   $$('button,select',wrap).forEach(el=>el.disabled=true);
   try{
-    const options={query:$('#orderFilterInput').value.trim(),status:$('#orderStatusFilter').value,sort:$('#orderSort').value,page:orderPage};
+    const options={query:$('#orderFilterInput').value.trim(),status:$('#orderStatusFilter').value,sort:$('#orderSort').value,payment:$('#orderPaymentFilter').value,page:orderPage};
     const data = await adminRead('adminOrders',options);
     if(sequence!==orderRequestSequence)return;
     orderResponse=Array.isArray(data)?null:data;
@@ -130,6 +144,7 @@ async function loadOrders(){
     if(orderResponse)orderPage=data.page;
     ORDERS = orderResponse?data.orders:data;
     renderOrderList();
+    renderPaymentControls();
     return true;
   } catch(err){
     if(sequence===orderRequestSequence){wrap.innerHTML = `<p class="hint">Could not load orders: ${escapeHtml(err.message)}</p><button type="button" class="ghost-btn" id="retryOrders">Retry</button>`;$('#retryOrders').onclick=loadOrders;}
@@ -229,6 +244,7 @@ async function updateOrderStatus(orderId, newStatus){
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    if(data.activityWarning)showToast(data.activityWarning);
     showToast('Order updated');
     await Promise.all([loadOrders(),loadDashboard(),loadProducts(false)]);
   } catch(err){
@@ -237,7 +253,7 @@ async function updateOrderStatus(orderId, newStatus){
 }
 
 function renderCategoryOptions(){
-  const cats = [...new Set(PRODUCTS.map(p => p.category).filter(Boolean))];
+  const cats = productResponse?.categories || [...new Set(PRODUCTS.map(p => p.category).filter(Boolean))];
   const subs = [...new Set(PRODUCTS.map(p => p.subcategory).filter(Boolean))];
   $('#categoryList').innerHTML = cats.map(c => `<option value="${escapeHtml(c)}">`).join('');
   $('#subcategoryList').innerHTML = subs.map(s => `<option value="${escapeHtml(s)}">`).join('');
@@ -249,23 +265,26 @@ function renderProductList(){
   const wrap = $('#productList');
   const q = $('#filterInput').value.trim().toLowerCase();
   if(q!==productFilter){productPage=0;productFilter=q;}
-  const matches=PRODUCTS.filter(p => !q || `${p.name} ${p.namehindi||''} ${p.category} ${p.subcategory} ${p.id} ${p.tags||''}`.toLowerCase().includes(q));
-  productPage=Math.min(productPage,Math.max(0,Math.ceil(matches.length/ADMIN_PAGE_SIZE)-1));
-  const list=matches.slice(productPage*ADMIN_PAGE_SIZE,(productPage+1)*ADMIN_PAGE_SIZE);
-  const pageCount=Math.max(1,Math.ceil(matches.length/ADMIN_PAGE_SIZE));
-  const range=`${matches.length ? productPage*ADMIN_PAGE_SIZE+1 : 0}–${Math.min((productPage+1)*ADMIN_PAGE_SIZE,matches.length)} of ${matches.length} products`;
+  const matches=productResponse?PRODUCTS:PRODUCTS.filter(p => !q || `${p.name} ${p.namehindi||''} ${p.category} ${p.subcategory} ${p.id} ${p.tags||''}`.toLowerCase().includes(q));
+  const total=productResponse?productResponse.total:matches.length;
+  productPage=Math.min(productPage,Math.max(0,Math.ceil(total/ADMIN_PAGE_SIZE)-1));
+  const list=productResponse?matches:matches.slice(productPage*ADMIN_PAGE_SIZE,(productPage+1)*ADMIN_PAGE_SIZE);
+  const pageCount=Math.max(1,Math.ceil(total/ADMIN_PAGE_SIZE));
+  const range=`${total ? productPage*ADMIN_PAGE_SIZE+1 : 0}–${Math.min((productPage+1)*ADMIN_PAGE_SIZE,total)} of ${total} products`;
   $$('.product-pagination').forEach(pager=>{
     const pages=[...new Set([0,productPage-1,productPage,productPage+1,pageCount-1])].filter(n=>n>=0&&n<pageCount).sort((a,b)=>a-b);
     pager.innerHTML=`<div class="pager-summary"><strong>Page ${productPage+1} <span>/ ${pageCount}</span></strong><small>${range}</small></div><div class="pager-controls"><button type="button" class="pager-arrow" data-page="${productPage-1}" ${productPage===0?'disabled':''} aria-label="Previous product page">‹ <span>Previous</span></button><div class="pager-numbers">${pages.map((n,i)=>`${i&&n>pages[i-1]+1?'<span class="pager-gap" aria-hidden="true">…</span>':''}<button type="button" data-page="${n}" ${n===productPage?'aria-current="page"':''} aria-label="Product page ${n+1}">${n+1}</button>`).join('')}</div><button type="button" class="pager-arrow" data-page="${productPage+1}" ${productPage===pageCount-1?'disabled':''} aria-label="Next product page"><span>Next</span> ›</button></div>`;
-    pager.onclick=e=>{const button=e.target.closest('button[data-page]');if(!button||button.disabled)return;const next=Number(button.dataset.page);if(next===productPage)return;productPage=Math.max(0,Math.min(pageCount-1,next));renderProductList();const top=$('#productsPagerTop');top.scrollIntoView({block:'start',behavior:reducedMotion()?'instant':'smooth'});top.querySelector('[aria-current="page"]').focus({preventScroll:true});};
+    pager.onclick=async e=>{const button=e.target.closest('button[data-page]');if(!button||button.disabled)return;const next=Number(button.dataset.page);if(next===productPage)return;productPage=Math.max(0,Math.min(pageCount-1,next));pager.querySelectorAll('button').forEach(el=>el.disabled=true);if(productResponse){if(!await loadProducts(false)){renderProductList();return;}}else renderProductList();const top=$('#productsPagerTop');top.scrollIntoView({block:'start',behavior:reducedMotion()?'instant':'smooth'});top.querySelector('[aria-current="page"]').focus({preventScroll:true});};
   });
-  $('#countLabel').textContent = PRODUCTS.length;
+  $('#countLabel').textContent = productResponse?productResponse.allCount:PRODUCTS.length;
+  updateBulkCount();
   if (!list.length){
     wrap.innerHTML = `<p class="hint">No products match.</p>`;
     return;
   }
   wrap.innerHTML = list.map(p => `
     <div class="arow" data-id="${escapeHtml(p.id)}">
+      <input class="product-select" type="checkbox" data-select="${escapeHtml(p.id)}" aria-label="Select ${escapeHtml(p.name)}" ${ADMIN_PROFILE?.role==='viewer'?'disabled':''}>
       <img class="arow-thumb" src="${escapeHtml(p.image)}" alt="" loading="lazy" decoding="async">
       <div class="arow-body">
         <div class="arow-title">${escapeHtml(p.name) || '(unnamed)'}</div>
@@ -273,12 +292,14 @@ function renderProductList(){
       </div>
       <div class="arow-actions">
         <button data-act="edit" aria-label="Edit">✏️</button>
-        <button data-act="delete" class="danger" aria-label="Delete">🗑️</button>
+        <button data-act="delete" class="danger" aria-label="${p.archived==='yes'?'Restore':'Archive'} ${escapeHtml(p.name)}" title="${p.archived==='yes'?'Restore':'Archive'}">${p.archived==='yes'?'↶':'▣'}</button>
       </div>
     </div>
   `).join('');
   const byId=new Map(list.map(p=>[String(p.id),p]));
-  wrap.onclick=e=>{const button=e.target.closest('button[data-act]'),row=button?.closest('.arow');if(!row)return;const product=byId.get(row.dataset.id);if(!product)return;if(button.dataset.act==='edit')fillForm(product);else deleteProduct(product.id,product.name);};
+  wrap.onchange=e=>{if(!e.target.matches('[data-select]'))return;const p=byId.get(e.target.dataset.select);if(e.target.checked)selectedProducts.set(String(p.id),p);else selectedProducts.delete(String(p.id));updateBulkCount();};
+  updateBulkCount();
+  wrap.onclick=e=>{const button=e.target.closest('button[data-act]'),row=button?.closest('.arow');if(!row)return;const product=byId.get(row.dataset.id);if(!product)return;if(button.dataset.act==='edit')fillForm(product);else archiveProduct(product);};
 }
 
 function fillForm(p){
@@ -474,7 +495,9 @@ async function saveProductTask(){
     try{saveRequest=JSON.parse(sessionStorage.getItem('dsb_admin_add_attempt') || 'null');if(!saveRequest || saveRequest.fingerprint!==fingerprint){saveRequest={requestId:crypto.randomUUID(),fingerprint};sessionStorage.setItem('dsb_admin_add_attempt',JSON.stringify(saveRequest));}}
     catch(_){status(statusEl,'Enable browser storage before adding products safely.',false);return;}
   }
+  if(isUpdate)product.expected_revision=editingSnapshot?._revision;
   const payload = {
+    clientVersion:7,
     requestId:saveRequest?.requestId,
     key: ADMIN_KEY,
     action: isUpdate ? 'update' : 'add',
@@ -491,10 +514,11 @@ async function saveProductTask(){
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    if(data.activityWarning)showToast(data.activityWarning);
     if(!isUpdate)sessionStorage.removeItem('dsb_admin_add_attempt');
     status(statusEl, isUpdate ? 'Product updated.' : `Product added as ${data.id}.`, true);
     showToast(isUpdate ? 'Product updated' : 'Product added');
-    clearForm();
+    clearForm(true);
     btn.disabled=false;btn.textContent='Save product';
     switchTab('products');
     if(!await loadProducts(false)) showToast('Product saved. List refresh failed; refresh before editing again.');
@@ -521,6 +545,7 @@ async function deleteProduct(id, name){
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    if(data.activityWarning)showToast(data.activityWarning);
     showToast('Product deleted');
     await Promise.all([loadProducts(false),loadDashboard()]);
   } catch(err){
@@ -531,6 +556,7 @@ async function deleteProduct(id, name){
 function switchTab(name){
   $$('.admin-tab').forEach(el => el.classList.toggle('active', el.id === 'tab-' + name));
   $$('[data-tab]').forEach(btn => {const active=btn.dataset.tab===name;btn.classList.toggle('active',active);if(active)btn.setAttribute('aria-current','page');else btn.removeAttribute('aria-current');});
+  if(name==='activity')loadActivity();
   if (name === 'dashboard' && LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
   window.scrollTo({ top:0, behavior:reducedMotion()?'instant':'smooth' });
 }
@@ -626,11 +652,11 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#saveBtn').addEventListener('click', saveProduct);
   $('#clearFormBtn').addEventListener('click',()=>{if(!editorBusy)clearForm();});
   let productSearchTimer;
-  $('#filterInput').addEventListener('input',()=>{clearTimeout(productSearchTimer);productSearchTimer=setTimeout(renderProductList,150);});
+  $('#filterInput').addEventListener('input',()=>{clearTimeout(productSearchTimer);productSearchTimer=setTimeout(()=>loadProducts(false),250);});
   $('#refreshProductsBtn').addEventListener('click',()=>loadProducts(false));
   const workspaceSearch=$('.topbar-search input');
   workspaceSearch.placeholder='Find products…';
-  workspaceSearch.addEventListener('keydown',e=>{if(e.key==='Enter'){switchTab('products');$('#filterInput').value=workspaceSearch.value;renderProductList();$('#filterInput').focus();}});
+  workspaceSearch.addEventListener('keydown',e=>{if(e.key==='Enter'){switchTab('products');$('#filterInput').value=workspaceSearch.value;loadProducts(false);$('#filterInput').focus();}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'&&$('#adminApp').style.display==='block'){e.preventDefault();switchTab('products');$('#filterInput').focus();}});
   $('#adminKey').addEventListener('keydown',e=>{if(e.key==='Enter'&&!$('#connectBtn').disabled)$('#connectBtn').click();});
   $('#uploadBtn').addEventListener('click', uploadImage);
@@ -641,6 +667,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const reloadOrders=()=>{clearTimeout(orderSearchTimer);orderPage=0;loadOrders();};
   $('#orderSort').addEventListener('change',reloadOrders);
   $('#orderStatusFilter').addEventListener('change',reloadOrders);
+  $('#orderPaymentFilter').addEventListener('change',reloadOrders);
   $('#orderFilterInput').addEventListener('input',()=>{clearTimeout(orderSearchTimer);orderSearchTimer=setTimeout(reloadOrders,250);});
   $('#dashRefreshBtn').addEventListener('click', async () => {const btn=$('#dashRefreshBtn');if(btn.disabled)return;btn.disabled=true;try{const ok=await loadDashboard();showToast(ok?'Dashboard refreshed':'Dashboard refresh failed. Try again.');}finally{btn.disabled=false;}});
 });

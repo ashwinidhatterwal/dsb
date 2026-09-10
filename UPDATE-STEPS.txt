@@ -1,3 +1,14 @@
+ADMIN WORKSPACE V7 — 20260910admin7
+
+IMPORTANT: DEPLOY THE INCLUDED code.gs AS A NEW VERSION OF YOUR EXISTING
+APPS SCRIPT DEPLOYMENT BEFORE UPLOADING THE NEW ADMIN WEBSITE FILES.
+Read ADMIN-SETUP.md for exact steps, automatic sheet additions and staff setup.
+
+Website changes: admin.html, admin.js, NEW admin-workspace.js. The ZIP also
+contains all prior storefront updates. No paid service or new database is needed.
+Earlier notes below saying no Apps Script deployment apply ONLY to those older
+updates, not to this v7 workspace.
+
 ADMIN UPDATE — 20260910admin6
 
 When upgrading from install5, replace admin.html and admin.js and let GitHub
