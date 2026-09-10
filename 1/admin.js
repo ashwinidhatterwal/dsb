@@ -1,0 +1,668 @@
+/* =========================================================
+   Dhatterwal Suhag Bhandar — admin panel logic
+   Talks to the Apps Script Web App deployed from code.gs
+   ========================================================= */
+const $ = (s, c = document) => c.querySelector(s);
+const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
+
+// Order and product data can contain anything a customer typed at checkout
+// (name, phone, address) — this must never be inserted into HTML unescaped,
+// or a malicious "name" like <img src=x onerror=...> could run script in
+// this very page, right where the admin key lives in memory.
+function escapeHtml(str){
+  return String(str ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// Kept in memory only for this tab — not persisted, so it's re-entered
+// each time the page is opened. See SETUP.md for how to deploy
+// the Apps Script backend that this talks to.
+// Deployed Apps Script Web App URL for this shop's Google Sheet.
+// Pre-filled so the admin only has to enter the password below.
+// Change this if you ever redeploy and get a new URL.
+const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbybavfXBC-5CNstiZx-giJcngXjHVKA1NljUQ6N55ybOu4OvunkQTVr3IFvLPp_9Ohu/exec';
+
+// Image hosting (Cloudinary "unsigned upload") — lets the admin upload a
+// photo straight from the browser and get back a permanent link, no server
+// needed. Fill these in after creating a free Cloudinary account and an
+// unsigned upload preset — see SETUP.md. Safe to leave the preset
+// unsigned/public since it only allows uploads, not account access.
+const CLOUDINARY_CLOUD_NAME = 'malfl6xv';
+const CLOUDINARY_UPLOAD_PRESET = 'dhatterwal suhag bhandar';
+
+let API_URL = '';
+let ADMIN_KEY = '';
+let PRODUCTS = [];
+let ADMIN_PROFILE=null, productResponse=null, productQueryKey="";
+let editingSnapshot = null;
+let editingProductId = null; // set while editing an existing product; null when adding a new one
+let ORDERS = [];
+let productRequestSequence=0, dashboardRequestSequence=0, editorBusy=false;
+const pendingDeletes=new Set(), pendingOrderUpdates=new Set();
+async function withEditorLock(task){
+  if(editorBusy){showToast('Please wait for the current save or upload.');return;}
+  editorBusy=true;
+  const fields=$$('input,select,textarea,button',$('#tab-add'));
+  const previous=fields.map(el=>el.disabled);
+  fields.forEach(el=>el.disabled=true);
+  try{return await task();}finally{editorBusy=false;fields.forEach((el,i)=>el.disabled=previous[i]);}
+}
+function reducedMotion(){return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;}
+
+let orderPage = 0, orderFilterKey = "", orderResponse=null, orderRequestSequence=0;
+const ORDER_PAGE_SIZE = 40;
+
+
+async function adminFetch(url,options={}){
+  const {timeoutMs=30000,...requestOptions}=options;
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try {
+    const response=await fetch(url,{...requestOptions,signal:controller.signal});
+    if(!response.ok) throw new Error(`Server returned HTTP ${response.status}`);
+    const data=await response.json();
+    return {json:async()=>data};
+  } catch(err){
+    if(err.name==='AbortError') throw new Error('Request timed out. A write may already have saved; refresh the list before retrying.');
+    throw err;
+  } finally {clearTimeout(timer);}
+}
+
+async function adminRead(action,options){
+  const res = await adminFetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ key: ADMIN_KEY, action, options })
+  });
+  const data = await res.json();
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+
+function status(el, msg, ok){
+  el.textContent = msg;
+  el.className = 'statusline ' + (ok ? 'ok' : 'err');
+}
+
+function showToast(msg){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+async function loadProducts(refreshRelated=true){
+  const statusEl = $('#connectStatus'), sequence=++productRequestSequence;
+  $('#productsStatus').textContent='Refreshing products…';
+  $('#refreshProductsBtn').disabled=true;
+  try{
+    if(!ADMIN_PROFILE){
+      const profile=await adminRead('adminSession');
+      if(profile.version!==11)throw new Error('Deploy the new code.gs version before opening this admin update.');
+      ADMIN_PROFILE=profile;applyStaffRole();offerSavedDraft();
+    }
+    const options={query:$('#filterInput').value.trim(),category:$('#productCategory').value,stock:$('#productStock').value,sort:$('#productSort').value,archived:false};
+    const queryKey=JSON.stringify(options);if(queryKey!==productQueryKey){productPage=0;productQueryKey=queryKey;}
+    options.page=productPage;
+    const data = await adminRead('adminProductsPage',options);
+    if(sequence!==productRequestSequence)return false;
+    if(!Array.isArray(data.products))throw new Error('Invalid product response');
+    productResponse=data;productPage=data.page;productFilter=$('#filterInput').value.trim().toLowerCase();
+    PRODUCTS = data.products;
+    const category=$('#productCategory').value;
+    $('#productCategory').innerHTML='<option value="">All categories</option>'+data.categories.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    $('#productCategory').value=category;
+    $('#productsStatus').textContent='Products up to date';
+    renderProductList();
+    renderCategoryOptions();
+    // First successful connect swaps the connect screen for the real app.
+    $('#connectScreen').style.display = 'none';
+    $('#adminApp').style.display = 'block';
+  } catch(err){
+    if(sequence!==productRequestSequence)return false;
+    status(statusEl, 'Could not load products: ' + err.message, false);
+    status($('#productsStatus'),'Could not refresh products: '+err.message,false);
+    return false;
+  } finally {if(sequence===productRequestSequence)$('#refreshProductsBtn').disabled=false;}
+  if(refreshRelated){loadOrders();loadDashboard();}
+  return true;
+}
+
+function formatDateTime(value){
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value || '');
+  return d.toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+async function loadOrders(){
+  const wrap = $('#orderList'),sequence=++orderRequestSequence;
+  $$('button,select',wrap).forEach(el=>el.disabled=true);
+  try{
+    const options={query:$('#orderFilterInput').value.trim(),status:$('#orderStatusFilter').value,sort:$('#orderSort').value,payment:$('#orderPaymentFilter').value,page:orderPage};
+    const data = await adminRead('adminOrders',options);
+    if(sequence!==orderRequestSequence)return;
+    orderResponse=Array.isArray(data)?null:data;
+    if(orderResponse && !Array.isArray(data.orders))throw new Error('Invalid order response');
+    if(orderResponse)orderPage=data.page;
+    ORDERS = orderResponse?data.orders:data;
+    renderOrderList();
+    renderPaymentControls();
+    return true;
+  } catch(err){
+    if(sequence===orderRequestSequence){wrap.innerHTML = `<p class="hint">Could not load orders: ${escapeHtml(err.message)}</p><button type="button" class="ghost-btn" id="retryOrders">Retry</button>`;$('#retryOrders').onclick=loadOrders;}
+    return false;
+  }
+}
+
+function renderOrderList(){
+  const wrap = $('#orderList');
+  const q = $('#orderFilterInput').value.trim().toLowerCase();
+  const statusFilter = $('#orderStatusFilter').value;
+  const sortMode = $('#orderSort').value;
+
+  let list = ORDERS.filter(o => {
+    if (statusFilter !== 'all' && (o.status || 'Pending') !== statusFilter) return false;
+    if (q && !`${o.customername} ${o.phone} ${o.orderid}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  list = list.slice().sort((a, b) => {
+    if (sortMode === 'date-asc') return new Date(a.date) - new Date(b.date);
+    if (sortMode === 'name-asc') return String(a.customername||'').localeCompare(String(b.customername||''));
+    return new Date(b.date) - new Date(a.date); // date-desc default
+  });
+
+  const filterKey=JSON.stringify([q,statusFilter,sortMode]);
+  if(filterKey!==orderFilterKey){if(!orderResponse)orderPage=0;orderFilterKey=filterKey;}
+  const pageCount=Math.max(1,Math.ceil((orderResponse?orderResponse.total:list.length)/ORDER_PAGE_SIZE));
+  orderPage=Math.min(orderPage,pageCount-1);
+  const filteredCount=orderResponse?orderResponse.total:list.length;
+  if(!orderResponse)list=list.slice(orderPage*ORDER_PAGE_SIZE,(orderPage+1)*ORDER_PAGE_SIZE);
+  $('#orderCountLabel').textContent = orderResponse?orderResponse.allCount:ORDERS.length;
+
+  if (!list.length){
+    wrap.innerHTML = `<p class="hint">No orders match.</p>`;
+    return;
+  }
+
+  wrap.innerHTML = list.map(o => {
+    const st = (o.status || 'Pending');
+    const pillClass = st.toLowerCase();
+    return `
+    <div class="orow" data-id="${escapeHtml(o.orderid)}">
+      <div class="ohead">
+        <span class="oid">${escapeHtml(o.orderid)}</span>
+        <span class="odate">${escapeHtml(formatDateTime(o.date))}</span>
+      </div>
+      <div class="ocust">${escapeHtml(o.customername) || '(no name)'}</div>
+      <div class="ophone">${escapeHtml(o.phone)}${o.paymentmethod ? ` • ${escapeHtml(o.paymentmethod)}` : ''}</div>
+      ${o.address ? `<div class="oaddress">${escapeHtml(o.address)}</div>` : ''}
+      <div class="oitems">${escapeHtml(o.items)}</div>
+      <div class="ofoot">
+        <span class="ototal">₹${Number(o.total || 0).toLocaleString('en-IN')}${Number(o.discount) > 0 ? ` <small>(−₹${Number(o.discount).toLocaleString('en-IN')}${o.promocode ? ' ' + escapeHtml(o.promocode) : ''})</small>` : ''}</span>
+        <span class="status-pill ${escapeHtml(pillClass)}">${escapeHtml(st)}</span>
+      </div>
+      <div class="order-controls" style="margin-top:8px;">
+        <select data-role="statusSelect">
+          <option value="Pending" ${st==='Pending'?'selected':''}>Pending</option>
+          <option value="Confirmed" ${st==='Confirmed'?'selected':''}>Confirmed</option>
+          <option value="Packed" ${st==='Packed'?'selected':''}>Packed</option>
+          <option value="Shipped" ${st==='Shipped'?'selected':''}>Shipped</option>
+          <option value="Delivered" ${st==='Delivered'?'selected':''}>Delivered</option>
+          <option value="Fulfilled" ${st==='Fulfilled'?'selected':''}>Fulfilled</option>
+          <option value="Cancelled" ${st==='Cancelled'?'selected':''}>Cancelled</option>
+        </select>
+        <button class="ghost-btn" data-role="saveStatus">Update</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  if(pageCount>1){
+    wrap.insertAdjacentHTML('beforeend',`<nav class="order-pagination" aria-label="Order pages"><button class="ghost-btn" data-order-page="prev" ${orderPage===0?'disabled':''}>Previous</button><span>Page ${orderPage+1} of ${pageCount} · ${filteredCount} orders</span><button class="ghost-btn" data-order-page="next" ${orderPage===pageCount-1?'disabled':''}>Next</button></nav>`);
+    $('[data-order-page="prev"]',wrap).onclick=()=>{orderPage--;loadOrders();};
+    $('[data-order-page="next"]',wrap).onclick=()=>{orderPage++;loadOrders();};
+  }
+
+  $$('.orow', wrap).forEach(row => {
+    const orderId = row.dataset.id;
+    $('[data-role="saveStatus"]', row).addEventListener('click', () => {
+      const newStatus = $('[data-role="statusSelect"]', row).value;
+      updateOrderStatus(orderId, newStatus);
+    });
+  });
+}
+
+async function updateOrderStatus(orderId, newStatus){
+  if(pendingOrderUpdates.has(orderId))return;
+  pendingOrderUpdates.add(orderId);
+  const row=$$('.orow').find(el=>el.dataset.id===String(orderId));
+  const controls=row ? $$('button,select',row) : [];
+  controls.forEach(el=>el.disabled=true);
+  try{
+    const res = await adminFetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ key: ADMIN_KEY, action: 'updateOrderStatus', orderId, status: newStatus })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    showToast('Order updated');
+    await Promise.all([loadOrders(),loadDashboard(),loadProducts(false)]);
+  } catch(err){
+    alert('Could not update order: ' + err.message);
+  } finally {pendingOrderUpdates.delete(orderId);controls.forEach(el=>el.disabled=false);}
+}
+
+function renderCategoryOptions(){
+  const cats = productResponse?.categories || [...new Set(PRODUCTS.map(p => p.category).filter(Boolean))];
+  const subs = [...new Set(PRODUCTS.map(p => p.subcategory).filter(Boolean))];
+  $('#categoryList').innerHTML = cats.map(c => `<option value="${escapeHtml(c)}">`).join('');
+  $('#subcategoryList').innerHTML = subs.map(s => `<option value="${escapeHtml(s)}">`).join('');
+}
+
+let productPage=0,productFilter='';
+const ADMIN_PAGE_SIZE=40;
+function renderProductList(){
+  const wrap = $('#productList');
+  const q = $('#filterInput').value.trim().toLowerCase();
+  if(q!==productFilter){productPage=0;productFilter=q;}
+  const matches=productResponse?PRODUCTS:PRODUCTS.filter(p => !q || `${p.name} ${p.namehindi||''} ${p.category} ${p.subcategory} ${p.id} ${p.tags||''}`.toLowerCase().includes(q));
+  const total=productResponse?productResponse.total:matches.length;
+  productPage=Math.min(productPage,Math.max(0,Math.ceil(total/ADMIN_PAGE_SIZE)-1));
+  const list=productResponse?matches:matches.slice(productPage*ADMIN_PAGE_SIZE,(productPage+1)*ADMIN_PAGE_SIZE);
+  const pageCount=Math.max(1,Math.ceil(total/ADMIN_PAGE_SIZE));
+  const range=`${total ? productPage*ADMIN_PAGE_SIZE+1 : 0}–${Math.min((productPage+1)*ADMIN_PAGE_SIZE,total)} of ${total} products`;
+  $$('.product-pagination').forEach(pager=>{
+    // Keep long catalogues bounded while allowing sideways browsing around the current page.
+    const start=Math.max(0,Math.min(productPage-25,pageCount-51));
+    const pages=[...new Set([0,...Array.from({length:Math.min(51,pageCount)},(_,i)=>start+i),pageCount-1])].sort((a,b)=>a-b);
+    pager.setAttribute('aria-label',`Product pages: page ${productPage+1} of ${pageCount}; ${range}`);
+    pager.innerHTML=`<span class="pager-summary">Page ${productPage+1} of ${pageCount} · ${range}</span><div class="pager-controls"><button type="button" class="pager-arrow" data-page="${productPage-1}" ${productPage===0?'disabled':''} aria-label="Previous product page" title="Previous page">‹</button><div class="pager-numbers" role="group" aria-label="Scroll sideways to choose a page">${pages.map((n,i)=>`${i&&n>pages[i-1]+1?'<span class="pager-gap" aria-hidden="true">…</span>':''}<button type="button" data-page="${n}" ${n===productPage?'aria-current="page"':''} aria-label="Product page ${n+1}">${n+1}</button>`).join('')}</div><button type="button" class="pager-arrow" data-page="${productPage+1}" ${productPage===pageCount-1?'disabled':''} aria-label="Next product page" title="Next page">›</button></div>`;
+    const rail=$('.pager-numbers',pager),current=$('[aria-current="page"]',rail);
+    rail.scrollLeft=Math.max(0,current.offsetLeft-(rail.clientWidth-current.offsetWidth)/2);
+    pager.onclick=async e=>{const button=e.target.closest('button[data-page]');if(!button||button.disabled)return;const next=Number(button.dataset.page);if(next===productPage)return;productPage=Math.max(0,Math.min(pageCount-1,next));pager.querySelectorAll('button').forEach(el=>el.disabled=true);if(productResponse){if(!await loadProducts(false)){renderProductList();return;}}else renderProductList();const top=$('#productsPagerTop');top.scrollIntoView({block:'start',behavior:reducedMotion()?'instant':'smooth'});top.querySelector('[aria-current="page"]').focus({preventScroll:true});};
+  });
+  $('#countLabel').textContent = productResponse?productResponse.allCount:PRODUCTS.length;
+  if (!list.length){
+    wrap.innerHTML = `<p class="hint">No products match.</p>`;
+    return;
+  }
+  wrap.innerHTML = list.map(p => `
+    <div class="arow" data-id="${escapeHtml(p.id)}">
+      <img class="arow-thumb" src="${escapeHtml(p.image)}" alt="" loading="lazy" decoding="async">
+      <div class="arow-body">
+        <div class="arow-title">${escapeHtml(p.name) || '(unnamed)'}</div>
+        <div class="arow-sub">${escapeHtml(p.id)} • ${escapeHtml(p.category)} • ₹${Number(p.price)||0}${(p.stockqty !== undefined && p.stockqty !== null && p.stockqty !== '') ? ` • Qty ${Number(p.stockqty)||0}` : ''}</div>
+      </div>
+      <div class="arow-actions">
+        <button data-act="edit" aria-label="Edit">✏️</button>
+        <button data-act="delete" class="danger" aria-label="${p.archived==='yes'?'Restore':'Archive'} ${escapeHtml(p.name)}" title="${p.archived==='yes'?'Restore':'Archive'}">${p.archived==='yes'?'↶':'▣'}</button>
+      </div>
+    </div>
+  `).join('');
+  if(ADMIN_PROFILE?.role==='viewer')$$('.arow-actions button',wrap).forEach(el=>el.disabled=true);
+  const byId=new Map(list.map(p=>[String(p.id),p]));
+  wrap.onclick=e=>{const button=e.target.closest('button[data-act]'),row=button?.closest('.arow');if(!row||button.disabled)return;const product=byId.get(row.dataset.id);if(!product)return;if(button.dataset.act==='edit')fillForm(product);else archiveProduct(product);};
+}
+
+function fillForm(p){
+  if(editorBusy){showToast('Please wait for the current save or upload.');return;}
+  editingSnapshot={...p};
+  editingProductId = p.id || null;
+  $('#f-id').value = p.id || '';
+  $('#f-id').readOnly = true;
+  $('#f-name').value = p.name || '';
+  $('#f-nameHindi').value = p.namehindi || '';
+  $('#f-category').value = p.category || '';
+  $('#f-subcategory').value = p.subcategory || '';
+  $('#f-price').value = p.price ?? '';
+  $('#f-mrp').value = p.mrp ?? '';
+  $('#f-costprice').value = (p.costprice === undefined || p.costprice === null || p.costprice === '') ? '' : p.costprice;
+  $('#f-image').value = p.image || '';
+  $('#f-description').value = p.description || '';
+  $('#f-stock').value = p.stock || 'in stock';
+  $('#f-stockqty').value = (p.stockqty === undefined || p.stockqty === null || p.stockqty === '') ? '' : p.stockqty;
+  $('#f-tags').value = p.tags || '';
+  $('#f-sizes').value = p.sizes || '';
+  $('#f-hasSizes').checked = !!String(p.sizes || '').trim();
+  $('#sizeOptionsField').hidden = !$('#f-hasSizes').checked;
+  updateImagePreview(p.image || '');
+  currentExtraImages = String(p.images || '').split(',').map(s => s.trim()).filter(Boolean);
+  renderExtraImagesPreview();
+  $('#addTabTitle').textContent = `Edit ${p.name || 'product'}`;
+  switchTab('add');
+  window.scrollTo({ top: 0, behavior: reducedMotion()?'instant':'smooth' });
+}
+
+function clearForm(){
+  editingSnapshot=null;
+  editingProductId = null;
+  $('#f-id').readOnly = false;
+  ['f-id','f-name','f-nameHindi','f-category','f-subcategory','f-price','f-mrp','f-costprice','f-image','f-description','f-stockqty','f-tags']
+    .forEach(id => $('#' + id).value = '');
+  $('#f-stock').value = 'in stock';
+  $('#f-sizes').value='';$('#f-hasSizes').checked=false;$('#sizeOptionsField').hidden=true;
+  $('#f-imagefile').value = '';
+  $('#uploadStatus').textContent = '';
+  updateImagePreview('');
+  $('#f-extraimagefile').value = '';
+  $('#f-extraimageurl').value = '';
+  $('#extraUploadStatus').textContent = '';
+  currentExtraImages = [];
+  renderExtraImagesPreview();
+  $('#addTabTitle').textContent = 'Add a product';
+  $('#saveStatus').textContent = '';
+}
+
+// Shared upload helper — both the main photo and the additional-photos
+// section use this, so there's exactly one place that talks to Cloudinary.
+async function uploadFileToCloudinary(file){
+  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET){
+    throw new Error('Image hosting isn\'t set up yet — see SETUP.md, or paste an image URL instead.');
+  }
+  const form = new FormData();
+  const upload = await resizeUpload(file);
+  form.append('file', upload, file.name.replace(/\.[^.]+$/, '') + ({ 'image/png':'.png','image/webp':'.webp','image/jpeg':'.jpg' }[upload.type] || '.jpg'));
+  form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  const res = await adminFetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+    method: 'POST',
+    body: form
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.secure_url;
+}
+
+async function uploadImage(){return withEditorLock(uploadImageTask);}
+async function uploadImageTask(){
+  const statusEl = $('#uploadStatus');
+  const fileInput = $('#f-imagefile');
+  const file = fileInput.files[0];
+  if (!file){
+    status(statusEl, 'Choose a photo first.', false);
+    return;
+  }
+  status(statusEl, 'Uploading…', true);
+  try{
+    const url = await uploadFileToCloudinary(file);
+    $('#f-image').value = url;
+    updateImagePreview(url);
+    status(statusEl, 'Photo uploaded.', true);
+    fileInput.value = '';
+  } catch(err){
+    status(statusEl, 'Upload failed: ' + err.message, false);
+  }
+}
+
+function updateImagePreview(url){
+  const box = $('#imgPreview');
+  box.innerHTML = url ? `<img src="${escapeHtml(url)}" alt="preview">` : '';
+}
+
+/* ---------------- Additional photos (gallery) ---------------- */
+let currentExtraImages = [];
+
+function renderExtraImagesPreview(){
+  const box = $('#extraImagesPreview');
+  box.innerHTML = currentExtraImages.map((url, i) => `
+    <div class="extra-thumb">
+      <img src="${escapeHtml(url)}" alt="" loading="lazy" decoding="async">
+      <button type="button" data-i="${i}" aria-label="Remove photo">✕</button>
+    </div>
+  `).join('');
+  $$('.extra-thumb button', box).forEach(btn => btn.addEventListener('click', () => {
+    currentExtraImages.splice(Number(btn.dataset.i), 1);
+    renderExtraImagesPreview();
+  }));
+}
+
+async function uploadExtraImage(){return withEditorLock(uploadExtraImageTask);}
+async function uploadExtraImageTask(){
+  const statusEl = $('#extraUploadStatus');
+  const fileInput = $('#f-extraimagefile');
+  const file = fileInput.files[0];
+  if (!file){
+    status(statusEl, 'Choose a photo first.', false);
+    return;
+  }
+  status(statusEl, 'Uploading…', true);
+  try{
+    const url = await uploadFileToCloudinary(file);
+    currentExtraImages.push(url);
+    renderExtraImagesPreview();
+    status(statusEl, 'Photo added.', true);
+    fileInput.value = '';
+  } catch(err){
+    status(statusEl, 'Upload failed: ' + err.message, false);
+  }
+}
+
+function addExtraImageUrl(){
+  const input = $('#f-extraimageurl');
+  const url = input.value.trim();
+  if (!url) return;
+  currentExtraImages.push(url);
+  renderExtraImagesPreview();
+  input.value = '';
+}
+
+async function saveProduct(){return withEditorLock(saveProductTask);}
+async function saveProductTask(){
+  const statusEl = $('#saveStatus');
+  const stockqty = $('#f-stockqty').value.trim() === '' ? '' : Number($('#f-stockqty').value);
+  const product = {
+    id: $('#f-id').value.trim(),
+    name: $('#f-name').value.trim(),
+    namehindi: $('#f-nameHindi').value.trim(),
+    category: $('#f-category').value.trim() || 'Other',
+    subcategory: $('#f-subcategory').value.trim() || 'General',
+    price: Number($('#f-price').value) || 0,
+    mrp: $('#f-mrp').value.trim()==='' ? Number($('#f-price').value) : Number($('#f-mrp').value),
+    costprice: $('#f-costprice').value.trim() === '' ? '' : Number($('#f-costprice').value),
+    image: $('#f-image').value.trim(),
+    images: currentExtraImages.join(','),
+    description: $('#f-description').value.trim(),
+    // If you've set stock quantity tracking and it's hit zero, keep the plain
+    // stock column in sync automatically rather than leaving it saying "in
+    // stock" — same thing the backend does when an order brings it to zero.
+    stock: (stockqty === 0) ? 'out of stock' : $('#f-stock').value,
+    stockqty,
+    tags: $('#f-tags').value.trim(),
+    sizes: $('#f-hasSizes').checked ? [...new Set($('#f-sizes').value.split(/[,\n]/).map(x=>x.trim()).filter(Boolean))].join(', ') : ''
+  };
+  if($('#f-hasSizes').checked && !product.sizes){status(statusEl,'Enter at least one size or turn off size selection.',false);return;}
+  if (!product.name){
+    status(statusEl, 'Product name is required.', false);
+    return;
+  }
+
+  if(!Number.isFinite(product.price) || product.price<=0){status(statusEl,'Price must be a positive number.',false);return;}
+  for(const key of ['mrp','costprice','stockqty']){
+    const value=product[key];
+    if(value!=='' && (!Number.isFinite(value)||value<0||(key==='stockqty'&&!Number.isInteger(value)))){status(statusEl,`Enter a valid non-negative ${key==='stockqty'?'whole stock quantity':key==='mrp'?'MRP':'cost price'}.`,false);return;}
+  }
+  const isUpdate = !!editingProductId;
+  if(isUpdate){const original=editingSnapshot;product.expected_stockqty=original?.stockqty ?? '';product.expected_stock=original?.stock ?? '';}
+
+  // Only relevant when adding a new product — editing an existing one keeps
+  // its ID locked (the field is read-only during edit) so this situation
+  // can't arise from that path.
+  if (!isUpdate && product.id && PRODUCTS.some(p => String(p.id) === product.id)){
+    status(statusEl, `Product ID "${product.id}" is already in use — leave it blank to auto-generate one, or choose a different ID.`, false);
+    return;
+  }
+
+  let saveRequest=null;
+  if(!isUpdate){
+    const fingerprint=JSON.stringify(product);
+    try{saveRequest=JSON.parse(sessionStorage.getItem('dsb_admin_add_attempt') || 'null');if(!saveRequest || saveRequest.fingerprint!==fingerprint){saveRequest={requestId:crypto.randomUUID(),fingerprint};sessionStorage.setItem('dsb_admin_add_attempt',JSON.stringify(saveRequest));}}
+    catch(_){status(statusEl,'Enable browser storage before adding products safely.',false);return;}
+  }
+  if(isUpdate)product.expected_revision=editingSnapshot?._revision;
+  const payload = {
+    clientVersion:7,
+    requestId:saveRequest?.requestId,
+    key: ADMIN_KEY,
+    action: isUpdate ? 'update' : 'add',
+    product
+  };
+  const btn = $('#saveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try{
+    const res = await adminFetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight against Apps Script
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if(!isUpdate)sessionStorage.removeItem('dsb_admin_add_attempt');
+    status(statusEl, isUpdate ? 'Product updated.' : `Product added as ${data.id}.`, true);
+    showToast(isUpdate ? 'Product updated' : 'Product added');
+    clearForm(true);
+    btn.disabled=false;btn.textContent='Save product';
+    switchTab('products');
+    if(!await loadProducts(false)) showToast('Product saved. List refresh failed; refresh before editing again.');
+    loadDashboard();
+  } catch(err){
+    status(statusEl, 'Save could not be confirmed: ' + err.message + ' Check the product list before retrying.', false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save product';
+  }
+}
+
+function switchTab(name){
+  $$('.admin-tab').forEach(el => el.classList.toggle('active', el.id === 'tab-' + name));
+  $$('[data-tab]').forEach(btn => {const active=btn.dataset.tab===name;btn.classList.toggle('active',active);if(active)btn.setAttribute('aria-current','page');else btn.removeAttribute('aria-current');});
+  if(name==='archive')loadArchive();
+  if (name === 'dashboard' && LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
+  window.scrollTo({ top:0, behavior:reducedMotion()?'instant':'smooth' });
+}
+
+/* ---------------- Dashboard ---------------- */
+let LAST_DASHBOARD = null;
+
+function animateNumber(el, target, prefix){
+  if (!el) return;
+  cancelAnimationFrame(el._numberFrame);
+  if(reducedMotion()){el.textContent=(prefix||'')+target.toLocaleString('en-IN');return;}
+  const duration = 500, start = performance.now();
+  const from = Number(String(el.textContent || '0').replace(/[^0-9.-]/g,'')) || 0;
+  function step(now){ const p=Math.min(1,(now-start)/duration), eased=1-Math.pow(1-p,3), value=Math.round(from+(target-from)*eased); el.textContent=(prefix||'')+value.toLocaleString('en-IN'); if(p<1) el._numberFrame=requestAnimationFrame(step); }
+  el._numberFrame=requestAnimationFrame(step);
+}
+
+async function loadDashboard(){
+  const sequence=++dashboardRequestSequence;
+  try{
+    const data = await adminRead('adminDashboard');
+    if(sequence!==dashboardRequestSequence)return false;
+    LAST_DASHBOARD = data; renderDashboard(data);return true;
+  } catch(err){if(sequence===dashboardRequestSequence)$('#dashTopProducts').innerHTML=`<p class="hint">Could not load dashboard: ${escapeHtml(err.message)}</p>`;return false;}
+}
+
+function moneyShort(n){ return '₹'+Math.round(Number(n)||0).toLocaleString('en-IN'); }
+function orderDate(v){ const d=new Date(v); return isNaN(d.getTime()) ? null : d; }
+function recentOrders(){ return (ORDERS||[]).slice().sort((a,b)=>(orderDate(b.date)?.getTime()||0)-(orderDate(a.date)?.getTime()||0)); }
+function buildSevenDaySales(){
+  const days=[]; const now=new Date(); now.setHours(0,0,0,0);
+  for(let i=6;i>=0;i--){ const d=new Date(now); d.setDate(now.getDate()-i); days.push({key:d.toDateString(),label:d.toLocaleDateString('en-IN',{weekday:'short'}),total:0}); }
+  (ORDERS||[]).forEach(o=>{ if(!['Delivered','Fulfilled'].includes(o.status)) return; const d=orderDate(o.date); if(!d) return; const hit=days.find(x=>x.key===new Date(d.getFullYear(),d.getMonth(),d.getDate()).toDateString()); if(hit) hit.total+=Number(o.total)||0; });
+  return days;
+}
+function renderDashboard(d){
+  const pending=(d.statusCounts&&d.statusCounts.Pending)||0, monthOrders=Number(d.monthOrders)||0;
+  animateNumber($('#statTodayRevenue'),Math.round(d.todayRevenue||0),'₹'); $('#statTodayOrders').textContent=`${d.todayOrders||0} order${d.todayOrders===1?'':'s'} today`;
+  animateNumber($('#statMonthRevenue'),Math.round(d.monthRevenue||0),'₹'); $('#statMonthOrders').textContent=`${monthOrders} order${monthOrders===1?'':'s'} this month`;
+  if(d.accountingIncomplete){cancelAnimationFrame($('#statMonthProfit')._numberFrame);$('#statMonthProfit').textContent='Incomplete';}
+  else animateNumber($('#statMonthProfit'),Math.round(d.monthProfit||0),'₹');
+  const avg=monthOrders ? (Number(d.monthRevenue)||0)/monthOrders : 0; animateNumber($('#statAverageOrder'),Math.round(avg),'₹'); $('#statPending').textContent=`${pending} pending${pending===1?'':' orders'}`;
+  $('#dashGreetingSub').textContent = pending ? `${pending} order${pending===1?'':'s'} need${pending===1?'s':''} your attention.` : 'Everything looks under control today.';
+
+  const attention=[]; if(pending) attention.push({icon:'⏳',title:`${pending} pending order${pending===1?'':'s'}`,sub:'Open orders and update their status',action:'pending'});
+  const critical=(d.lowStock||[]).filter(p=>Number(p.qty)<=2).length; if(critical) attention.push({icon:'📦',title:`${critical} product${critical===1?'':'s'} critically low`,sub:'Stock is at 2 or below',action:'products'});
+  $('#dashAttention').innerHTML=attention.map(a=>`<button class="dash-alert" data-dash-action="${a.action}"><span class="alert-icon">${a.icon}</span><span class="alert-copy"><strong>${a.title}</strong><small>${a.sub}</small></span><span class="alert-arrow">›</span></button>`).join('');
+
+  if(d.telegram){
+    const t=d.telegram,notice=document.createElement('p');notice.className='hint';
+    notice.textContent=`Telegram: ${t.pending} awaiting delivery. ${t.lastRun?'Last queue run: '+formatDateTime(t.lastRun):'No queue run recorded yet. Check the background trigger if orders are waiting.'}${t.lastSuccess?' Last successful notification: '+formatDateTime(t.lastSuccess):''}`;
+    $('#dashAttention').appendChild(notice);
+  }
+  const top=d.topProducts||[], max=Math.max(1,...top.map(p=>Number(p.revenue)||0));
+  $('#dashTopProducts').innerHTML=top.length?top.map((p,i)=>`<div class="dash-product-row"><span class="dash-rank">${i+1}</span><div class="dash-product-name"><strong>${escapeHtml(p.name||'(unknown)')}</strong><div class="dash-product-meta">${Number(p.qty)||0} sold</div></div><div class="dash-product-bar-track"><div class="dash-product-bar-fill" style="width:${Math.round((Number(p.revenue)||0)/max*100)}%"></div></div><div class="dash-product-value">${moneyShort(p.revenue)}</div></div>`).join(''):'<p class="hint">No sales recorded yet this month.</p>';
+
+  const sc=d.statusCounts||{}, statuses=['Pending','Confirmed','Packed','Shipped','Delivered','Fulfilled','Cancelled'], total=statuses.reduce((n,s)=>n+(sc[s]||0),0);
+  if(!total){$('#dashStatusBar').style.display='none';$('#dashStatusLegend').innerHTML='';$('#dashStatusEmpty').style.display='block';}
+  else { $('#dashStatusBar').style.display='flex';$('#dashStatusEmpty').style.display='none'; $('#dashStatusBar').innerHTML=statuses.map(s=>{const c=sc[s]||0;if(!c)return '';return `<div class="dash-status-seg ${s.toLowerCase()}" style="width:${(c/total*100)}%">${c}</div>`;}).join(''); $('#dashStatusLegend').innerHTML=statuses.map(s=>`<span class="dash-legend"><b>${sc[s]||0}</b> ${s}</span>`).join(''); }
+
+  const low=d.lowStock||[]; $('#dashLowStock').innerHTML=low.length?low.map(p=>`<div class="dash-lowstock-item"><div><div class="lowstock-name">${escapeHtml(p.name)}</div><div class="lowstock-state">${Number(p.qty)<=2?'Critical — restock soon':'Low stock'}</div></div><span class="qty">${escapeHtml(p.qty)} left</span></div>`).join(''):'<p class="hint">All tracked products have healthy stock.</p>';
+
+  const recent=d.recentOrders || recentOrders().slice(0,5); $('#dashRecentOrders').innerHTML=recent.length?recent.map(o=>{const st=o.status||'Pending';return `<div class="dash-recent-row"><div class="dash-recent-icon">🧾</div><div class="dash-recent-copy"><strong>${escapeHtml(o.customername||o.orderid||'Order')}</strong><span>${escapeHtml(o.orderid||'')} · ${escapeHtml(formatDateTime(o.date))}</span></div><div class="dash-recent-total">${moneyShort(o.total)}<br><span class="status-pill ${escapeHtml(st.toLowerCase())}">${escapeHtml(st)}</span></div></div>`;}).join(''):'<p class="hint">No recent orders yet.</p>';
+
+  const days=d.sevenDaySales || buildSevenDaySales(), maxDay=Math.max(1,...days.map(x=>x.total)), week=days.reduce((a,x)=>a+x.total,0); $('#dashWeekTotal').textContent=moneyShort(week); $('#dashSalesChart').innerHTML=days.some(x=>x.total)?days.map(x=>`<div class="dash-bar-wrap"><span class="dash-bar-value">${x.total?moneyShort(x.total):''}</span><div class="dash-bar" style="height:${Math.max(6,Math.round(x.total/maxDay*82))}%"></div><span class="dash-bar-label">${escapeHtml(x.label)}</span></div>`).join(''):'<p class="hint dash-chart-empty">No sales activity in the last 7 days.</p>';
+
+  $$('[data-dash-action]').forEach(btn=>btn.onclick=()=>{const a=btn.dataset.dashAction;if(a==='pending'){switchTab('orders');$('#orderStatusFilter').value='Pending';orderPage=0;loadOrders();}else if(a==='orders')switchTab('orders');else if(a==='products')switchTab('products');});
+
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  $('#apiUrl').value = DEFAULT_API_URL;
+  $('#adminKey').focus();
+
+  $$('[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  $('#connectBtn').addEventListener('click', async () => {
+    API_URL = $('#apiUrl').value.trim();
+    ADMIN_KEY = $('#adminKey').value;
+    if (!API_URL){
+      status($('#connectStatus'), 'Paste your Apps Script Web App URL first.', false);
+      return;
+    }
+    const btn = $('#connectBtn');
+    btn.disabled = true;
+    btn.textContent = 'Connecting…';
+    await loadProducts();
+    btn.disabled = false;
+    btn.textContent = 'Connect';
+  });
+  $('#saveBtn').addEventListener('click', saveProduct);
+  $('#clearFormBtn').addEventListener('click',()=>{if(!editorBusy)clearForm();});
+  let productSearchTimer;
+  $('#filterInput').addEventListener('input',()=>{clearTimeout(productSearchTimer);productSearchTimer=setTimeout(()=>loadProducts(false),250);});
+  $('#refreshProductsBtn').addEventListener('click',()=>loadProducts(false));
+  const workspaceSearch=$('.topbar-search input');
+  workspaceSearch.placeholder='Find products…';
+  workspaceSearch.addEventListener('keydown',e=>{if(e.key==='Enter'){switchTab('products');$('#filterInput').value=workspaceSearch.value;loadProducts(false);$('#filterInput').focus();}});
+  document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'&&$('#adminApp').style.display==='block'){e.preventDefault();switchTab('products');$('#filterInput').focus();}});
+  $('#adminKey').addEventListener('keydown',e=>{if(e.key==='Enter'&&!$('#connectBtn').disabled)$('#connectBtn').click();});
+  $('#uploadBtn').addEventListener('click', uploadImage);
+  $('#uploadExtraBtn').addEventListener('click', uploadExtraImage);
+  $('#addExtraUrlBtn').addEventListener('click', addExtraImageUrl);
+  $('#f-image').addEventListener('input', (e) => updateImagePreview(e.target.value.trim()));
+  let orderSearchTimer;
+  const reloadOrders=()=>{clearTimeout(orderSearchTimer);orderPage=0;loadOrders();};
+  $('#orderSort').addEventListener('change',reloadOrders);
+  $('#orderStatusFilter').addEventListener('change',reloadOrders);
+  $('#orderPaymentFilter').addEventListener('change',reloadOrders);
+  $('#orderFilterInput').addEventListener('input',()=>{clearTimeout(orderSearchTimer);orderSearchTimer=setTimeout(reloadOrders,250);});
+  $('#dashRefreshBtn').addEventListener('click', async () => {const btn=$('#dashRefreshBtn');if(btn.disabled)return;btn.disabled=true;try{const ok=await loadDashboard();showToast(ok?'Dashboard refreshed':'Dashboard refresh failed. Try again.');}finally{btn.disabled=false;}});
+});
+
+async function resizeUpload(file){
+  if(!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Please choose a JPEG, PNG or WebP image.');
+  if(file.size>15*1024*1024) throw new Error('Choose an image smaller than 15 MB.');
+  const bitmap=await createImageBitmap(file);
+  try {
+    const scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height));
+    const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+    canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);
+    const type=file.type==='image/png'?'image/png':'image/jpeg';
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,type,.85));
+    if(!blob) throw new Error('Could not prepare this image.');
+    return blob.size<file.size || scale<1 ? blob : file;
+  } finally {bitmap.close();}
+}
+
+$('#f-hasSizes').addEventListener('change',()=>{ $('#sizeOptionsField').hidden=!$('#f-hasSizes').checked; });
