@@ -1,3 +1,10 @@
+ADMIN UPDATE — 20260910admin6
+
+When upgrading from install5, replace admin.html and admin.js and let GitHub
+Actions publish. The full ZIP contains all earlier website improvements.
+No Apps Script redeployment or Google Sheets changes are needed.
+See ADMIN-REVIEW.md for the review, implemented fixes and validation limits.
+
 INSTALL POPUP RESTORED — 20260910install5
 
 Replace website files and let GitHub Actions publish. No Apps Script redeployment
