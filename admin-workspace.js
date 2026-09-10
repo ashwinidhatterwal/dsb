@@ -1,7 +1,7 @@
 /* Progressive admin tools. Credentials stay in memory; product drafts stay in this tab. */
 const selectedProducts=new Map();
 let activityPage=0, activitySequence=0, bulkBusy=false;
-let cleanEditor='', draftTimer, restoredDraft=false;
+let cleanEditor='', draftTimer;
 const editorFields=()=>$$('#tab-add input:not([type=file]),#tab-add select,#tab-add textarea');
 function editorState(){return editorFields().map(el=>({id:el.id,value:el.type==='checkbox'?el.checked:el.value}));}
 function editorFingerprint(){return JSON.stringify([editorState(),currentExtraImages]);}
@@ -23,7 +23,7 @@ function offerSavedDraft(){
     draft.fields.forEach(x=>{const el=document.getElementById(x.id);if(!el||!el.closest('#tab-add'))return;if(el.type==='checkbox')el.checked=!!x.value;else el.value=x.value;});
     currentExtraImages=Array.isArray(draft.images)?draft.images:[];editingProductId=draft.id;editingSnapshot=draft.snapshot;
     $('#f-id').readOnly=!!editingProductId;$('#sizeOptionsField').hidden=!$('#f-hasSizes').checked;
-    $('#addTabTitle').textContent=editingProductId?'Edit restored draft':'Add a product';updateImagePreview($('#f-image').value);renderExtraImagesPreview();box.hidden=true;restoredDraft=true;
+    $('#addTabTitle').textContent=editingProductId?'Edit restored draft':'Add a product';updateImagePreview($('#f-image').value);renderExtraImagesPreview();box.hidden=true;
     showToast('Draft restored. Saving checks for changes made since it was opened.');
   };
   $('#discardDraft').onclick=()=>{if(confirm('Discard the saved draft?')){sessionStorage.removeItem(draftKey());box.hidden=true;}};
@@ -33,12 +33,12 @@ const originalFillForm=fillForm;
 fillForm=function(p){
   if(editorBusy)return showToast('Please wait for the current save or upload.');
   if(editorDirty()&&!confirm('Discard unsaved changes and open this product?'))return;
-  originalFillForm(p);cleanEditor=editorFingerprint();restoredDraft=false;sessionStorage.removeItem(draftKey());$('#draftOffer').hidden=true;
+  originalFillForm(p);cleanEditor=editorFingerprint();sessionStorage.removeItem(draftKey());$('#draftOffer').hidden=true;
 };
 const originalClearForm=clearForm;
 clearForm=function(confirmed=false){
   if(!confirmed&&editorDirty()&&!confirm('Discard unsaved changes?'))return;
-  originalClearForm();cleanEditor=editorFingerprint();restoredDraft=false;sessionStorage.removeItem(draftKey());$('#draftOffer').hidden=true;
+  originalClearForm();cleanEditor=editorFingerprint();sessionStorage.removeItem(draftKey());$('#draftOffer').hidden=true;
 };
 const originalEditorLock=withEditorLock;
 withEditorLock=async function(task){
@@ -93,7 +93,7 @@ function renderPaymentControls(){
     const order=ORDERS.find(o=>String(o.orderid)===row.dataset.id);if(!order)return;
     const box=document.createElement('div');box.className='payment-admin';
     const canVerify=ADMIN_PROFILE?.role==='admin';
-    box.innerHTML=`<strong>Payment: ${escapeHtml(order.paymentstatus||'Unverified')}</strong><p class="hint">${escapeHtml(order.paymentreference||'No manual verification recorded.')}${order.paymentverifiedby?' · '+escapeHtml(order.paymentverifiedby):''}</p>${canVerify?'<div class="payment-fields"><select aria-label="Payment verification status"><option>Unverified</option><option>Received</option><option>Refunded</option></select><input maxlength="120" aria-label="Transaction reference or verification note" placeholder="Transaction reference / verification note"><button type="button" class="ghost-btn">Save verification</button></div><p class="hint">Check your bank or cash records first. This records a manual check; it does not charge or refund money.</p>':''}`;
+    box.innerHTML=`<strong>Payment: ${escapeHtml(order.paymentstatus||'Unverified')}</strong><p class="hint">${escapeHtml(order.paymentreference||'No manual verification recorded.')}${order.paymentverifiedby?' · '+escapeHtml(order.paymentverifiedby):''}</p>${canVerify?'<div class="payment-fields"><select aria-label="Payment verification status"><option>Unverified</option><option>Received</option><option>Refunded</option></select><input maxlength="120" aria-label="Transaction reference or verification note" placeholder="Transaction reference / verification note"><button type="button" class="ghost-btn">Save verification</button></div><p class="hint">Check bank/cash records first. This does not charge or refund money.</p>':''}`;
     row.appendChild(box);
     if(ADMIN_PROFILE?.role==='viewer')$$('[data-role]',row).forEach(el=>el.disabled=true);
     if(!canVerify)return;

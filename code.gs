@@ -2,7 +2,7 @@
  * Dhatterwal Suhag Bhandar — Google Sheet backend
  * ------------------------------------------------
  * Paste this into Extensions > Apps Script on your product Google Sheet,
- * then deploy as a Web App. See SETUP-GUIDE.md for step-by-step instructions.
+ * then deploy as a Web App. See SETUP.md for step-by-step instructions.
  *
  * Sheet tabs expected in this spreadsheet:
  *
@@ -75,7 +75,7 @@ const ADMIN_KEY = ''; // Prefer the ADMIN_KEY Script Property; never publish sec
 // Optional — silently pings a Telegram chat/channel the instant a new order
 // comes in, so you don't have to keep the Sheet or admin page open to know.
 // Leave TELEGRAM_BOT_TOKEN blank to turn this off entirely; nothing else
-// about order-taking changes either way. See SETUP-GUIDE.md for how to get
+// about order-taking changes either way. See SETUP.md for how to get
 // a bot token and chat ID from @BotFather in about two minutes.
 const TELEGRAM_BOT_TOKEN = ''; // e.g. '123456789:AAExampleTokenFromBotFather'
 const TELEGRAM_CHAT_ID = '';   // your numeric chat ID, or '@yourchannel'
@@ -125,32 +125,8 @@ function doPost(e) {
     }
 
     // Everything below is an admin-only action.
-    const adminKey = secret_('ADMIN_KEY', ADMIN_KEY);
-    if (!adminKey || adminKey === 'change-this-secret-key' || body.key !== adminKey) {
-      return jsonResponse({ error: 'unauthorized' });
-    }
-    if (body.action === 'add') {
-      return jsonResponse(addProduct(body.product || {},body.requestId));
-    }
-    if (body.action === 'update') {
-      return jsonResponse(updateProduct(body.product || {}));
-    }
-    if (body.action === 'adminProducts') {
-      return jsonResponse(getAllProducts(true));
-    }
-    if (body.action === 'adminOrders') {
-      return jsonResponse(getAllOrders(body.options));
-    }
-    if (body.action === 'adminDashboard') {
-      return jsonResponse(getDashboardData());
-    }
-    if (body.action === 'delete') {
-      return jsonResponse(deleteProduct(body.id));
-    }
-    if (body.action === 'updateOrderStatus') {
-      return jsonResponse(updateOrderStatus(body.orderId, body.status));
-    }
-    return jsonResponse({ error: 'unknown action' });
+    const actor = authenticateAdmin_(body.key);
+    return jsonResponse(dispatchAdmin_(body, actor));
   } catch (err) {
     return jsonResponse({ error: String(err) });
   }
@@ -307,7 +283,7 @@ function getAllProducts(includeCost) {
   }
   const rows = rowsAsObjects_(getSheet_(PRODUCTS_SHEET));
   if (includeCost) return rows;
-  const publicRows = rows.map(r => {
+  const publicRows = rows.filter(r=>!isArchived_(r)).map(r => {
     const copy={};
     ['id','name','namehindi','category','subcategory','price','mrp','image','images','description','stock','stockqty','tags','sizes'].forEach(key=>{if(r[key]!==undefined)copy[key]=r[key];});
     return copy;
@@ -354,6 +330,7 @@ function updateProduct(p) {
     const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet);
     const row = findRow_(sheet, 'id', String(p.id || '').trim());
     if (!row) throw new Error('Product not found.');
+    if(p.expected_revision){const current={};sheet.getRange(row,1,1,heads.length).getValues()[0].forEach((v,i)=>current[heads[i]]=v);if(productRevision_(current)!==p.expected_revision)throw new Error('Product changed since editing began. Refresh and reopen it before saving.');}
     ['stockqty','stock'].forEach(key => {
       const expected = p['expected_' + key];
       if (expected === undefined) { if (p[key] !== undefined) throw new Error('Refresh the admin page before editing stock.'); return; }
@@ -464,7 +441,7 @@ function getAllOrders(options) {
   const all=rowsAsObjects_(getSheet_(ORDERS_SHEET));
   if(!options)return all;
   const q=String(options.query||'').trim().toLowerCase().slice(0,100),status=String(options.status||'all');
-  const list=all.filter(o=>(status==='all'||(o.status||'Pending')===status)&&(!q||`${o.customername} ${o.phone} ${o.orderid}`.toLowerCase().includes(q)));
+  const list=all.filter(o=>(!options.payment||options.payment==='all'||(o.paymentstatus||'Unverified')===options.payment)&&(status==='all'||(o.status||'Pending')===status)&&(!q||`${o.customername} ${o.phone} ${o.orderid}`.toLowerCase().includes(q)));
   list.sort((a,b)=>options.sort==='name-asc'?String(a.customername||'').localeCompare(String(b.customername||'')):(options.sort==='date-asc'?1:-1)*(new Date(a.date)-new Date(b.date)));
   const pageSize=40,page=Math.max(0,Math.min(Math.floor(Number(options.page)||0),Math.max(0,Math.ceil(list.length/pageSize)-1)));
   return {orders:list.slice(page*pageSize,(page+1)*pageSize),page,pageSize,total:list.length,allCount:all.length};
@@ -751,6 +728,7 @@ function buildValidatedOrderItems_(itemsDetail, productData) {
     const found = byId[requested.id];
     if (!found) return { ok: false, error: `Product ${requested.id} is no longer available.` };
     const row = found.row;
+    if(heads.indexOf('archived')>=0 && String(row[heads.indexOf('archived')]).toLowerCase()==='yes')return {ok:false,error:'This product is no longer available.'};
     const sizes=parseSizes_(heads.indexOf('sizes')<0 ? '' : row[heads.indexOf('sizes')]);
     const size=String(requested.size || '');
     if(sizes.length ? !sizes.includes(size) : !!size) return {ok:false,code:'invalid_size',error:'Please choose an available size for ' + (row[nameCol] || requested.id) + '.'};
@@ -1254,4 +1232,112 @@ function getTelegramHealth_(){
   const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(JOURNAL_SHEET);
   if(sheet && sheet.getLastRow()>1 && sheet.getLastColumn()>=5)result.pending=sheet.getRange(2,5,sheet.getLastRow()-1,1).createTextFinder('Pending').matchEntireCell(true).findAll().length;
   return result;
+}
+
+
+/* Admin workspace v7: staff permissions, paging, archive, payment and activity. */
+function authenticateAdmin_(key){
+  const owner=secret_('ADMIN_KEY',ADMIN_KEY);
+  if(owner && owner!=='change-this-secret-key' && key===owner)return {name:'Owner',role:'admin'};
+  let staff=[];try{staff=JSON.parse(PropertiesService.getScriptProperties().getProperty('ADMIN_STAFF_JSON')||'[]');}catch(_){throw new Error('Staff configuration is invalid.');}
+  const match=Array.isArray(staff)&&staff.find(x=>x.enabled!==false&&typeof x.key==='string'&&x.key.length>=24&&x.key===key&&['admin','editor','viewer'].includes(x.role));
+  if(!match)throw new Error('unauthorized');
+  return {name:String(match.name||'Staff').slice(0,60),role:match.role};
+}
+function assertAdminPermission_(actor,action){
+  const reads=['adminSession','adminProducts','adminProductsPage','adminOrders','adminDashboard'];
+  const edits=['add','update','archiveProduct','bulkProducts','updateOrderStatus'];
+  if(actor.role==='admin'||reads.includes(action)||(actor.role==='editor'&&edits.includes(action)))return;
+  throw new Error('Your staff role does not allow this action.');
+}
+function activitySheet_(){
+  const ss=SpreadsheetApp.getActiveSpreadsheet();let sheet=ss.getSheetByName('AdminActivity');
+  if(!sheet){sheet=ss.insertSheet('AdminActivity');sheet.appendRow(['date','actor','role','action','target','outcome','detail']);}
+  return sheet;
+}
+function logAdminActivity_(actor,action,target,outcome,detail){
+  const lock=LockService.getScriptLock();
+  if(!lock.tryLock(10000))throw new Error('Activity history is busy. Retry shortly.');
+  try{activitySheet_().appendRow([new Date(),actor.name,actor.role,action,String(target||''),outcome,String(detail||'').slice(0,1200)].map(sheetText_));}
+  finally{lock.releaseLock();}
+}
+function dispatchAdmin_(body,actor){
+  const action=String(body.action||'');assertAdminPermission_(actor,action);
+  if(action==='adminSession')return {version:9,name:actor.name,role:actor.role};
+  if(action==='adminProducts')return getAllProducts(true);
+  if(action==='adminProductsPage')return adminProductsPage_(body.options||{});
+  if(action==='adminOrders')return getAllOrders(body.options);
+  if(action==='adminDashboard')return getDashboardData();
+  if(action==='adminActivity'){
+    const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName('AdminActivity');
+    if(!sheet)return {entries:[],page:0,total:0};
+    const total=Math.max(0,sheet.getLastRow()-1),page=Math.min(Math.max(0,Math.floor(Number(body.options?.page)||0)),Math.max(0,Math.ceil(total/40)-1)),end=total-page*40,count=Math.min(40,end),heads=headers_(sheet);
+    return {entries:count?sheet.getRange(end-count+2,1,count,heads.length).getValues().reverse().map(row=>{const o={};heads.forEach((h,i)=>o[h]=row[i]);return o;}):[],page,total};
+  }
+  if(action==='bulkProducts'){
+    if(!Array.isArray(body.items)||!body.items.length||body.items.length>20)throw new Error('Select between 1 and 20 products.');
+    return {results:body.items.map(item=>{
+      try{if(!item.expected_revision)throw new Error('Refresh before bulk editing.');if(Object.keys(item).some(k=>!['id','price','stockqty','stock','expected_revision','expected_stockqty','expected_stock'].includes(k)))throw new Error('Unsupported bulk field.');return {id:item.id,...dispatchAdmin_({action:'update',clientVersion:7,product:item},actor)};}catch(err){return {id:item.id,error:String(err.message||err)};}
+    })};
+  }
+  const allowed=['add','update','delete','archiveProduct','updateOrderStatus','verifyPayment'];
+  if(!allowed.includes(action))throw new Error('unknown action');
+  if(action==='update' && !body.product?.expected_revision && body.clientVersion===7)throw new Error('Refresh and reopen the product before saving.');
+  const target=body.product?.id||body.id||body.orderId||'new product';
+  const change={};['name','category','subcategory','price','mrp','costprice','stock','stockqty','sizes'].forEach(k=>{if(body.product&&body.product[k]!==undefined)change[k]=String(body.product[k]).slice(0,120);});
+  if(action==='archiveProduct')change.archived=body.archived===true;
+  if(action==='updateOrderStatus')change.status=body.status;
+  if(action==='verifyPayment')change.paymentStatus=body.paymentStatus;
+  const detail=JSON.stringify(change);
+  logAdminActivity_(actor,action,target,'Started',detail);
+  let result;
+  try{
+    if(action==='add')result=addProduct(body.product||{},body.requestId);
+    if(action==='update')result=updateProduct(body.product||{});
+    if(action==='delete')throw new Error('Permanent deletion is disabled. Archive the product instead.');
+    if(action==='archiveProduct')result=archiveProduct_(body);
+    if(action==='updateOrderStatus')result=updateOrderStatus(body.orderId,body.status);
+    if(action==='verifyPayment')result=verifyPayment_(body,actor);
+  }catch(err){try{logAdminActivity_(actor,action,target,'Failed',String(err.message||err));}catch(_){}throw err;}
+  try{logAdminActivity_(actor,action,result.id||target,result.success===false?'Failed':'Completed',result.error||detail);}
+  catch(_){result.activityWarning='Change saved, but the completion history could not be recorded.';}
+  return result;
+}
+function isArchived_(p){return String(p.archived||'').toLowerCase()==='yes';}
+function productRevision_(p){
+  return hashText_(JSON.stringify(['id','name','namehindi','category','subcategory','price','mrp','costprice','image','images','description','stock','stockqty','tags','sizes','archived'].map(k=>String(p[k]??''))));
+}
+function adminProductsPage_(options){
+  const all=getAllProducts(true),q=String(options.query||'').trim().toLowerCase().slice(0,120),category=String(options.category||''),stock=String(options.stock||'all');
+  let list=all.filter(p=>isArchived_(p)===(options.archived===true)&&(!category||p.category===category)&&(!q||[p.id,p.name,p.namehindi,p.category,p.subcategory,p.tags].join(' ').toLowerCase().includes(q)));
+  list=list.filter(p=>{const tracked=p.stockqty!==''&&p.stockqty!==undefined&&p.stockqty!==null,out=p.stock==='out of stock'||(tracked&&Number(p.stockqty)<=0);return stock==='all'||(stock==='out'?out:stock==='low'?tracked&&Number(p.stockqty)>0&&Number(p.stockqty)<=5:!out);});
+  const compareId=(a,b)=>String(a.id||'').localeCompare(String(b.id||''),'en',{numeric:true,sensitivity:'base'})||String(a.id||'').localeCompare(String(b.id||''),'en');
+  list.sort((a,b)=>options.sort==='id-asc'?compareId(a,b):options.sort==='id-desc'?compareId(b,a):(options.sort==='price-asc'?Number(a.price)-Number(b.price):options.sort==='price-desc'?Number(b.price)-Number(a.price):String(a.name||'').localeCompare(String(b.name||'')))||compareId(a,b));
+  const total=list.length,page=Math.min(Math.max(0,Math.floor(Number(options.page)||0)),Math.max(0,Math.ceil(total/40)-1));
+  return {products:list.slice(page*40,(page+1)*40).map(p=>({...p,_revision:productRevision_(p)})),page,total,allCount:all.length,categories:[...new Set(all.map(p=>p.category).filter(Boolean))].sort()};
+}
+function archiveProduct_(body){
+  return withWriteLock_(function(){
+    const sheet=getSheet_(PRODUCTS_SHEET);ensureColumn_(sheet,'archived');
+    const heads=headers_(sheet),row=findRow_(sheet,'id',String(body.id||''));if(!row)throw new Error('Product not found.');
+    const p={};sheet.getRange(row,1,1,heads.length).getValues()[0].forEach((v,i)=>p[heads[i]]=v);
+    const desired=body.archived===true;
+    if(isArchived_(p)===desired)return {success:true,id:body.id};
+    if(!body.expected_revision||productRevision_(p)!==body.expected_revision)throw new Error('Product changed. Refresh before archiving or restoring.');
+    sheet.getRange(row,heads.indexOf('archived')+1).setValue(desired?'yes':'');invalidatePublicCaches_();return {success:true,id:body.id};
+  });
+}
+function verifyPayment_(body,actor){
+  return withWriteLock_(function(){
+    const state=String(body.paymentStatus||''),reference=String(body.reference||'').trim();
+    if(!['Unverified','Received','Refunded'].includes(state)||reference.length>120)throw new Error('Invalid payment details.');
+    if(state!=='Unverified'&&!reference)throw new Error('Enter a transaction reference or verification note.');
+    const sheet=getSheet_(ORDERS_SHEET);['paymentstatus','paymentreference','paymentverifiedby','paymentverifiedat'].forEach(k=>ensureColumn_(sheet,k));
+    const heads=headers_(sheet),row=findRow_(sheet,'orderid',String(body.orderId||''));if(!row)throw new Error('Order not found.');
+    const current=sheet.getRange(row,heads.indexOf('paymentverifiedat')+1).getValue();
+    if((current instanceof Date?current.toISOString():String(current||''))!==String(body.expectedVerifiedAt||''))throw new Error('Payment details changed. Refresh orders before verifying.');
+    const record={paymentstatus:state,paymentreference:reference,paymentverifiedby:actor.name,paymentverifiedat:new Date().toISOString()};
+    Object.keys(record).forEach(k=>sheet.getRange(row,heads.indexOf(k)+1).setValue(sheetText_(record[k])));
+    return {success:true};
+  });
 }

@@ -1,6 +1,6 @@
 /* =========================================================
    Dhatterwal Suhag Bhandar — admin panel logic
-   Talks to the Apps Script Web App deployed from apps-script/Code.gs
+   Talks to the Apps Script Web App deployed from code.gs
    ========================================================= */
 const $ = (s, c = document) => c.querySelector(s);
 const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
@@ -14,7 +14,7 @@ function escapeHtml(str){
 }
 
 // Kept in memory only for this tab — not persisted, so it's re-entered
-// each time the page is opened. See UPDATE-STEPS.txt for how to deploy
+// each time the page is opened. See SETUP.md for how to deploy
 // the Apps Script backend that this talks to.
 // Deployed Apps Script Web App URL for this shop's Google Sheet.
 // Pre-filled so the admin only has to enter the password below.
@@ -24,7 +24,7 @@ const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbybavfXBC-5CNst
 // Image hosting (Cloudinary "unsigned upload") — lets the admin upload a
 // photo straight from the browser and get back a permanent link, no server
 // needed. Fill these in after creating a free Cloudinary account and an
-// unsigned upload preset — see UPDATE-STEPS.txt. Safe to leave the preset
+// unsigned upload preset — see SETUP.md. Safe to leave the preset
 // unsigned/public since it only allows uploads, not account access.
 const CLOUDINARY_CLOUD_NAME = 'malfl6xv';
 const CLOUDINARY_UPLOAD_PRESET = 'dhatterwal suhag bhandar';
@@ -96,7 +96,7 @@ async function loadProducts(refreshRelated=true){
   try{
     if(!ADMIN_PROFILE){
       const profile=await adminRead('adminSession');
-      if(profile.version!==7)throw new Error('Deploy the new code.gs version before opening this admin update.');
+      if(profile.version!==9)throw new Error('Deploy the new code.gs version before opening this admin update.');
       ADMIN_PROFILE=profile;applyStaffRole();offerSavedDraft();
     }
     const options={query:$('#filterInput').value.trim(),category:$('#productCategory').value,stock:$('#productStock').value,sort:$('#productSort').value,archived:$('#showArchived').checked};
@@ -272,8 +272,13 @@ function renderProductList(){
   const pageCount=Math.max(1,Math.ceil(total/ADMIN_PAGE_SIZE));
   const range=`${total ? productPage*ADMIN_PAGE_SIZE+1 : 0}–${Math.min((productPage+1)*ADMIN_PAGE_SIZE,total)} of ${total} products`;
   $$('.product-pagination').forEach(pager=>{
-    const pages=[...new Set([0,productPage-1,productPage,productPage+1,pageCount-1])].filter(n=>n>=0&&n<pageCount).sort((a,b)=>a-b);
-    pager.innerHTML=`<div class="pager-summary"><strong>Page ${productPage+1} <span>/ ${pageCount}</span></strong><small>${range}</small></div><div class="pager-controls"><button type="button" class="pager-arrow" data-page="${productPage-1}" ${productPage===0?'disabled':''} aria-label="Previous product page">‹ <span>Previous</span></button><div class="pager-numbers">${pages.map((n,i)=>`${i&&n>pages[i-1]+1?'<span class="pager-gap" aria-hidden="true">…</span>':''}<button type="button" data-page="${n}" ${n===productPage?'aria-current="page"':''} aria-label="Product page ${n+1}">${n+1}</button>`).join('')}</div><button type="button" class="pager-arrow" data-page="${productPage+1}" ${productPage===pageCount-1?'disabled':''} aria-label="Next product page"><span>Next</span> ›</button></div>`;
+    // Keep long catalogues bounded while allowing sideways browsing around the current page.
+    const start=Math.max(0,Math.min(productPage-25,pageCount-51));
+    const pages=[...new Set([0,...Array.from({length:Math.min(51,pageCount)},(_,i)=>start+i),pageCount-1])].sort((a,b)=>a-b);
+    pager.setAttribute('aria-label',`Product pages: page ${productPage+1} of ${pageCount}; ${range}`);
+    pager.innerHTML=`<span class="pager-summary">Page ${productPage+1} of ${pageCount} · ${range}</span><div class="pager-controls"><button type="button" class="pager-arrow" data-page="${productPage-1}" ${productPage===0?'disabled':''} aria-label="Previous product page" title="Previous page">‹</button><div class="pager-numbers" role="group" aria-label="Scroll sideways to choose a page">${pages.map((n,i)=>`${i&&n>pages[i-1]+1?'<span class="pager-gap" aria-hidden="true">…</span>':''}<button type="button" data-page="${n}" ${n===productPage?'aria-current="page"':''} aria-label="Product page ${n+1}">${n+1}</button>`).join('')}</div><button type="button" class="pager-arrow" data-page="${productPage+1}" ${productPage===pageCount-1?'disabled':''} aria-label="Next product page" title="Next page">›</button></div>`;
+    const rail=$('.pager-numbers',pager),current=$('[aria-current="page"]',rail);
+    rail.scrollLeft=Math.max(0,current.offsetLeft-(rail.clientWidth-current.offsetWidth)/2);
     pager.onclick=async e=>{const button=e.target.closest('button[data-page]');if(!button||button.disabled)return;const next=Number(button.dataset.page);if(next===productPage)return;productPage=Math.max(0,Math.min(pageCount-1,next));pager.querySelectorAll('button').forEach(el=>el.disabled=true);if(productResponse){if(!await loadProducts(false)){renderProductList();return;}}else renderProductList();const top=$('#productsPagerTop');top.scrollIntoView({block:'start',behavior:reducedMotion()?'instant':'smooth'});top.querySelector('[aria-current="page"]').focus({preventScroll:true});};
   });
   $('#countLabel').textContent = productResponse?productResponse.allCount:PRODUCTS.length;
@@ -355,7 +360,7 @@ function clearForm(){
 // section use this, so there's exactly one place that talks to Cloudinary.
 async function uploadFileToCloudinary(file){
   if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET){
-    throw new Error('Image hosting isn\'t set up yet — see UPDATE-STEPS.txt, or paste an image URL instead.');
+    throw new Error('Image hosting isn\'t set up yet — see SETUP.md, or paste an image URL instead.');
   }
   const form = new FormData();
   const upload = await resizeUpload(file);
@@ -529,28 +534,6 @@ async function saveProductTask(){
     btn.disabled = false;
     btn.textContent = 'Save product';
   }
-}
-
-async function deleteProduct(id, name){
-  if(pendingDeletes.has(id))return;
-  if (!confirm(`Delete "${name || id}"? This cannot be undone.`)) return;
-  pendingDeletes.add(id);
-  const row=$$('.arow').find(el=>el.dataset.id===String(id));
-  const buttons=row?$$('button',row):[];buttons.forEach(el=>el.disabled=true);
-  try{
-    const res = await adminFetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ key: ADMIN_KEY, action: 'delete', id })
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    if(data.activityWarning)showToast(data.activityWarning);
-    showToast('Product deleted');
-    await Promise.all([loadProducts(false),loadDashboard()]);
-  } catch(err){
-    alert('Delete failed: ' + err.message);
-  } finally {pendingDeletes.delete(id);buttons.forEach(el=>el.disabled=false);}
 }
 
 function switchTab(name){

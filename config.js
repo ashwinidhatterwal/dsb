@@ -2,10 +2,10 @@
    Dhatterwal Suhag Bhandar — shared site configuration
    Used by index.html, product.html (and referenced by admin.html).
    Edit these values to point at your own Google Sheet / Apps
-   Script API and WhatsApp number. See SETUP-GUIDE.md.
+   Script API and WhatsApp number. See SETUP.md.
    ========================================================= */
 const CONFIG = {
-  // Your deployed Apps Script Web App URL (see SETUP-GUIDE.md).
+  // Your deployed Apps Script Web App URL (see SETUP.md).
   // Leave blank ('') to use the bundled sample-products.json for local testing.
   SHEET_API_URL: 'https://script.google.com/macros/s/AKfycbybavfXBC-5CNstiZx-giJcngXjHVKA1NljUQ6N55ybOu4OvunkQTVr3IFvLPp_9Ohu/exec',
   WHATSAPP_NUMBER: '918000519440', // country code + number, no + or spaces

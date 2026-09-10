@@ -135,3 +135,29 @@ input[type=checkbox]:disabled{opacity:.5;cursor:not-allowed}
   .arow:has(.product-select:checked){outline:1px solid Highlight}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* Slim page strip: fixed end arrows and a horizontally scrollable centre. */
+.product-pagination{display:block;margin:12px 0;padding:4px 6px;border-radius:10px;}
+.product-pagination .pager-summary{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+.product-pagination .pager-controls{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:6px;width:100%;}
+.product-pagination .pager-numbers{position:relative;display:flex;justify-content:flex-start;gap:6px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:#789e98 transparent;min-width:0;padding:2px 3px;}
+.product-pagination .pager-numbers button{display:block!important;flex:0 0 40px;min-width:40px;min-height:40px;padding:4px 8px;scroll-snap-align:center;}
+.product-pagination .pager-gap{display:block;align-self:center;flex-shrink:0;}
+.product-pagination .pager-arrow{width:44px;min-width:44px;min-height:44px;padding:0;font-size:25px;line-height:1;}
+/* Compact, aligned product controls without shrinking their tap targets. */
+#tab-products .search-row{margin:12px 0 8px;align-items:stretch;}
+#tab-products .search-row input{max-width:none;}
+#tab-products .search-row input,#tab-products .search-row button,
+.inventory-filters select,.bulk-tools select,.bulk-tools>input,.bulk-tools>button{min-height:44px;padding-block:8px;border-radius:9px;font-size:14px;}
+.inventory-filters{margin:8px 0;padding:8px;gap:8px;}
+.bulk-tools{display:grid;grid-template-columns:auto auto minmax(150px,1fr) minmax(90px,.6fr) auto;gap:8px;padding:10px;margin-top:8px;}
+.bulk-tools select,.bulk-tools>input{width:100%;min-width:0;}
+.bulk-tools p{grid-column:1/-1;font-size:12px;line-height:1.4;}
+#productsStatus{font-size:12px;margin-top:6px;min-height:18px;}
+#productList{gap:10px;}
+.arow{padding:10px;gap:8px;}
+.arow-title{font-size:14px;}
+.arow-sub{font-size:11px;}
+.arow-actions button{min-width:44px;min-height:44px;}
+@media(max-width:1050px){.bulk-tools{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}.bulk-tools>button{grid-column:1/-1}.bulk-tools p{margin:0}.bulk-tools>input,.bulk-tools select{width:100%}}
+@media(max-width:700px){.inventory-filters{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.product-pagination{padding:4px}.product-pagination .pager-controls{gap:4px}.product-pagination .pager-numbers{gap:5px}.product-pagination .pager-numbers button{flex-basis:38px;min-width:38px}}
