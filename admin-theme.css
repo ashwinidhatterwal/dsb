@@ -6,6 +6,8 @@ label, .hint, .section-sub, .connect-card .sub {color: var(--muted);}
 input:not([type=checkbox]), select, textarea {background: #172431; border: 1px solid #536779; border-radius: 10px; color: var(--text); box-shadow: none;}
 input::placeholder, textarea::placeholder {color: #a5b5c3; opacity: 1;}
 input:not([type=checkbox]):focus, select:focus, textarea:focus {border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(152,225,215,.13);}
+input:not([type=checkbox])[readonly] {background: #1c2b38; border-style: dashed; color: #a5b5c3; cursor: default;}
+input:not([type=checkbox])[readonly]:focus {box-shadow: none; border-color: #536779;}
 select option {background: #1d2c3b; color: var(--text);}
 .primary-btn, .install-btn {background: #27665f; color: #fff; border: 1px solid #72b5aa; border-radius: 10px; box-shadow: none;}
 .primary-btn:hover:not(:disabled) {background: #307970;}

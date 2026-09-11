@@ -21,7 +21,7 @@ function offerSavedDraft(){
     cleanEditor=editorFingerprint();
     draft.fields.forEach(x=>{const el=document.getElementById(x.id);if(!el||!el.closest('#tab-add'))return;if(el.type==='checkbox')el.checked=!!x.value;else el.value=x.value;});
     currentExtraImages=Array.isArray(draft.images)?draft.images:[];editingProductId=draft.id;editingSnapshot=draft.snapshot;
-    $('#f-id').readOnly=!!editingProductId;$('#sizeOptionsField').hidden=!$('#f-hasSizes').checked;
+    $('#f-id').readOnly=!!editingProductId;$('#idLockHint').hidden=!editingProductId;$('#duplicateBtn').hidden=!editingProductId;$('#sizeOptionsField').hidden=!$('#f-hasSizes').checked;
     $('#addTabTitle').textContent=editingProductId?'Edit restored draft':'Add a product';updateImagePreview($('#f-image').value);renderExtraImagesPreview();box.hidden=true;
     showToast('Draft restored. Saving checks for changes made since it was opened.');
   };

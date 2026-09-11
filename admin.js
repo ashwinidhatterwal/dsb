@@ -38,13 +38,13 @@ let editingProductId = null; // set while editing an existing product; null when
 let ORDERS = [];
 let productRequestSequence=0, dashboardRequestSequence=0, editorBusy=false;
 const pendingDeletes=new Set(), pendingOrderUpdates=new Set();
+// Guards against two writes overlapping (e.g. switching to edit a different
+// product, or clicking Save twice, while a save/upload is in flight) without
+// freezing the whole form — each task disables only its own button below.
 async function withEditorLock(task){
   if(editorBusy){showToast('Please wait for the current save or upload.');return;}
   editorBusy=true;
-  const fields=$$('input,select,textarea,button',$('#tab-add'));
-  const previous=fields.map(el=>el.disabled);
-  fields.forEach(el=>el.disabled=true);
-  try{return await task();}finally{editorBusy=false;fields.forEach((el,i)=>el.disabled=previous[i]);}
+  try{return await task();}finally{editorBusy=false;}
 }
 function reducedMotion(){return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;}
 
@@ -309,6 +309,8 @@ function fillForm(p){
   editingProductId = p.id || null;
   $('#f-id').value = p.id || '';
   $('#f-id').readOnly = true;
+  $('#idLockHint').hidden = false;
+  $('#duplicateBtn').hidden = false;
   $('#f-name').value = p.name || '';
   $('#f-nameHindi').value = p.namehindi || '';
   $('#f-category').value = p.category || '';
@@ -332,10 +334,29 @@ function fillForm(p){
   window.scrollTo({ top: 0, behavior: reducedMotion()?'instant':'smooth' });
 }
 
+// Keeps the current form's field values but detaches it from the product
+// being edited, so Save adds it as a brand-new listing with its own ID
+// instead of trying to (and failing to) rename the original's ID.
+function duplicateAsNew(){
+  if(editorBusy)return showToast('Please wait for the current save or upload.');
+  const name = $('#f-name').value.trim() || 'product';
+  editingProductId = null;
+  editingSnapshot = null;
+  $('#f-id').value = '';
+  $('#f-id').readOnly = false;
+  $('#idLockHint').hidden = true;
+  $('#duplicateBtn').hidden = true;
+  $('#addTabTitle').textContent = `New product (copy of ${name})`;
+  showToast('Editing a copy — Save will add it as a separate new product. The original is untouched.');
+  $('#f-id').focus();
+}
+
 function clearForm(){
   editingSnapshot=null;
   editingProductId = null;
   $('#f-id').readOnly = false;
+  $('#idLockHint').hidden = true;
+  $('#duplicateBtn').hidden = true;
   ['f-id','f-name','f-nameHindi','f-category','f-subcategory','f-price','f-mrp','f-costprice','f-image','f-description','f-stockqty','f-tags']
     .forEach(id => $('#' + id).value = '');
   $('#f-stock').value = 'in stock';
@@ -380,6 +401,8 @@ async function uploadImageTask(){
     status(statusEl, 'Choose a photo first.', false);
     return;
   }
+  const btn = $('#uploadBtn'), label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Uploading…';
   status(statusEl, 'Uploading…', true);
   try{
     const url = await uploadFileToCloudinary(file);
@@ -389,6 +412,8 @@ async function uploadImageTask(){
     fileInput.value = '';
   } catch(err){
     status(statusEl, 'Upload failed: ' + err.message, false);
+  } finally {
+    btn.disabled = false; btn.textContent = label;
   }
 }
 
@@ -423,6 +448,8 @@ async function uploadExtraImageTask(){
     status(statusEl, 'Choose a photo first.', false);
     return;
   }
+  const btn = $('#uploadExtraBtn'), label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Uploading…';
   status(statusEl, 'Uploading…', true);
   try{
     const url = await uploadFileToCloudinary(file);
@@ -432,6 +459,8 @@ async function uploadExtraImageTask(){
     fileInput.value = '';
   } catch(err){
     status(statusEl, 'Upload failed: ' + err.message, false);
+  } finally {
+    btn.disabled = false; btn.textContent = label;
   }
 }
 
@@ -629,6 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('#saveBtn').addEventListener('click', saveProduct);
   $('#clearFormBtn').addEventListener('click',()=>{if(!editorBusy)clearForm();});
+  $('#duplicateBtn').addEventListener('click', duplicateAsNew);
   let productSearchTimer;
   $('#filterInput').addEventListener('input',()=>{clearTimeout(productSearchTimer);productSearchTimer=setTimeout(()=>loadProducts(false),250);});
   $('#refreshProductsBtn').addEventListener('click',()=>loadProducts(false));
