@@ -285,7 +285,7 @@ function getAllProducts(includeCost) {
   if (includeCost) return rows;
   const publicRows = rows.filter(r=>!isArchived_(r)).map(r => {
     const copy={};
-    ['id','name','namehindi','category','subcategory','price','mrp','image','images','description','stock','stockqty','tags','sizes'].forEach(key=>{if(r[key]!==undefined)copy[key]=r[key];});
+    ['id','name','namehindi','category','subcategory','price','mrp','image','images','description','stock','stockqty','tags','sizes','sizeprices'].forEach(key=>{if(r[key]!==undefined)copy[key]=r[key];});
     return copy;
   });
   cachePutJson_(CATALOG_CACHE_KEY, publicRows, CATALOG_CACHE_TTL);
@@ -298,6 +298,7 @@ function addProduct(p,requestId) {
     const retired=SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeletedProductIds');
     if(p.id&&retired&&findRow_(retired,'id',String(p.id).trim()))throw new Error('This product ID was retired. Choose a new ID.');
     if(p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizes');
+    if(p.sizeprices !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizeprices');
     const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet);
     let reservation=null;
     if(requestId){
@@ -331,6 +332,7 @@ function updateProduct(p) {
   return withWriteLock_(function() {
     validateProductFields_(p, false);
     if(p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizes');
+    if(p.sizeprices !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizeprices');
     const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet);
     const row = findRow_(sheet, 'id', String(p.id || '').trim());
     if (!row) throw new Error('Product not found.');
@@ -745,8 +747,10 @@ function buildValidatedOrderItems_(itemsDetail, productData) {
     const status = String(stockCol === -1 ? 'in stock' : row[stockCol] || 'in stock').trim().toLowerCase();
     if (status === 'out of stock') return { ok: false, error: `${row[nameCol] || requested.id} is out of stock.` };
 
-    const unitPrice = roundMoney_(Number(row[priceCol]));
-    if (String(row[priceCol]).trim() === '' || !Number.isFinite(unitPrice) || unitPrice <= 0 || unitPrice > 10000000) return { ok: false, error: 'Invalid product price.' };
+    let unitPrice = roundMoney_(Number(row[priceCol]));
+    const sizePrices=parseSizePrices_(heads.indexOf('sizeprices')<0 ? '' : row[heads.indexOf('sizeprices')]);
+    if(size && Number.isFinite(sizePrices[size])) unitPrice=roundMoney_(sizePrices[size]);
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0 || unitPrice > 10000000) return { ok: false, error: 'Invalid product price.' };
 
     let tracked = false;
     let availableQty = null;
@@ -986,6 +990,16 @@ function validateProductFields_(p, adding) {
     if(raw.length>1000 || sizes.length>30 || sizes.some(x=>x.length>40 || /[|<>\x00-\x1f]/.test(x))) throw new Error('Use up to 30 sizes, each at most 40 characters, without | or angle brackets.');
     p.sizes=sizes.join(', ');
   }
+  if(p.sizeprices !== undefined){
+    const raw=String(p.sizeprices||'');
+    if(raw.length>2000) throw new Error('Size prices are too long.');
+    let obj={};
+    if(raw){try{obj=JSON.parse(raw);}catch(_){throw new Error('Invalid size-price data.');}}
+    if(!obj || Array.isArray(obj) || typeof obj!=='object')throw new Error('Invalid size-price data.');
+    const sizes=parseSizes_(p.sizes||'');
+    Object.keys(obj).forEach(size=>{const n=Number(obj[size]);if(!sizes.includes(size)||!Number.isFinite(n)||n<=0||n>10000000)throw new Error('Each size price must match an available size and be a valid positive price.');obj[size]=roundMoney_(n);});
+    p.sizeprices=Object.keys(obj).length?JSON.stringify(obj):'';
+  }
   if (adding && !String(p.name || '').trim()) throw new Error('Product name is required.');
   if (adding || p.price !== undefined) {
     const n = Number(p.price);
@@ -1171,6 +1185,7 @@ function orderResult(requestId,phone) {
 }
 
 function parseSizes_(value){return [...new Set(String(value || '').split(/[,\n]/).map(x=>x.trim()).filter(Boolean))];}
+function parseSizePrices_(value){try{const obj=value&&typeof value==='object'?value:JSON.parse(String(value||'{}'));const out={};Object.keys(obj||{}).forEach(k=>{const n=Number(obj[k]);if(Number.isFinite(n)&&n>0)out[String(k)]=n;});return out;}catch(_){return {};}}
 function ensureColumn_(sheet,name){if(headers_(sheet).indexOf(name)<0) sheet.getRange(1,sheet.getLastColumn()+1).setValue(name);}
 
 // Run ONCE from the Apps Script editor, then authorize the timer.
@@ -1280,7 +1295,7 @@ function dispatchAdmin_(body,actor){
 }
 function isArchived_(p){return String(p.archived||'').toLowerCase()==='yes';}
 function productRevision_(p){
-  return hashText_(JSON.stringify(['id','name','namehindi','category','subcategory','price','mrp','costprice','image','images','description','stock','stockqty','tags','sizes','archived'].map(k=>String(p[k]??''))));
+  return hashText_(JSON.stringify(['id','name','namehindi','category','subcategory','price','mrp','costprice','image','images','description','stock','stockqty','tags','sizes','sizeprices','archived'].map(k=>String(p[k]??''))));
 }
 function adminProductsPage_(options){
   const all=getAllProducts(true),q=String(options.query||'').trim().toLowerCase().slice(0,120),category=String(options.category||''),stock=String(options.stock||'all');

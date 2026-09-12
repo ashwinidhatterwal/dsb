@@ -20,6 +20,7 @@ function normalizeRows(rows){
         id: String(r.id ?? r.ID ?? '').trim(),
         name: String(r.name ?? r.Name ?? '').trim(),
         sizes: [...new Set(String(r.sizes ?? r.Sizes ?? '').split(/[,\n]/).map(x=>x.trim()).filter(Boolean))],
+        sizePrices: (()=>{try{const raw=r.sizeprices ?? r.sizePrices ?? r.SizePrices ?? '';const obj=raw&&typeof raw==='object'?raw:JSON.parse(String(raw||'{}'));const out={};Object.entries(obj||{}).forEach(([k,v])=>{const n=Number(v);if(k&&Number.isFinite(n)&&n>0)out[String(k).trim()]=n;});return out;}catch(_){return {};}})(),
         nameHindi: String(r.namehindi ?? r.nameHindi ?? '').trim(),
         category: String(r.category ?? r.Category ?? 'Other').trim() || 'Other',
         subcategory: String(r.subcategory ?? r.Subcategory ?? 'General').trim() || 'General',

@@ -15,8 +15,9 @@ function notifyCartChanged(){
 
 
 function sizeCartKey(id,size){ return size ? String(id)+'::size:'+encodeURIComponent(size) : String(id); }
+function productPriceForSize(product,size){const n=Number(product?.sizePrices?.[size]);return size&&Number.isFinite(n)&&n>0?n:Number(product?.price);}
 function sizedCartProduct(product,size){
-  return size ? {...product,productId:product.productId || product.id,id:sizeCartKey(product.productId || product.id,size),size} : product;
+  return size ? {...product,productId:product.productId || product.id,id:sizeCartKey(product.productId || product.id,size),size,price:productPriceForSize(product,size)} : product;
 }
 const CartStore = (function(){
   let memoryFallback = {};
@@ -128,7 +129,8 @@ const CartStore = (function(){
           cart[id].qty=Math.min(cart[id].qty,available);
           if(!cart[id].qty){removed.push(old.name);delete cart[id];changed=true;return;}
         }
-        if(oldQty!==cart[id].qty || oldPrice!==fresh.price) adjusted.push({name:old.name,size:old.size || '',oldQty,qty:cart[id].qty,oldPrice,price:fresh.price});
+        const freshLinePrice=productPriceForSize(fresh,old.size || '');
+        if(oldQty!==cart[id].qty || oldPrice!==freshLinePrice) adjusted.push({name:old.name,size:old.size || '',oldQty,qty:cart[id].qty,oldPrice,price:freshLinePrice});
         used[baseId]=(used[baseId] || 0)+cart[id].qty;changed=true;
       });
       if (changed) writeAll(cart);

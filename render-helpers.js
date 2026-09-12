@@ -61,7 +61,7 @@ function cardHtml(p,options={}){
       ${customerProductSecondaryName(p) ? `<div class="name-hindi">${escapeHtml(customerProductSecondaryName(p))}</div>` : ''}
       <div class="card-rating-slot">${cardRatingHtml(p)}</div>
       <div class="prices">
-        <span class="price">${money(p.price)}</span>
+        <span class="price">${Object.keys(p.sizePrices||{}).length?'From ':''}${money(Object.keys(p.sizePrices||{}).length?Math.min(Number(p.price),...Object.values(p.sizePrices).map(Number).filter(n=>Number.isFinite(n)&&n>0)):p.price)}</span>
         ${p.mrp > p.price ? `<span class="mrp">${money(p.mrp)}</span>` : ''}
       </div>
       ${low ? `<div class="low-stock">${escapeHtml(low)}</div>` : ''}

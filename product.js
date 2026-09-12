@@ -107,7 +107,7 @@ function renderProduct(p){
       <h1 class="pd-title">${escapeHtml(customerProductName(p))}</h1>
       ${customerProductSecondaryName(p) ? `<div class="pd-title-hindi">${escapeHtml(customerProductSecondaryName(p))}</div>` : ''}
       <div class="pd-prices">
-        <span class="price">${money(p.price)}</span>
+        <span class="price" id="pdPrice">${money(displayProductPrice(p))}</span>
         ${p.mrp > p.price ? `<span class="mrp">${money(p.mrp)}</span>` : ''}
         ${disc ? `<span class="discount" style="position:static; display:inline-block;">${disc}% OFF</span>` : ''}
       </div>
@@ -159,6 +159,7 @@ function renderProduct(p){
   `;
   bindGallerySwipe();
   updateSizeOptions(p);
+  updateDisplayedProductPrice(p);
   renderPdActions(p);
   renderStarInput();
   $('#submitReviewBtn').addEventListener('click', submitReview);
@@ -369,6 +370,9 @@ function setJsonLd(id, data){
   }
   el.textContent = JSON.stringify(data);
 }
+
+function displayProductPrice(p){if(selectedSize)return productPriceForSize(p,selectedSize);const vals=Object.values(p.sizePrices||{}).map(Number).filter(n=>Number.isFinite(n)&&n>0);return vals.length?Math.min(Number(p.price),...vals):p.price;}
+function updateDisplayedProductPrice(p){const el=$('#pdPrice');if(!el)return;const price=selectedSize?productPriceForSize(p,selectedSize):displayProductPrice(p);el.textContent=(Object.keys(p.sizePrices||{}).length&&!selectedSize?'From ':'')+money(price);}
 
 function renderPdActions(p){
   if(isOutOfStock(p)){$('#pdActions').innerHTML='<button class="ghost-btn" disabled style="flex:1;">Currently unavailable</button>';return;}
@@ -582,5 +586,5 @@ function updateSizeOptions(p){
   if(!p.sizes.includes(selectedSize))selectedSize='';
   if(!field){field=document.createElement('fieldset');field.className='product-sizes';$('#pdActions').before(field);}
   field.innerHTML=`<legend>Choose size</legend><div class="size-options">${p.sizes.map(size=>`<button type="button" class="size-option" data-size="${escapeHtml(size)}" aria-pressed="${selectedSize===size}">${escapeHtml(size)}</button>`).join('')}</div><p class="hint" id="sizeHelp">Select a size before adding to cart.</p>`;
-  field.querySelectorAll('.size-option').forEach(btn=>btn.addEventListener('click',()=>{selectedSize=btn.dataset.size;field.querySelectorAll('.size-option').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.size===selectedSize)));renderPdActions(CURRENT_PRODUCT||p);}));
+  field.querySelectorAll('.size-option').forEach(btn=>btn.addEventListener('click',()=>{selectedSize=btn.dataset.size;field.querySelectorAll('.size-option').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.size===selectedSize)));updateDisplayedProductPrice(CURRENT_PRODUCT||p);renderPdActions(CURRENT_PRODUCT||p);}));
 }

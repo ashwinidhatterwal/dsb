@@ -324,6 +324,7 @@ function fillForm(p){
   $('#f-stockqty').value = (p.stockqty === undefined || p.stockqty === null || p.stockqty === '') ? '' : p.stockqty;
   $('#f-tags').value = p.tags || '';
   $('#f-sizes').value = p.sizes || '';
+  $('#f-sizeprices').value = formatSizePricesForAdmin(p.sizeprices || '');
   $('#f-hasSizes').checked = !!String(p.sizes || '').trim();
   $('#sizeOptionsField').hidden = !$('#f-hasSizes').checked;
   updateImagePreview(p.image || '');
@@ -360,7 +361,7 @@ function clearForm(){
   ['f-id','f-name','f-nameHindi','f-category','f-subcategory','f-price','f-mrp','f-costprice','f-image','f-description','f-stockqty','f-tags']
     .forEach(id => $('#' + id).value = '');
   $('#f-stock').value = 'in stock';
-  $('#f-sizes').value='';$('#f-hasSizes').checked=false;$('#sizeOptionsField').hidden=true;
+  $('#f-sizes').value='';$('#f-sizeprices').value='';$('#f-hasSizes').checked=false;$('#sizeOptionsField').hidden=true;
   $('#f-imagefile').value = '';
   $('#uploadStatus').textContent = '';
   updateImagePreview('');
@@ -473,6 +474,23 @@ function addExtraImageUrl(){
   input.value = '';
 }
 
+
+function parseAdminSizePrices(raw){
+  raw=String(raw||'').trim();if(!raw)return '';
+  const out={};
+  for(const part of raw.split(/[,\n]/)){
+    const item=part.trim();if(!item)continue;
+    const m=item.match(/^(.+?)\s*=\s*(\d+(?:\.\d{1,2})?)$/);if(!m)return null;
+    const size=m[1].trim(),price=Number(m[2]);if(!size||!Number.isFinite(price)||price<=0)return null;
+    out[size]=price;
+  }
+  return Object.keys(out).length?JSON.stringify(out):'';
+}
+function formatSizePricesForAdmin(value){
+  if(!value)return '';
+  try{const obj=typeof value==='string'?JSON.parse(value):value;return Object.entries(obj||{}).map(([size,price])=>`${size}=${price}`).join(', ');}catch(_){return String(value||'');}
+}
+
 async function saveProduct(){return withEditorLock(saveProductTask);}
 async function saveProductTask(){
   const statusEl = $('#saveStatus');
@@ -495,9 +513,12 @@ async function saveProductTask(){
     stock: (stockqty === 0) ? 'out of stock' : $('#f-stock').value,
     stockqty,
     tags: $('#f-tags').value.trim(),
-    sizes: $('#f-hasSizes').checked ? [...new Set($('#f-sizes').value.split(/[,\n]/).map(x=>x.trim()).filter(Boolean))].join(', ') : ''
+    sizes: $('#f-hasSizes').checked ? [...new Set($('#f-sizes').value.split(/[,\n]/).map(x=>x.trim()).filter(Boolean))].join(', ') : '',
+    sizeprices: $('#f-hasSizes').checked ? parseAdminSizePrices($('#f-sizeprices').value) : ''
   };
   if($('#f-hasSizes').checked && !product.sizes){status(statusEl,'Enter at least one size or turn off size selection.',false);return;}
+  if(product.sizeprices === null){status(statusEl,'Size prices must use Size=Price, for example 32B=299, 34B=329.',false);return;}
+  if(product.sizeprices){const allowed=new Set(product.sizes.split(',').map(x=>x.trim()));const prices=JSON.parse(product.sizeprices);const unknown=Object.keys(prices).find(k=>!allowed.has(k));if(unknown){status(statusEl,`Size price ${unknown} is not in Available sizes.`,false);return;}}
   if (!product.name){
     status(statusEl, 'Product name is required.', false);
     return;
