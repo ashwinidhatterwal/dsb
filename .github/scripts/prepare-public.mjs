@@ -26,3 +26,5 @@ await fs.writeFile(path.join(destination,'catalog-snapshot.json'),JSON.stringify
 const count=await generateStaticProducts(destination,rows,await fs.readFile('product.html','utf8'),site);
 await fs.appendFile(path.join(destination,'config.js'),'\nwindow.DSB_PUBLISHED_PRODUCTS=new Set('+JSON.stringify(rows.map(p=>String(p.id))).replaceAll('<','\\u003c')+');\n');
 console.log(`Generated ${count} static product pages.`);
+
+await fs.appendFile(path.join(destination,'config.js'),'\nwindow.DSB_HINDI_PRODUCTS=new Set('+JSON.stringify(rows.filter(p=>p.namehindi&&p.descriptionhindi).map(p=>String(p.id))).replaceAll('<','\\u003c')+');\n');

@@ -1,45 +1,54 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-export const productPath = id => `products/p-${Buffer.from(String(id)).toString('hex')}.html`;
-const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const json = value => JSON.stringify(value).replaceAll('<','\\u003c');
-export async function generateStaticProducts(destination, rows, template, siteBase){
-  if(!Array.isArray(rows))throw new Error('Invalid catalogue response');
-  const products=rows.filter(p=>String(p.id || '').trim());
-  if(!products.length)throw new Error('Refusing to publish an empty generated catalogue');
-  await fs.mkdir(path.join(destination,'products'),{recursive:true});
-  const links=[];
-  for(const p of products){
-    const id=String(p.id).trim(),url=`${siteBase}/${productPath(id)}`;
-    const title=`${p.name || id} | Dhatterwal Suhag Bhandar`;
-    const description=String(p.description || `Shop ${p.name || id} at Dhatterwal Suhag Bhandar.`).slice(0,180);
-    const price=Number(p.price), validPrice=Number.isFinite(price)&&price>0;
-    const image=/^https:\/\//i.test(String(p.image)) ? optimizeImage(String(p.image)) : '';
-    const content=`<article class="pd-wrap" data-prerendered><div class="pd-breadcrumb"><a href="index.html">Shop</a> / ${esc(p.category)}</div>${image?`<div class="pd-gallery"><div class="pd-gallery-track"><div class="pd-slide"><img src="${esc(image)}" alt="${esc(p.name)}" decoding="async" fetchpriority="high"></div></div></div>`:''}<div class="pd-info"><h1 class="pd-title">${esc(p.name || id)}</h1>${validPrice?`<div class="pd-prices"><span class="price">₹${price.toFixed(2)}</span></div>`:''}<p class="pd-desc">${esc(p.description)}</p><div class="pd-id">Product ID: ${esc(id)}</div><p class="hint">Price and availability are checked before ordering.</p><div class="pd-actions"><p role="status">Connecting to the shop for current availability…</p></div><noscript>Enable JavaScript to choose sizes and place an order.</noscript></div></article>`;
-    const schema={'@context':'https://schema.org','@type':'Product',name:String(p.name || id),description,sku:id,url,...(image?{image:[image]}:{}),...(validPrice?{offers:{'@type':'Offer',priceCurrency:'INR',price:price.toFixed(2),url,availability:p.stock==='out of stock'||(String(p.stockqty??'')!==''&&Number(p.stockqty)<=0)?'https://schema.org/OutOfStock':'https://schema.org/InStock'}}:{})};
-    let html=template.replace('<html lang="en">',()=>`<html lang="en" data-product-id="${esc(id)}">`).replace('<head>',()=>`<head>\n<base href="${esc(siteBase)}/">`);
-    html=html.replace(/<title>[\s\S]*?<\/title>/,()=>`<title>${esc(title)}</title>`)
-      .replace(/(<meta name="description" content=")[^"]*/,(_,prefix)=>prefix+esc(description))
-      .replace(/(<link rel="canonical" id="canonicalLink" href=")[^"]*/,(_,prefix)=>prefix+esc(url))
-      .replace(/(<meta[^>]*(?:property="og:title"|name="twitter:title")[^>]*content=")[^"]*/g,(_,prefix)=>prefix+esc(title))
-      .replace(/(<meta[^>]*(?:property="og:description"|name="twitter:description")[^>]*content=")[^"]*/g,(_,prefix)=>prefix+esc(description))
-      .replace(/(<meta[^>]*property="og:url"[^>]*content=")[^"]*/g,(_,prefix)=>prefix+esc(url));
-    html=html.replace(/(<div id="pdRoot">)[\s\S]*?(<\/div>\s*<footer>)/,(_,prefix,suffix)=>prefix+content+suffix);
-    if(!html.includes('data-prerendered'))throw new Error('Product template target not found');
-    html=html.replace('</head>',()=>`<script type="application/ld+json" id="staticProductLd">${json(schema)}</script></head>`);
-    if(image) html=html.replace(/(<meta[^>]*(?:property="og:image"|name="twitter:image")[^>]*content=")[^"]*/g,(_,prefix)=>prefix+esc(image));
-    await fs.writeFile(path.join(destination,productPath(id)),html);
-    links.push(`<a class="catalog-item" href="${esc(productPath(id))}"><strong>${esc(p.name || id)}</strong><span>${esc(p.category)}${validPrice?' · ₹'+price.toFixed(2):''}</span></a>`);
+import seo from '../../seo.js';
+export const productPath=seo.productPath;
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const json=v=>JSON.stringify(v).replaceAll('<','\\u003c');
+const hiCategory=c=>({'Bangle':'चूड़ियाँ','Bangles':'चूड़ियाँ','Lingerie':'अंतर्वस्त्र','Cosmetics':'सौंदर्य प्रसाधन','Hair Care':'बालों की देखभाल','Personal Care':'व्यक्तिगत देखभाल','Stationery':'स्टेशनरी','Baby Products':'शिशु उत्पाद','Hair accessories':'बालों की सजावट','Other':'अन्य उत्पाद'}[c]||c);
+const localized=p=>p.namehindi&&p.descriptionhindi;
+const alternates=(en,hi)=>hi?`<link rel="alternate" hreflang="en-IN" href="${esc(en)}"><link rel="alternate" hreflang="hi-IN" href="${esc(hi)}"><link rel="alternate" hreflang="x-default" href="${esc(en)}">`:'';
+const specs=p=>`<dl class="product-specs">${seo.details(p).map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
+const item=(p,site,hi=false)=>`<a class="catalog-item" href="${esc((hi&&localized(p)?'hi/':'')+productPath(p.id))}">${p.image&&/^https:\/\//.test(p.image)?`<img src="${esc(optimizeImage(p.image,400))}" alt="${esc(hi?p.namehindi:seo.name(p))}" loading="lazy" decoding="async" width="160" height="160">`:''}<strong>${esc(hi?p.namehindi:seo.name(p))}</strong><span>₹${Number(p.price).toFixed(2)}</span></a>`;
+function page(title,description,url,body,site,lang='en',schema={},alternate=''){
+ return `<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="${esc(site)}/"><title>${esc(title)}</title><meta name="description" content="${esc(description)}"><meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="${esc(url)}">${alternate}<meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:url" content="${esc(url)}"><meta property="og:image" content="${esc(site)}/social-card.png"><meta name="twitter:card" content="summary_large_image"><link rel="icon" href="favicon-48.png"><link rel="stylesheet" href="style.css?v=20260912seo1"><script type="application/ld+json">${json(schema)}</script></head><body><main class="seo-category"><nav><a href="${lang==='hi'?'hi/':'index.html'}">${lang==='hi'?'दुकान':'Shop'}</a> · <a href="catalog.html">${lang==='hi'?'सभी उत्पाद':'All products'}</a> · <a href="contact.html">${lang==='hi'?'संपर्क':'Contact'}</a></nav>${body}</main></body></html>`;
+}
+export async function generateStaticProducts(destination,rows,template,site){
+ const products=rows.filter(p=>String(p.id||'').trim());if(!products.length)throw Error('Refusing empty catalogue');
+ const ids=new Set();for(const p of products){if(ids.has(String(p.id)))throw Error('Duplicate product ID '+p.id);ids.add(String(p.id));}
+ await fs.mkdir(path.join(destination,'products'),{recursive:true});await fs.mkdir(path.join(destination,'hi/products'),{recursive:true});await fs.mkdir(path.join(destination,'categories'),{recursive:true});
+ const hindi=products.filter(localized);
+ for(const p of products){
+  const en=site+'/'+productPath(p.id),hi=localized(p)?site+'/hi/'+productPath(p.id):'';
+  for(const lang of (hi?['en','hi']:['en'])){
+   const isHi=lang==='hi',url=isHi?hi:en,title=(isHi?p.namehindi:seo.name(p))+' | '+(isHi?'धत्तरवाल सुहाग भंडार':'Dhatterwal Suhag Bhandar'),description=isHi?p.descriptionhindi:seo.description(p);
+   const image=/^https:\/\//.test(p.image||'')?optimizeImage(p.image,1200):'';
+   const siblings=p.variantgroup?products.filter(x=>x.variantgroup===p.variantgroup):[];
+   const variantLinks=siblings.length>1?`<nav class="static-variants" aria-label="${isHi?'साइज़ / रंग':'Size / colour'}">${siblings.map(x=>`<a href="${esc(productPath(x.id))}">${esc(x.variantlabel||x.name)} · ₹${Number(x.price).toFixed(2)}</a>`).join('')}</nav>`:'';
+   const sizeMap=seo.product(p,products,site).offers,price=Array.isArray(sizeMap)?Math.min(...sizeMap.map(o=>Number(o.price))):Number(p.price);
+   const content=`<article class="pd-wrap" data-prerendered><div class="pd-breadcrumb"><a href="index.html">${isHi?'दुकान':'Shop'}</a> / <a href="${esc(seo.categoryPath(p.category||'Other'))}">${esc(isHi?hiCategory(p.category||'Other'):p.category||'Other')}</a></div>${image?`<div class="pd-gallery"><div class="pd-gallery-track"><div class="pd-slide"><img src="${esc(image)}" alt="${esc(isHi?p.namehindi:seo.name(p))}" decoding="async" fetchpriority="high" width="600" height="800"></div></div></div>`:''}<div class="pd-info"><h1 class="pd-title">${esc(isHi?p.namehindi:seo.name(p))}</h1><div class="pd-prices"><span class="price">${Array.isArray(sizeMap)?isHi?'शुरुआती कीमत ':'From ':''}₹${price.toFixed(2)}</span>${Number(p.mrp)>price?`<span class="mrp">₹${Number(p.mrp).toFixed(2)}</span>`:''}</div><p class="pd-desc">${esc(description)}</p>${isHi?'':specs(p)}${variantLinks}<div class="pd-id">${isHi?'उत्पाद आईडी':'Product ID'}: ${esc(p.id)}</div><p>${isHi?'ऑर्डर से पहले कीमत और उपलब्धता की जाँच की जाती है।':'Current price, stock and delivery charges are checked before you confirm your order.'}</p><a href="returns.html">${isHi?'रिटर्न और रिफंड की शर्तें':'Returns and refunds'}</a><div class="pd-actions"><p role="status">${isHi?'वर्तमान उपलब्धता के लिए दुकान से जुड़ रहे हैं…':'Connecting to the shop for current availability…'}</p></div><noscript>${isHi?'ऑर्डर करने के लिए JavaScript चालू करें या दुकान से संपर्क करें।':'Enable JavaScript to order, or contact the shop.'}</noscript></div></article>`;
+   let html=template.replace('<html lang="en">',`<html lang="${lang}" data-product-id="${esc(p.id)}" data-page-language="${lang}">`).replace('<head>',`<head><base href="${esc(site)}/">`);
+   html=html.replace(/<title>[\s\S]*?<\/title>/,()=>`<title>${esc(title)}</title>`).replace(/(<meta name="description" content=")[^"]*/,(_,x)=>x+esc(description.slice(0,170))).replace(/(<link rel="canonical" id="canonicalLink" href=")[^"]*/,(_,x)=>x+esc(url)).replace(/(<meta[^>]*(?:property="og:title"|name="twitter:title")[^>]*content=")[^"]*/g,(_,x)=>x+esc(title)).replace(/(<meta[^>]*(?:property="og:description"|name="twitter:description")[^>]*content=")[^"]*/g,(_,x)=>x+esc(description.slice(0,170))).replace(/(<meta[^>]*property="og:url"[^>]*content=")[^"]*/g,(_,x)=>x+esc(url));
+   if(isHi)html=html.replace('content="en_IN"','content="hi_IN"');
+   if(image)html=html.replace(/(<meta[^>]*(?:property="og:image"|name="twitter:image")[^>]*content=")[^"]*/g,(_,x)=>x+esc(image));
+   html=html.replace(/(<div id="pdRoot">)[\s\S]*?(<\/div>\s*<footer>)/,(_,x,y)=>x+content+y);
+   if(!html.includes('data-prerendered'))throw Error('Template target missing');
+   const productGraph=seo.graph(p,products,site,lang);const graph={'@context':'https://schema.org','@graph':[...(productGraph['@graph']||[productGraph]),seo.breadcrumbs(p,site,lang)]};
+   html=html.replace('</head>',`${alternates(en,hi)}<script>window.DSB_PAGE_LANGUAGE=${json(lang)};window.DSB_LANGUAGE_ALTERNATE=${json(hi?isHi?en:hi:null)};</script><script type="application/ld+json" id="staticProductLd">${json(graph)}</script></head>`);
+   await fs.writeFile(path.join(destination,(isHi?'hi/':'')+productPath(p.id)),html);
   }
-  const catalogFile=path.join(destination,'catalog.html');
-  let catalog=await fs.readFile(catalogFile,'utf8');
-  catalog=catalog.replace(/(<div[^>]*id="catalogRoot"[^>]*>)[\s\S]*?(<\/div>)/,(_,prefix,suffix)=>prefix+links.join('\n')+suffix);
-  await fs.writeFile(catalogFile,catalog);
-  return products.length;
+ }
+ const categories=[...new Set(products.map(p=>p.category||'Other'))];
+ for(const category of categories){
+  const items=products.filter(p=>(p.category||'Other')===category),title=category+' in Goluwala | Dhatterwal Suhag Bhandar',desc=`Browse ${category.toLowerCase()} from Dhatterwal Suhag Bhandar in Goluwala, Rajasthan. View product details, prices and available choices before ordering.`,url=site+'/'+seo.categoryPath(category);
+  const body=`<h1>${esc(category)} in Goluwala</h1><p>${esc(desc)}</p><a class="primary-btn" href="index.html?category=${encodeURIComponent(category)}">Shop this category</a><p>Delivery charges are shown before order confirmation. <a href="contact.html">Ask about delivery to your area</a>.</p><div class="seo-products">${items.map(p=>item(p,site)).join('')}</div><p><a href="returns.html">Read returns and refund conditions</a></p>`;
+  const schema={'@context':'https://schema.org','@type':'CollectionPage',name:title,url,mainEntity:{'@type':'ItemList',numberOfItems:items.length,itemListElement:items.map((p,i)=>({'@type':'ListItem',position:i+1,url:site+'/'+productPath(p.id)}))}};
+  await fs.writeFile(path.join(destination,seo.categoryPath(category)),page(title,desc,url,body,site,'en',schema));
+ }
+ const categoryLinks=categories.map(c=>`<a href="${esc(seo.categoryPath(c))}">${esc(c)}</a>`).join('');
+ const catalogFile=path.join(destination,'catalog.html');let catalog=await fs.readFile(catalogFile,'utf8');catalog=catalog.replace(/(<div[^>]*id="catalogRoot"[^>]*>)[\s\S]*?(<\/div>)/,(_,x,y)=>x+`<nav class="seo-category-links">${categoryLinks}</nav><div class="seo-products">${products.map(p=>item(p,site)).join('')}</div>`+y);await fs.writeFile(catalogFile,catalog);
+ const homeFile=path.join(destination,'index.html');let home=await fs.readFile(homeFile,'utf8');home=home.replace('<main id="shopMain">','<main id="shopMain"><nav class="seo-category-links" aria-label="Product categories">'+categoryLinks+'</nav>');home=home.replace('</head>',alternates(site+'/',site+'/hi/')+'</head>');await fs.writeFile(homeFile,home);
+ const hiBody=`<h1>धत्तरवाल सुहाग भंडार</h1><p>गोलूवाला, राजस्थान में आपकी स्थानीय दुकान। उत्पाद देखें और ऑनलाइन ऑर्डर करें।</p><nav class="seo-category-links">${categories.map(c=>`<a href="${esc(seo.categoryPath(c))}">${esc(hiCategory(c))}</a>`).join('')}</nav>${hindi.length?`<h2>उत्पाद और जानकारी</h2><div class="seo-products">${hindi.map(p=>item(p,site,true)).join('')}</div>`:''}<p>डिलीवरी शुल्क ऑर्डर की पुष्टि से पहले दिखाए जाते हैं। रिटर्न की शर्तें जानने के लिए <a href="returns.html">रिटर्न पेज</a> देखें।</p><p><a href="index.html">English · ऑनलाइन दुकान खोलें</a> · <a href="contact.html">दुकान से संपर्क करें</a></p>`;
+ await fs.writeFile(path.join(destination,'hi/index.html'),page('धत्तरवाल सुहाग भंडार | गोलूवाला','गोलूवाला, राजस्थान की धत्तरवाल सुहाग भंडार दुकान के उत्पाद देखें। ऑनलाइन ऑर्डर और दुकान से संपर्क की सुविधा।',site+'/hi/',hiBody,site,'hi',{'@context':'https://schema.org','@type':'WebPage',inLanguage:'hi-IN',name:'धत्तरवाल सुहाग भंडार'},alternates(site+'/',site+'/hi/')));
+ return products.length;
 }
-
-function optimizeImage(src){
-  try{const u=new URL(src),asset=u.pathname.split('/image/upload/')[1],first=asset?.split('/')[0]||'';
-    if(u.hostname==='res.cloudinary.com' && asset && !(/^(?:[a-z]{1,4}_|\$)/.test(first)&&!/^v\d+$/.test(first)))u.pathname=u.pathname.replace('/image/upload/','/image/upload/f_auto,q_auto,c_limit,w_1200/');return u.href;
-  }catch(_){return src;}
-}
+function optimizeImage(src,width){try{const u=new URL(src),asset=u.pathname.split('/image/upload/')[1],first=asset?.split('/')[0]||'';if(u.hostname==='res.cloudinary.com'&&asset&&!(/^(?:[a-z]{1,4}_|\$)/.test(first)&&!/^v\d+$/.test(first)))u.pathname=u.pathname.replace('/image/upload/',`/image/upload/f_auto,q_auto,c_limit,w_${width}/`);return u.href;}catch(_){return src;}}
