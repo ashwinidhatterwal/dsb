@@ -3,7 +3,7 @@
    ========================================================= */
 let CURRENT_PRODUCT = null;
 let selectedRating = 5;
-let selectedSize = '';
+let selectedSize = new URLSearchParams(location.search).get('size') || '';
 let CURRENT_REVIEWS=[];
 let galleryResizeObserver=null;
 
@@ -107,7 +107,7 @@ function renderProduct(p){
       <h1 class="pd-title">${escapeHtml(customerProductName(p))}</h1>
       ${customerProductSecondaryName(p) ? `<div class="pd-title-hindi">${escapeHtml(customerProductSecondaryName(p))}</div>` : ''}
       <div class="pd-prices">
-        <span class="price" id="pdPrice">${money(displayProductPrice(p))}</span>
+        <span class="price">${money(p.price)}</span>
         ${p.mrp > p.price ? `<span class="mrp">${money(p.mrp)}</span>` : ''}
         ${disc ? `<span class="discount" style="position:static; display:inline-block;">${disc}% OFF</span>` : ''}
       </div>
@@ -123,7 +123,8 @@ function renderProduct(p){
           Size guide
         </button>` : ''}
       </div>
-      <p class="pd-desc">${escapeHtml(p.description || 'Contact the shop for product details before ordering.')}</p>
+      <p class="pd-desc">${escapeHtml((window.DSB_PAGE_LANGUAGE==='hi'?p.descriptionhindi:p.description) || 'Contact the shop for product details before ordering.')}</p>
+      <dl class="product-specs">${DSB_SEO.details(p).map(([k,v])=>`<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}</dl>
       <div class="pd-id">Product ID: ${escapeHtml(p.id)}</div>
       ${p.sizes?.length ? `<fieldset class="product-sizes"><legend>Choose size</legend><div class="size-options">${p.sizes.map(size=>`<button type="button" class="size-option" data-size="${escapeHtml(size)}" aria-pressed="${selectedSize===size}">${escapeHtml(size)}</button>`).join('')}</div><p class="hint" id="sizeHelp">Select a size before adding to cart.</p></fieldset>` : ''}
       <div class="pd-actions" id="pdActions"></div>
@@ -159,7 +160,6 @@ function renderProduct(p){
   `;
   bindGallerySwipe();
   updateSizeOptions(p);
-  updateDisplayedProductPrice(p);
   renderPdActions(p);
   renderStarInput();
   $('#submitReviewBtn').addEventListener('click', submitReview);
@@ -282,9 +282,10 @@ function updateSeoTags(p){
   document.getElementById('staticProductLd')?.remove();
   const url = productUrl(p);
   const imageUrl = (() => { try { return new URL(p.image, CONFIG.SITE_URL + '/').href; } catch (_) { return p.image; } })();
-  const title = `${p.name} — ${CONFIG.SHOP_NAME}`;
-  const desc = (p.description && p.description.trim())
-    ? p.description.trim().slice(0, 155)
+  const title = `${window.DSB_PAGE_LANGUAGE==='hi'?(p.nameHindi||p.name):DSB_SEO.name(p)} — ${CONFIG.SHOP_NAME}`;
+  const productDescription=window.DSB_PAGE_LANGUAGE==='hi'?(p.descriptionhindi||p.description):DSB_SEO.description(p);
+  const desc = (productDescription && productDescription.trim())
+    ? productDescription.trim().slice(0, 170)
     : `Buy ${p.name} from ${CONFIG.SHOP_NAME} in Goluwala, Rajasthan — order online.`;
 
   document.title = title;
@@ -313,49 +314,18 @@ function updateStructuredData(p, reviews){
   const images = (p.gallery && p.gallery.length ? p.gallery : [p.image]).map(src => {
     try { return new URL(src, CONFIG.SITE_URL + '/').href; } catch (_) { return src; }
   });
-  const productLd = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    'name': p.name,
-    'image': images,
-    'description': p.description || `${p.name} — available at ${CONFIG.SHOP_NAME}`,
-    'sku': p.id,
-    'category': `${p.category} > ${p.subcategory}`,
-    'url': url,
-    'offers': {
-      '@type': 'Offer',
-      'url': url,
-      'priceCurrency': 'INR',
-      'price': Number(p.price).toFixed(2),
-      'availability': isOutOfStock(p) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
-      'itemCondition': 'https://schema.org/NewCondition',
-      'seller': {
-        '@type': 'Organization',
-        'name': CONFIG.SHOP_NAME,
-        'url': CONFIG.SITE_URL
-      }
-    }
-  };
+  const productLd=DSB_SEO.graph(p,ALL_PRODUCTS,CONFIG.SITE_URL,window.DSB_PAGE_LANGUAGE||'en');
+  const ratedProduct=productLd['@graph']?productLd['@graph'][0]:productLd;
   if (reviews && reviews.length){
     const avg = reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviews.length;
-    productLd.aggregateRating = {
+    ratedProduct.aggregateRating = {
       '@type': 'AggregateRating',
       'ratingValue': avg.toFixed(1),
       'reviewCount': reviews.length
     };
   }
 
-  const breadcrumbLd = {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    'itemListElement': [
-      { '@type': 'ListItem', 'position': 1, 'name': 'Shop', 'item': `${CONFIG.SITE_URL}/index.html` },
-      { '@type': 'ListItem', 'position': 2, 'name': p.category, 'item': `${CONFIG.SITE_URL}/index.html?category=${encodeURIComponent(p.category)}` },
-      { '@type': 'ListItem', 'position': 3, 'name': p.subcategory, 'item': `${CONFIG.SITE_URL}/index.html?category=${encodeURIComponent(p.category)}&subcategory=${encodeURIComponent(p.subcategory)}` },
-      { '@type': 'ListItem', 'position': 4, 'name': p.name, 'item': url }
-    ]
-  };
-
+  const breadcrumbLd=DSB_SEO.breadcrumbs(p,CONFIG.SITE_URL);
   setJsonLd('productJsonLd', productLd);
   setJsonLd('breadcrumbJsonLd', breadcrumbLd);
 }
@@ -371,10 +341,15 @@ function setJsonLd(id, data){
   el.textContent = JSON.stringify(data);
 }
 
-function displayProductPrice(p){if(selectedSize)return productPriceForSize(p,selectedSize);const vals=Object.values(p.sizePrices||{}).map(Number).filter(n=>Number.isFinite(n)&&n>0);return vals.length?Math.min(Number(p.price),...vals):p.price;}
-function updateDisplayedProductPrice(p){const el=$('#pdPrice');if(!el)return;const price=selectedSize?productPriceForSize(p,selectedSize):displayProductPrice(p);el.textContent=(Object.keys(p.sizePrices||{}).length&&!selectedSize?'From ':'')+money(price);}
-
 function renderPdActions(p){
+  const priced=sizedCartProduct(p,selectedSize);
+  const prices=$('#pdRoot .pd-prices');if(prices)prices.innerHTML=`<span class="price">${money(priced.price)}</span>${p.mrp>priced.price?`<span class="mrp">${money(p.mrp)}</span>`:''}`;
+  let merchandising=$('#variantMerchandising');
+  if(!merchandising){merchandising=document.createElement('div');merchandising.id='variantMerchandising';$('#pdActions').before(merchandising);}
+  const siblings=p.variantgroup?ALL_PRODUCTS.filter(x=>x.variantgroup===p.variantgroup):[];
+  const merchandisingHtml=(siblings.length?`<fieldset class="product-sizes"><legend>Size / colour</legend><div class="size-options">${siblings.map(x=>`<a class="size-option" href="${preferredProductPath(x.id)}" ${x.id===p.id?'aria-current="page"':''}>${escapeHtml(x.variantlabel)} · ${money(x.price)}${isOutOfStock(x)?' · Unavailable':''}</a>`).join('')}</div></fieldset>`:'')+(p.bundlecontents?`<div class="product-sizes"><strong>Combo includes</strong><p>${escapeHtml(p.bundlecontents)}</p></div>`:'');
+  if(merchandising.dataset.html!==merchandisingHtml){merchandising.innerHTML=merchandisingHtml;merchandising.dataset.html=merchandisingHtml;}
+
   if(isOutOfStock(p)){$('#pdActions').innerHTML='<button class="ghost-btn" disabled style="flex:1;">Currently unavailable</button>';return;}
   if(p.sizes?.length && !p.sizes.includes(selectedSize)){
     $('#pdActions').innerHTML='<button class="ghost-btn" disabled style="flex:1;">Choose a size first</button>';return;
@@ -421,9 +396,9 @@ function refreshCurrentProductCard(){
 
 /* ---------------- Related products ---------------- */
 function renderRelated(p){
-  let related = ALL_PRODUCTS.filter(x => x.id !== p.id && x.category === p.category);
+  let related = ALL_PRODUCTS.filter(x => x.id !== p.id && !isOutOfStock(x) && (!p.variantgroup || x.variantgroup!==p.variantgroup) && x.category === p.category);
   if (related.length < 4){
-    const extra = ALL_PRODUCTS.filter(x => x.id !== p.id && !related.includes(x)).slice(0, 8 - related.length);
+    const extra = ALL_PRODUCTS.filter(x => x.id !== p.id && !isOutOfStock(x) && (!p.variantgroup || x.variantgroup!==p.variantgroup) && !related.includes(x)).slice(0, 8 - related.length);
     related = related.concat(extra);
   }
   related = related.slice(0, 8);
@@ -549,18 +524,17 @@ document.addEventListener('dsb:languagechange',()=>{
   document.querySelectorAll('.pd-slide img').forEach(img=>img.alt=customerProductName(p));
   const secondary=$('#pdRoot .pd-title-hindi');if(secondary)secondary.textContent=customerProductSecondaryName(p);
   document.querySelectorAll('.card[data-id]').forEach(card=>{
-    const product=ALL_PRODUCTS.find(x=>x.id===card.dataset.id);if(!product)return;
+    const product=PRODUCT_BY_ID.get(card.dataset.id);if(!product)return;
     card.querySelector('.name').textContent=customerProductName(product);
     const sub=card.querySelector('.name-hindi');if(sub)sub.textContent=customerProductSecondaryName(product);
   });
 });
 document.addEventListener('dsb:catalogchange',()=>{
   if(!CURRENT_PRODUCT)return;
-  const updated=ALL_PRODUCTS.find(p=>p.id===CURRENT_PRODUCT.id);
+  const updated=PRODUCT_BY_ID.get(CURRENT_PRODUCT.id);
   if(!updated){CURRENT_PRODUCT={...CURRENT_PRODUCT,stock:'out of stock'};renderPdActions(CURRENT_PRODUCT);return;}
   CURRENT_PRODUCT=updated;updateSizeOptions(updated);renderPdActions(updated);
   const title=$('#pdRoot .pd-title');if(title)title.textContent=customerProductName(updated);
-  const prices=$('#pdRoot .pd-prices');if(prices)prices.innerHTML=`<span class="price">${money(updated.price)}</span>${updated.mrp>updated.price?`<span class="mrp">${money(updated.mrp)}</span>`:''}`;
   const stock=$('#pdRoot .pd-stock');if(stock){stock.textContent=isOutOfStock(updated)?'Out of stock':(lowStockLabel(updated)||'In stock');stock.className='pd-stock '+(isOutOfStock(updated)?'out':'in');}
   updateSeoTags(updated);updateStructuredData(updated,CURRENT_REVIEWS);
 });
@@ -586,5 +560,5 @@ function updateSizeOptions(p){
   if(!p.sizes.includes(selectedSize))selectedSize='';
   if(!field){field=document.createElement('fieldset');field.className='product-sizes';$('#pdActions').before(field);}
   field.innerHTML=`<legend>Choose size</legend><div class="size-options">${p.sizes.map(size=>`<button type="button" class="size-option" data-size="${escapeHtml(size)}" aria-pressed="${selectedSize===size}">${escapeHtml(size)}</button>`).join('')}</div><p class="hint" id="sizeHelp">Select a size before adding to cart.</p>`;
-  field.querySelectorAll('.size-option').forEach(btn=>btn.addEventListener('click',()=>{selectedSize=btn.dataset.size;field.querySelectorAll('.size-option').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.size===selectedSize)));updateDisplayedProductPrice(CURRENT_PRODUCT||p);renderPdActions(CURRENT_PRODUCT||p);}));
+  field.querySelectorAll('.size-option').forEach(btn=>btn.addEventListener('click',()=>{selectedSize=btn.dataset.size;field.querySelectorAll('.size-option').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.size===selectedSize)));renderPdActions(CURRENT_PRODUCT||p);}));
 }

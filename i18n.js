@@ -4,11 +4,20 @@
   'use strict';
   const KEY='dsb_customer_lang';
   let lang='en';try{lang=localStorage.getItem(KEY)==='hi'?'hi':'en';}catch(_){}
+  if(window.DSB_PAGE_LANGUAGE==='hi'||window.DSB_LANGUAGE_ALTERNATE)lang=window.DSB_PAGE_LANGUAGE || lang;
   const originalText = new WeakMap();
   const originalAttrs = new WeakMap();
   const renderedText=new WeakMap();
 
   const HI = {
+    'Brand':'ब्रांड','Material':'सामग्री','Pack / quantity':'पैक / मात्रा','Product details':'उत्पाद की जानकारी','Colour':'रंग','Size':'साइज़',
+    'Available offers':'उपलब्ध ऑफ़र',
+    'Enter a code at checkout. Eligibility is checked when ordering.':'चेकआउट पर कोड डालें। ऑर्डर करते समय पात्रता जाँची जाएगी।',
+    'Promo code copied':'प्रोमो कोड कॉपी हो गया',
+    'Combo includes':'कॉम्बो में शामिल',
+    'Combo':'कॉम्बो',
+    'Size / colour':'साइज़ / रंग',
+
     'Could not check promo codes. Please try again.':'प्रोमो कोड की जाँच नहीं हो सकी। कृपया फिर से कोशिश करें।',
     'Live availability is temporarily unavailable. Please retry before ordering.':'अभी उपलब्धता की जानकारी नहीं मिल रही है। ऑर्डर करने से पहले फिर से कोशिश करें।',
     'Connecting to the shop for current availability…':'वर्तमान उपलब्धता के लिए दुकान से जुड़ रहे हैं…',
@@ -146,6 +155,10 @@
   const normalize=s=>String(s||'').replace(/\s+/g,' ').trim();
   function dynamicHi(s){
     let m;
+    if((m=s.match(/^From (₹.+)$/)))return `${m[1]} से शुरू`;
+    if((m=s.match(/^ · (.+) off$/)))return ` · ${m[1]} की छूट`;
+    if((m=s.match(/^Use code (.+) at checkout$/)))return `चेकआउट पर ${m[1]} कोड डालें`;
+
     if((m=s.match(/^Delivery: (.+) below (.+) after discounts; free at or above that amount\. Cash on Delivery: (.+) extra\.$/)))return `छूट के बाद ${m[2]} से कम पर डिलीवरी ${m[1]}; इस राशि या अधिक पर मुफ़्त। कैश ऑन डिलीवरी: ${m[3]} अतिरिक्त।`;
     if((m=s.match(/^Photo (\d+) of (\d+)$/)))return `फ़ोटो ${m[1]} / ${m[2]}`;
     if ((m=s.match(/^Size: (.+)$/))) return `साइज़: ${m[1]}`;
@@ -200,6 +213,8 @@
     document.querySelectorAll('.lang-toggle').forEach(b=>{const label=lang==='hi'?'EN':'हिं';if(b.textContent!==label)b.textContent=label; b.setAttribute('aria-label',lang==='hi'?'Switch to English':'हिंदी में देखें');});
   }
   function setLang(next){
+    if(window.DSB_LANGUAGE_ALTERNATE && next!==window.DSB_PAGE_LANGUAGE){try{localStorage.setItem(KEY,next);}catch(_){}location.assign(window.DSB_LANGUAGE_ALTERNATE);return;}
+
     lang=next==='hi'?'hi':'en'; try{localStorage.setItem(KEY,lang);}catch(_){} translateTree(document.body);
     document.dispatchEvent(new CustomEvent('dsb:languagechange',{detail:{lang}}));
   }
@@ -210,7 +225,7 @@
     const obs=new MutationObserver(ms=>{
       ms.forEach(m=>{if(m.type==='characterData'){if(m.target.nodeValue!==renderedText.get(m.target))roots.add(m.target);}else m.addedNodes.forEach(n=>roots.add(n));});
       if(!roots.size || scheduled)return;
-      scheduled=true;requestAnimationFrame(()=>{scheduled=false;const batch=[...roots];roots.clear();batch.filter(n=>n.isConnected && !batch.some(parent=>parent!==n && parent.contains?.(n))).forEach(translateTree);});
+      scheduled=true;requestAnimationFrame(()=>{scheduled=false;const batch=[...roots],rootsInBatch=new Set(batch);roots.clear();batch.filter(n=>{if(!n.isConnected)return false;for(let parent=n.parentNode;parent;parent=parent.parentNode)if(rootsInBatch.has(parent))return false;return true;}).forEach(translateTree);});
     });
     obs.observe(document.body,{childList:true,characterData:true,subtree:true});
   }

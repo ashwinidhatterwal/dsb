@@ -2,7 +2,7 @@
  * Dhatterwal Suhag Bhandar — Google Sheet backend
  * ------------------------------------------------
  * Paste this into Extensions > Apps Script on your product Google Sheet,
- * then deploy as a Web App. See SETUP.md for step-by-step instructions.
+ * then deploy as a Web App. See UPDATE.txt for step-by-step instructions.
  *
  * Sheet tabs expected in this spreadsheet:
  *
@@ -70,15 +70,15 @@ const ALLOWED_ORDER_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'De
 // Set the ADMIN_KEY Script Property before deploying — the admin page uses it to
 // add/delete products and manage orders. Anyone who has this key can edit
 // your sheet and see customer order details.
-const ADMIN_KEY = ''; // Prefer the ADMIN_KEY Script Property; never publish secrets in GitHub.
+const ADMIN_KEY = 'ashwini'; // Prefer the ADMIN_KEY Script Property; never publish secrets in GitHub.
 
 // Optional — silently pings a Telegram chat/channel the instant a new order
 // comes in, so you don't have to keep the Sheet or admin page open to know.
 // Leave TELEGRAM_BOT_TOKEN blank to turn this off entirely; nothing else
-// about order-taking changes either way. See SETUP.md for how to get
+// about order-taking changes either way. See UPDATE.txt for how to get
 // a bot token and chat ID from @BotFather in about two minutes.
-const TELEGRAM_BOT_TOKEN = ''; // e.g. '123456789:AAExampleTokenFromBotFather'
-const TELEGRAM_CHAT_ID = '';   // your numeric chat ID, or '@yourchannel'
+const TELEGRAM_BOT_TOKEN = '7986254241:AAH0I0vCQe2LEe6dUf-u5gc8Bcw6DLyfoJg'; // e.g. '123456789:AAExampleTokenFromBotFather'
+const TELEGRAM_CHAT_ID = '629369496';   // your numeric chat ID, or '@yourchannel'
 
 function doGet(e) {
   const action = (e.parameter.action || 'products').toString();
@@ -193,55 +193,39 @@ function getCheckoutConfig_() {
 /* ---------------- Cache helpers ---------------- */
 
 function cacheGetJson_(key) {
-  const cache = CacheService.getScriptCache();
-  const raw = cache.get(key);
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch (err) { return null; }
+  try{const raw=CacheService.getScriptCache().get(key);return raw?JSON.parse(raw):null;}catch(_){return null;}
 }
-
-function cachePutJson_(key, value, ttl) {
-  cacheRemove_(key);
-  const raw = JSON.stringify(value);
-  // CacheService has a per-entry size limit. Product catalogs are normally
-  // small, but chunking makes this safe for larger shops too.
-  const MAX = 90000;
-  if (raw.length <= MAX) {
-    CacheService.getScriptCache().put(key, raw, ttl);
-    return;
-  }
-  const count = Math.ceil(raw.length / MAX);
-  const cache = CacheService.getScriptCache();
-  cache.put(key + ':meta', String(count), ttl);
-  for (let i = 0; i < count; i++) cache.put(key + ':' + i, raw.slice(i * MAX, (i + 1) * MAX), ttl);
+function cachePutJson_(key,value,ttl) {
+  try{
+    cacheRemove_(key);
+    const raw=JSON.stringify(value),cache=CacheService.getScriptCache();
+    // UTF-16 length bounds UTF-8 size by 3 bytes per code unit.
+    // Keep Hindi text and emoji chunks comfortably within the cache limit.
+    const MAX=24000;
+    if(raw.length<=MAX){cache.put(key,raw,ttl);return;}
+    const count=Math.ceil(raw.length/MAX);if(count>900)return;
+    const values={};for(let i=0;i<count;i++)values[key+':'+i]=raw.slice(i*MAX,(i+1)*MAX);
+    cache.putAll(values,ttl);
+    cache.put(key+':meta',String(count),ttl);
+  }catch(_){/* Caching is optional; live catalogue and order writes still work. */}
 }
-
 function cacheGetChunkedJson_(key) {
-  const cache = CacheService.getScriptCache();
-  const meta = cache.get(key + ':meta');
-  if (!meta) return cacheGetJson_(key);
-  const count = Number(meta) || 0;
-  if (!count) return null;
-  let raw = '';
-  for (let i = 0; i < count; i++) {
-    const part = cache.get(key + ':' + i);
-    if (part === null) return null;
-    raw += part;
-  }
-  try { return JSON.parse(raw); } catch (err) { return null; }
+  try{
+    const cache=CacheService.getScriptCache(),meta=cache.get(key+':meta');
+    if(!meta)return cacheGetJson_(key);
+    const count=Number(meta);if(!Number.isInteger(count)||count<1||count>900)return null;
+    const keys=Array.from({length:count},(_,i)=>key+':'+i),parts=cache.getAll(keys);
+    if(keys.some(k=>typeof parts[k]!=='string'))return null;
+    return JSON.parse(keys.map(k=>parts[k]).join(''));
+  }catch(_){return null;}
 }
-
 function cacheRemove_(key) {
-  const cache = CacheService.getScriptCache();
-  const meta = cache.get(key + ':meta');
-  const count = Number(meta) || 0;
-  if (count) {
-    const keys = [key + ':meta'];
-    for (let i = 0; i < count; i++) keys.push(key + ':' + i);
+  try{
+    const cache=CacheService.getScriptCache(),count=Number(cache.get(key+':meta'))||0;
+    const keys=[key,key+':meta'];
+    if(Number.isInteger(count)&&count>0&&count<=900)for(let i=0;i<count;i++)keys.push(key+':'+i);
     cache.removeAll(keys);
-  } else {
-    cache.remove(key);
-    cache.remove(key + ':meta');
-  }
+  }catch(_){/* Checkout always validates inventory directly from the sheet. */}
 }
 
 function invalidatePublicCaches_() {
@@ -285,7 +269,7 @@ function getAllProducts(includeCost) {
   if (includeCost) return rows;
   const publicRows = rows.filter(r=>!isArchived_(r)).map(r => {
     const copy={};
-    ['id','name','namehindi','category','subcategory','price','mrp','image','images','description','stock','stockqty','tags','sizes','sizeprices'].forEach(key=>{if(r[key]!==undefined)copy[key]=r[key];});
+    ['id','name','namehindi','category','subcategory','price','mrp','image','images','description','stock','stockqty','tags','brand','material','packsize','specifications','gtin','variantsize','variantcolor','descriptionhindi','variantgroup','variantlabel','bundlecontents','sizeprices','sizes'].forEach(key=>{if(r[key]!==undefined)copy[key]=r[key];});
     return copy;
   });
   cachePutJson_(CATALOG_CACHE_KEY, publicRows, CATALOG_CACHE_TTL);
@@ -298,7 +282,7 @@ function addProduct(p,requestId) {
     const retired=SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeletedProductIds');
     if(p.id&&retired&&findRow_(retired,'id',String(p.id).trim()))throw new Error('This product ID was retired. Choose a new ID.');
     if(p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizes');
-    if(p.sizeprices !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizeprices');
+    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'variantsize', 'variantcolor', 'descriptionhindi', 'variantgroup', 'variantlabel', 'bundlecontents', 'sizeprices'].forEach(k=>{if(p[k]!==undefined)ensureColumn_(getSheet_(PRODUCTS_SHEET),k);});
     const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet);
     let reservation=null;
     if(requestId){
@@ -332,7 +316,7 @@ function updateProduct(p) {
   return withWriteLock_(function() {
     validateProductFields_(p, false);
     if(p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizes');
-    if(p.sizeprices !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizeprices');
+    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'variantsize', 'variantcolor', 'descriptionhindi', 'variantgroup', 'variantlabel', 'bundlecontents', 'sizeprices'].forEach(k=>{if(p[k]!==undefined)ensureColumn_(getSheet_(PRODUCTS_SHEET),k);});
     const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet);
     const row = findRow_(sheet, 'id', String(p.id || '').trim());
     if (!row) throw new Error('Product not found.');
@@ -436,7 +420,7 @@ function getActivePromos() {
   }
   const rows = rowsAsObjects_(sheet);
   const promos = rows
-    .filter(r => String(r.active).trim().toLowerCase() === 'yes')
+    .filter(r => String(r.active).trim().toLowerCase() === 'yes' && (r.maxuses==='' || r.maxuses==null || Number(r.uses || 0)<Number(r.maxuses)))
     .map(r => ({
       code: String(r.code || '').trim(),
       type: String(r.type || '').trim().toLowerCase(),
@@ -747,10 +731,10 @@ function buildValidatedOrderItems_(itemsDetail, productData) {
     const status = String(stockCol === -1 ? 'in stock' : row[stockCol] || 'in stock').trim().toLowerCase();
     if (status === 'out of stock') return { ok: false, error: `${row[nameCol] || requested.id} is out of stock.` };
 
-    let unitPrice = roundMoney_(Number(row[priceCol]));
-    const sizePrices=parseSizePrices_(heads.indexOf('sizeprices')<0 ? '' : row[heads.indexOf('sizeprices')]);
-    if(size && Number.isFinite(sizePrices[size])) unitPrice=roundMoney_(sizePrices[size]);
-    if (!Number.isFinite(unitPrice) || unitPrice <= 0 || unitPrice > 10000000) return { ok: false, error: 'Invalid product price.' };
+    const overrides=Object.create(null);
+    if(heads.indexOf('sizeprices')>=0)String(row[heads.indexOf('sizeprices')]||'').split(',').forEach(e=>{const a=e.split('=');if(a.length===2 && Number(a[1])>0)overrides[a[0].trim()]=Number(a[1]);});
+    const unitPrice = roundMoney_(overrides[size] || Number(row[priceCol]));
+    if (String(row[priceCol]).trim() === '' || !Number.isFinite(unitPrice) || unitPrice <= 0 || unitPrice > 10000000) return { ok: false, error: 'Invalid product price.' };
 
     let tracked = false;
     let availableQty = null;
@@ -985,20 +969,15 @@ function findRow_(sheet, column, value) {
   return hit ? hit.getRow() : 0;
 }
 function validateProductFields_(p, adding) {
+  ['brand', 'material', 'packsize', 'specifications', 'gtin', 'variantsize', 'variantcolor', 'descriptionhindi', 'variantgroup', 'variantlabel', 'bundlecontents', 'sizeprices'].forEach(k=>{if(p[k]!==undefined){p[k]=String(p[k]).trim();if(p[k].length>2000)throw new Error(k+' is too long.');}});
+  if(p.gtin && !/^(?:\d{8}|\d{12}|\d{13}|\d{14})$/.test(p.gtin))throw new Error('GTIN must be 8, 12, 13 or 14 digits. Leave it blank if unknown.');
+  if(p.variantgroup && (!p.variantlabel || p.sizes))throw new Error('Grouped variants need a label and must not also use shared sizes.');
+  if(p.sizeprices){const sizes=parseSizes_(p.sizes||'');p.sizeprices.split(',').forEach(entry=>{const pair=entry.trim().split('=');if(pair.length!==2 || !sizes.includes(pair[0].trim()) || !Number.isFinite(Number(pair[1])) || Number(pair[1])<=0)throw new Error('Size prices must use available sizes and positive prices: 32B=299.');});}
+
   if(p.sizes !== undefined){
     const raw=String(p.sizes), sizes=parseSizes_(raw);
     if(raw.length>1000 || sizes.length>30 || sizes.some(x=>x.length>40 || /[|<>\x00-\x1f]/.test(x))) throw new Error('Use up to 30 sizes, each at most 40 characters, without | or angle brackets.');
     p.sizes=sizes.join(', ');
-  }
-  if(p.sizeprices !== undefined){
-    const raw=String(p.sizeprices||'');
-    if(raw.length>2000) throw new Error('Size prices are too long.');
-    let obj={};
-    if(raw){try{obj=JSON.parse(raw);}catch(_){throw new Error('Invalid size-price data.');}}
-    if(!obj || Array.isArray(obj) || typeof obj!=='object')throw new Error('Invalid size-price data.');
-    const sizes=parseSizes_(p.sizes||'');
-    Object.keys(obj).forEach(size=>{const n=Number(obj[size]);if(!sizes.includes(size)||!Number.isFinite(n)||n<=0||n>10000000)throw new Error('Each size price must match an available size and be a valid positive price.');obj[size]=roundMoney_(n);});
-    p.sizeprices=Object.keys(obj).length?JSON.stringify(obj):'';
   }
   if (adding && !String(p.name || '').trim()) throw new Error('Product name is required.');
   if (adding || p.price !== undefined) {
@@ -1185,7 +1164,6 @@ function orderResult(requestId,phone) {
 }
 
 function parseSizes_(value){return [...new Set(String(value || '').split(/[,\n]/).map(x=>x.trim()).filter(Boolean))];}
-function parseSizePrices_(value){try{const obj=value&&typeof value==='object'?value:JSON.parse(String(value||'{}'));const out={};Object.keys(obj||{}).forEach(k=>{const n=Number(obj[k]);if(Number.isFinite(n)&&n>0)out[String(k)]=n;});return out;}catch(_){return {};}}
 function ensureColumn_(sheet,name){if(headers_(sheet).indexOf(name)<0) sheet.getRange(1,sheet.getLastColumn()+1).setValue(name);}
 
 // Run ONCE from the Apps Script editor, then authorize the timer.
@@ -1295,14 +1273,15 @@ function dispatchAdmin_(body,actor){
 }
 function isArchived_(p){return String(p.archived||'').toLowerCase()==='yes';}
 function productRevision_(p){
-  return hashText_(JSON.stringify(['id','name','namehindi','category','subcategory','price','mrp','costprice','image','images','description','stock','stockqty','tags','sizes','sizeprices','archived'].map(k=>String(p[k]??''))));
+  return hashText_(JSON.stringify(['id','name','namehindi','category','subcategory','price','mrp','costprice','image','images','description','stock','stockqty','tags','brand','material','packsize','specifications','gtin','variantsize','variantcolor','descriptionhindi','variantgroup','variantlabel','bundlecontents','sizeprices','sizes','archived'].map(k=>String(p[k]??''))));
 }
 function adminProductsPage_(options){
   const all=getAllProducts(true),q=String(options.query||'').trim().toLowerCase().slice(0,120),category=String(options.category||''),stock=String(options.stock||'all');
   let list=all.filter(p=>isArchived_(p)===(options.archived===true)&&(!category||p.category===category)&&(!q||[p.id,p.name,p.namehindi,p.category,p.subcategory,p.tags].join(' ').toLowerCase().includes(q)));
   list=list.filter(p=>{const tracked=p.stockqty!==''&&p.stockqty!==undefined&&p.stockqty!==null,out=p.stock==='out of stock'||(tracked&&Number(p.stockqty)<=0);return stock==='all'||(stock==='out'?out:stock==='low'?tracked&&Number(p.stockqty)>0&&Number(p.stockqty)<=5:!out);});
   const sort=options.sort||'id-asc';
-  const compareId=(a,b)=>String(a.id||'').localeCompare(String(b.id||''),'en',{numeric:true,sensitivity:'base'})||String(a.id||'').localeCompare(String(b.id||''),'en');
+  const idCollator=new Intl.Collator('en',{numeric:true,sensitivity:'base'});
+  const compareId=(a,b)=>idCollator.compare(String(a.id||''),String(b.id||''))||String(a.id||'').localeCompare(String(b.id||''),'en');
   list.sort((a,b)=>sort==='id-asc'?compareId(a,b):sort==='id-desc'?compareId(b,a):(options.sort==='price-asc'?Number(a.price)-Number(b.price):options.sort==='price-desc'?Number(b.price)-Number(a.price):String(a.name||'').localeCompare(String(b.name||'')))||compareId(a,b));
   const total=list.length,page=Math.min(Math.max(0,Math.floor(Number(options.page)||0)),Math.max(0,Math.ceil(total/40)-1));
   return {products:list.slice(page*40,(page+1)*40).map(p=>({...p,_revision:productRevision_(p)})),page,total,allCount:all.filter(p=>isArchived_(p)===(options.archived===true)).length,categories:[...new Set(all.filter(p=>isArchived_(p)===(options.archived===true)).map(p=>p.category).filter(Boolean))].sort()};

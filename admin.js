@@ -323,8 +323,19 @@ function fillForm(p){
   $('#f-stock').value = p.stock || 'in stock';
   $('#f-stockqty').value = (p.stockqty === undefined || p.stockqty === null || p.stockqty === '') ? '' : p.stockqty;
   $('#f-tags').value = p.tags || '';
+  $('#f-brand').value=p.brand || '';
+  $('#f-material').value=p.material || '';
+  $('#f-packsize').value=p.packsize || '';
+  $('#f-specifications').value=p.specifications || '';
+  $('#f-gtin').value=p.gtin || '';
+  $('#f-variantsize').value=p.variantsize || '';
+  $('#f-variantcolor').value=p.variantcolor || '';
+  $('#f-descriptionhindi').value=p.descriptionhindi || '';
+  $('#f-variantgroup').value = p.variantgroup || '';
+  $('#f-variantlabel').value = p.variantlabel || '';
+  $('#f-bundlecontents').value = p.bundlecontents || '';
+  $('#f-sizeprices').value = p.sizeprices || '';
   $('#f-sizes').value = p.sizes || '';
-  $('#f-sizeprices').value = formatSizePricesForAdmin(p.sizeprices || '');
   $('#f-hasSizes').checked = !!String(p.sizes || '').trim();
   $('#sizeOptionsField').hidden = !$('#f-hasSizes').checked;
   updateImagePreview(p.image || '');
@@ -361,7 +372,9 @@ function clearForm(){
   ['f-id','f-name','f-nameHindi','f-category','f-subcategory','f-price','f-mrp','f-costprice','f-image','f-description','f-stockqty','f-tags']
     .forEach(id => $('#' + id).value = '');
   $('#f-stock').value = 'in stock';
-  $('#f-sizes').value='';$('#f-sizeprices').value='';$('#f-hasSizes').checked=false;$('#sizeOptionsField').hidden=true;
+  $('#f-brand').value='';  $('#f-material').value='';  $('#f-packsize').value='';  $('#f-specifications').value='';  $('#f-gtin').value='';  $('#f-variantsize').value='';  $('#f-variantcolor').value='';  $('#f-descriptionhindi').value='';
+  $('#f-variantgroup').value='';  $('#f-variantlabel').value='';  $('#f-bundlecontents').value='';  $('#f-sizeprices').value='';
+  $('#f-sizes').value='';$('#f-hasSizes').checked=false;$('#sizeOptionsField').hidden=true;
   $('#f-imagefile').value = '';
   $('#uploadStatus').textContent = '';
   updateImagePreview('');
@@ -474,23 +487,6 @@ function addExtraImageUrl(){
   input.value = '';
 }
 
-
-function parseAdminSizePrices(raw){
-  raw=String(raw||'').trim();if(!raw)return '';
-  const out={};
-  for(const part of raw.split(/[,\n]/)){
-    const item=part.trim();if(!item)continue;
-    const m=item.match(/^(.+?)\s*=\s*(\d+(?:\.\d{1,2})?)$/);if(!m)return null;
-    const size=m[1].trim(),price=Number(m[2]);if(!size||!Number.isFinite(price)||price<=0)return null;
-    out[size]=price;
-  }
-  return Object.keys(out).length?JSON.stringify(out):'';
-}
-function formatSizePricesForAdmin(value){
-  if(!value)return '';
-  try{const obj=typeof value==='string'?JSON.parse(value):value;return Object.entries(obj||{}).map(([size,price])=>`${size}=${price}`).join(', ');}catch(_){return String(value||'');}
-}
-
 async function saveProduct(){return withEditorLock(saveProductTask);}
 async function saveProductTask(){
   const statusEl = $('#saveStatus');
@@ -512,13 +508,22 @@ async function saveProductTask(){
     // stock" — same thing the backend does when an order brings it to zero.
     stock: (stockqty === 0) ? 'out of stock' : $('#f-stock').value,
     stockqty,
+    brand: $('#f-brand').value.trim(),
+    material: $('#f-material').value.trim(),
+    packsize: $('#f-packsize').value.trim(),
+    specifications: $('#f-specifications').value.trim(),
+    gtin: $('#f-gtin').value.trim(),
+    variantsize: $('#f-variantsize').value.trim(),
+    variantcolor: $('#f-variantcolor').value.trim(),
+    descriptionhindi: $('#f-descriptionhindi').value.trim(),
+    variantgroup: $('#f-variantgroup').value.trim(),
+    variantlabel: $('#f-variantlabel').value.trim(),
+    bundlecontents: $('#f-bundlecontents').value.trim(),
+    sizeprices: $('#f-sizeprices').value.trim(),
     tags: $('#f-tags').value.trim(),
-    sizes: $('#f-hasSizes').checked ? [...new Set($('#f-sizes').value.split(/[,\n]/).map(x=>x.trim()).filter(Boolean))].join(', ') : '',
-    sizeprices: $('#f-hasSizes').checked ? parseAdminSizePrices($('#f-sizeprices').value) : ''
+    sizes: $('#f-hasSizes').checked ? [...new Set($('#f-sizes').value.split(/[,\n]/).map(x=>x.trim()).filter(Boolean))].join(', ') : ''
   };
   if($('#f-hasSizes').checked && !product.sizes){status(statusEl,'Enter at least one size or turn off size selection.',false);return;}
-  if(product.sizeprices === null){status(statusEl,'Size prices must use Size=Price, for example 32B=299, 34B=329.',false);return;}
-  if(product.sizeprices){const allowed=new Set(product.sizes.split(',').map(x=>x.trim()));const prices=JSON.parse(product.sizeprices);const unknown=Object.keys(prices).find(k=>!allowed.has(k));if(unknown){status(statusEl,`Size price ${unknown} is not in Available sizes.`,false);return;}}
   if (!product.name){
     status(statusEl, 'Product name is required.', false);
     return;

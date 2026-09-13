@@ -14,7 +14,8 @@ const CHECKOUT_INFO_KEY = 'dsb_checkout_info_v1';
 function loadSavedCheckoutInfo(){
   try{
     const raw = localStorage.getItem(CHECKOUT_INFO_KEY);
-    return raw ? JSON.parse(raw) : {};
+    const value=raw ? JSON.parse(raw) : {};
+    return value && typeof value==='object' && !Array.isArray(value)?value:{};
   } catch(e){ return {}; }
 }
 
@@ -282,7 +283,7 @@ async function fetchPromosIfNeeded(){
   if (checkoutState.availablePromos !== null) return; // already fetched this page load
   if (!CONFIG.SHEET_API_URL) { checkoutState.availablePromos = []; return; }
   try{
-    const data = await requestJson(`${CONFIG.SHEET_API_URL}?action=promos`);
+    const data = await loadPublicPromos();
     if(!Array.isArray(data))throw new Error('Invalid promo response');
     checkoutState.availablePromos = data;
   } catch(err){

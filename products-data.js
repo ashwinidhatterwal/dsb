@@ -2,6 +2,7 @@
    Dhatterwal Suhag Bhandar — shared product data loading
    ========================================================= */
 let ALL_PRODUCTS = [];
+let PRODUCT_BY_ID=new Map();
 // { [productId]: { avg: number, count: number } } — built once from every
 // review in the sheet so product cards can show a star rating + review
 // count without a separate fetch per card.
@@ -18,9 +19,21 @@ function normalizeRows(rows){
         .split(',').map(s => s.trim()).filter(Boolean);
       return {
         id: String(r.id ?? r.ID ?? '').trim(),
+        searchText: [r.id,r.name,r.Name,r.namehindi,r.nameHindi,r.category,r.subcategory,r.tags,r.variantlabel,r.bundlecontents].filter(Boolean).join(' ').toLowerCase(),
         name: String(r.name ?? r.Name ?? '').trim(),
+        brand: String(r.brand || '').trim(),
+        material: String(r.material || '').trim(),
+        packsize: String(r.packsize || '').trim(),
+        specifications: String(r.specifications || '').trim(),
+        gtin: String(r.gtin || '').trim(),
+        variantsize: String(r.variantsize || '').trim(),
+        variantcolor: String(r.variantcolor || '').trim(),
+        descriptionhindi: String(r.descriptionhindi || '').trim(),
+        variantgroup: String(r.variantgroup || '').trim(),
+        variantlabel: String(r.variantlabel || '').trim(),
+        bundlecontents: String(r.bundlecontents || '').trim(),
+        sizeprices: String(r.sizeprices || '').trim(),
         sizes: [...new Set(String(r.sizes ?? r.Sizes ?? '').split(/[,\n]/).map(x=>x.trim()).filter(Boolean))],
-        sizePrices: (()=>{try{const raw=r.sizeprices ?? r.sizePrices ?? r.SizePrices ?? '';const obj=raw&&typeof raw==='object'?raw:JSON.parse(String(raw||'{}'));const out={};Object.entries(obj||{}).forEach(([k,v])=>{const n=Number(v);if(k&&Number.isFinite(n)&&n>0)out[String(k).trim()]=n;});return out;}catch(_){return {};}})(),
         nameHindi: String(r.namehindi ?? r.nameHindi ?? '').trim(),
         category: String(r.category ?? r.Category ?? 'Other').trim() || 'Other',
         subcategory: String(r.subcategory ?? r.Subcategory ?? 'General').trim() || 'General',
@@ -57,14 +70,14 @@ function lowStockLabel(p){
   return '';
 }
 
-const CATALOG_SESSION_KEY = 'dsb_catalog_v3';
+const CATALOG_SESSION_KEY = 'dsb_catalog_v5';
 let catalogRequest=null, catalogLiveRequest=null;
 let CATALOG_META={source:'loading',time:0};
 const CATALOG_MAX_AGE=24*60*60*1000;
 function applyCatalogRows(rows,source,time){
   const products=normalizeRows(rows),changed=JSON.stringify(products)!==JSON.stringify(ALL_PRODUCTS);
   const hadProducts=ALL_PRODUCTS.length>0;
-  ALL_PRODUCTS=products;CATALOG_META={source,time};
+  ALL_PRODUCTS=products;PRODUCT_BY_ID=new Map(products.map(p=>[p.id,p]));CATALOG_META={source,time};
   if(hadProducts && changed)document.dispatchEvent(new CustomEvent('dsb:catalogchange'));
   document.dispatchEvent(new CustomEvent('dsb:catalogstatus'));
   return ALL_PRODUCTS;
@@ -159,4 +172,9 @@ async function loadReviewSummaries(){
 
 function reviewSummaryFor(id){
   return REVIEW_SUMMARY[id] || null;
+}
+
+function loadPublicPromos(){
+  if(!CONFIG.SHEET_API_URL)return Promise.resolve([]);
+  return cachedPublicJson('promos',`${CONFIG.SHEET_API_URL}?action=promos`,60000);
 }

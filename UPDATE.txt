@@ -1,0 +1,40 @@
+Deploy the website files and replace/redeploy code.gs in your existing Apps Script web app. Keep the same API URL. No existing sheet columns need to be removed or reordered. Admin saves automatically add the new optional columns.
+
+VARIANTS: Create a separate product for each size/colour combination, each with a unique ID, price, MRP and stock quantity. Give all related rows the same Variant group (e.g. kalyani-bra), and labels such as 32 / Skin or 34 / Black. Leave shared Available sizes off for these rows. Customers can switch between them on the product page. Checkout, order history, stock deductions and cancellation refunds use the actual SKU. Variant rows remain individually searchable in the catalogue.
+
+SIZE PRICES: Existing shared-size products can use 32B=299, 34B=329. Other sizes use normal price. Shared-size products still share a stock quantity. Checkout recalculates size prices from the sheet.
+
+COMBOS: Create a product with Combo contents, a combo price, MRP and stock quantity counting prepared sets. Component inventory is managed separately; this does not automatically deduct component products.
+
+MRP / RELATED: Existing discount badges and related-product sections are preserved. Related suggestions now exclude unavailable products and other variants of the same item.
+
+OFFERS: Active codes in the Promos sheet appear on the home page and can be copied. The existing checkout validates usage limits and customer eligibility. Offers may be subject to those limits.
+
+EFFICIENCY RELEASE:
+- Search text and product lookups are prepared once per catalogue update.
+- Repeated cart lookups reuse parsed storage; changes from other tabs still refresh it.
+- Unchanged cart reconciliation no longer writes storage or dispatches refresh events.
+- Home and checkout promo loads share a request and short-lived cache.
+- Scroll reveals reuse one observer; translation batches avoid repeated descendant scans.
+- Currency formatting reuses one formatter; action updates skip unchanged button HTML.
+- Hindi/emoji backend cache chunks stay within byte limits and use batched reads/writes.
+- Cache failures fall back to live operations. See Google API reference: https://developers.google.com/apps-script/reference/cache/cache
+- Variant labels and combo labels appear in cards; sized prices show From pricing.
+- Customer-facing new labels have Hindi translations. Shop/admin records stay English.
+
+Validation: JavaScript/Apps Script syntax, local asset references, checkout pricing and stock cases, cart repair/cross-tab refresh, shared promo requests, and cache eviction/outage/Unicode cases passed. Local benchmark: 1,000 cart quantity lookups over 100 saved lines required 1 JSON parse versus 1,000 in the previous ZIP. This is a focused benchmark, not a whole-site speed claim. Browser rendering and live Apps Script execution were not verified in this environment.
+
+SEO RELEASE:
+1. Upload the source files to the existing GitHub repository, including .github/scripts and .github/workflows. The publishing workflow builds categories, product pages, Hindi pages and the catalogue snapshot from your live Google Sheet. Those generated files do not need to be maintained by hand. A plain drag-and-drop upload of only root assets cannot generate them.
+2. Replace/redeploy code.gs at the same Apps Script URL. New optional sheet columns are added by Admin saves. Existing data is preserved.
+3. Fill actual brand, material, pack / quantity, specifications and description in Admin. Leave unknown fields blank. For grouped variants fill Variant size and Variant colour; these supply accurate ProductGroup dimensions. Enter genuine barcodes only, as text in Sheets to preserve leading zeroes.
+4. Supply both Hindi name and Hindi description to publish a Hindi product URL. The Hindi landing page is published at /hi/. English/Hindi product alternatives are linked with reciprocal hreflang and self-canonical URLs. Products without supplied Hindi descriptions remain English only.
+5. Product pages contain static specifications, variant links, size-price offers, breadcrumbs and related category links. Prices/stock are refreshed in the browser and independently verified at checkout. Category pages have their own titles, descriptions, crawlable products and sitemap entries. Sitemap image URLs help image discovery. Branded social-card.png replaces the external share-image placeholder.
+6. After the workflow finishes, submit https://suhagbhandar.in/sitemap.xml in Google Search Console. Inspect a category and an English/Hindi product URL; check the Google Rich Results Test. Inspect Core Web Vitals in Search Console when field data is available. Also maintain your real Google Business Profile, store details and genuine customer reviews.
+
+No product specifications, ratings, delivery promises, opening hours, barcode values or blanket returns guarantees were invented. Shipping/return policy rich-result properties require verified policy data; the existing policy pages remain linked. This release cannot populate missing retailer descriptions or verify Google indexing without your real source data and live Search Console access.
+
+References: https://developers.google.com/search/docs/appearance/structured-data/product-variants
+https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites
+https://developers.google.com/search/docs/specialty/ecommerce/help-google-understand-your-ecommerce-site-structure
+https://developers.google.com/search/docs/crawling-indexing/sitemaps/image-sitemaps

@@ -15,15 +15,16 @@ function notifyCartChanged(){
 
 
 function sizeCartKey(id,size){ return size ? String(id)+'::size:'+encodeURIComponent(size) : String(id); }
-function productPriceForSize(product,size){const n=Number(product?.sizePrices?.[size]);return size&&Number.isFinite(n)&&n>0?n:Number(product?.price);}
 function sizedCartProduct(product,size){
-  return size ? {...product,productId:product.productId || product.id,id:sizeCartKey(product.productId || product.id,size),size,price:productPriceForSize(product,size)} : product;
+  const prices=Object.create(null);String(product.sizeprices || '').split(',').forEach(e=>{const a=e.split('=');if(a.length===2 && Number(a[1])>0)prices[a[0].trim()]=Number(a[1]);});
+  return size ? {...product,price:prices[size] || product.price,productId:product.productId || product.id,id:sizeCartKey(product.productId || product.id,size),size} : product;
 }
 const CartStore = (function(){
   let memoryFallback = {};
   let usingFallback = false;
   let consumedFallback=[];
 
+  let cachedRaw,cachedCart;
   let repaired=false;
   function sanitize(value){
     if(!value || typeof value!=='object' || Array.isArray(value)){repaired=true;return {};}
@@ -41,7 +42,9 @@ const CartStore = (function(){
     try{
       const raw = localStorage.getItem(CART_STORAGE_KEY);
       if(!raw)return {};
+      if(raw===cachedRaw && cachedCart)return cachedCart;
       const parsed=JSON.parse(raw),clean=sanitize(parsed);
+      cachedRaw=raw;cachedCart=clean;
       const expectedKeys=parsed && typeof parsed==='object' ? Object.keys(parsed).filter(k=>k!=='__dsbApplied').length : -1;
       if(expectedKeys!==Object.keys(clean).length || !parsed || Array.isArray(parsed)){
         try{localStorage.setItem(CART_STORAGE_KEY,JSON.stringify({...clean,__dsbApplied:appliedOrders()}));}catch(_){}
@@ -59,6 +62,7 @@ const CartStore = (function(){
     try {const value=JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || '{}').__dsbApplied;return Array.isArray(value)?value:[];} catch(_){return [];}
   }
   function writeAll(cart,applied=appliedOrders()){
+    cachedRaw=undefined;cachedCart=undefined;
     notifyCartChanged();
     if (usingFallback){ memoryFallback = cart;consumedFallback=applied; return; }
     try{
@@ -116,9 +120,10 @@ const CartStore = (function(){
       const removed = [], adjusted = [];
       let changed = false;
       const used = {};
+      const catalogById=new Map(catalog.map(p=>[p.id,p]));
       Object.keys(cart).forEach(id => {
         const old=cart[id].product, baseId=old.productId || old.id;
-        const fresh=catalog.find(p=>p.id===baseId);
+        const fresh=catalogById.get(baseId);
         const oldQty=cart[id].qty, oldPrice=old.price;
         if(!fresh || !Number.isFinite(fresh.price) || fresh.price<=0 || fresh.stock==='out of stock' || ((fresh.sizes || []).length ? !fresh.sizes.includes(old.size) : !!old.size)){
           removed.push(old.name + (old.size ? ' ('+old.size+')' : ''));delete cart[id];changed=true;return;
@@ -129,9 +134,9 @@ const CartStore = (function(){
           cart[id].qty=Math.min(cart[id].qty,available);
           if(!cart[id].qty){removed.push(old.name);delete cart[id];changed=true;return;}
         }
-        const freshLinePrice=productPriceForSize(fresh,old.size || '');
-        if(oldQty!==cart[id].qty || oldPrice!==freshLinePrice) adjusted.push({name:old.name,size:old.size || '',oldQty,qty:cart[id].qty,oldPrice,price:freshLinePrice});
-        used[baseId]=(used[baseId] || 0)+cart[id].qty;changed=true;
+        if(oldQty!==cart[id].qty || oldPrice!==cart[id].product.price) adjusted.push({name:old.name,size:old.size || '',oldQty,qty:cart[id].qty,oldPrice,price:cart[id].product.price});
+        used[baseId]=(used[baseId] || 0)+cart[id].qty;
+        if(JSON.stringify(old)!==JSON.stringify(cart[id].product) || oldQty!==cart[id].qty)changed=true;
       });
       if (changed) writeAll(cart);
       return { removed, adjusted };

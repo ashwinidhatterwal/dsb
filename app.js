@@ -175,7 +175,7 @@ function createPager(container, sentinelEl){
     template.innerHTML = next.map((p,i)=>cardHtml(p,{eager:container.id==='productGrid' && renderedCount===0 && i<2})).join('');
     const cards = Array.from(template.content.children);
     container.appendChild(template.content);
-    bindCardEvents(cards, list);
+    bindCardEvents(cards, next);
     renderedCount += next.length;
     if (sentinelEl) sentinelEl.style.display = renderedCount >= list.length ? 'none' : 'block';
   }
@@ -249,7 +249,7 @@ function renderSearchResults(){
     return;
   }
   const list = ALL_PRODUCTS.filter(p =>
-    `${p.name} ${p.nameHindi || ''} ${p.category} ${p.subcategory} ${p.tags}`.toLowerCase().includes(q) &&
+    p.searchText.includes(q) &&
     (!inStockOnly || !isOutOfStock(p))
   );
   searchPager.reset(list, `No results for "${escapeHtml(searchQuery)}"`);
@@ -342,4 +342,17 @@ document.addEventListener('dsb:catalogchange',()=>{
     const next=Array.from(document.querySelectorAll('#productGrid .card')).find(c=>c.dataset.id===id);
     if(next)window.scrollBy({top:next.getBoundingClientRect().top-top,behavior:'instant'});
   });
+});
+
+// Offers load independently of the catalogue and never delay shopping.
+document.addEventListener('DOMContentLoaded',async()=>{
+  if(!CONFIG.SHEET_API_URL)return;
+  try{
+    const promos=await loadPublicPromos();
+    if(!Array.isArray(promos)||!promos.length)return;
+    const section=document.createElement('section');section.className='shop-offers';section.setAttribute('aria-label','Available offers');
+    section.innerHTML='<strong>Available offers</strong>'+promos.filter(p=>p.value>0).slice(0,6).map(p=>`<button type="button" data-offer="${escapeHtml(p.code)}"><strong>${escapeHtml(p.code)}</strong> · ${p.type==='percent'?`${Math.min(100,p.value)}%`:money(p.value)} off</button>`).join('')+'<small>Enter a code at checkout. Eligibility is checked when ordering.</small>';
+    $('#shopMain').prepend(section);
+    section.addEventListener('click',async e=>{const b=e.target.closest('[data-offer]');if(!b)return;try{await navigator.clipboard.writeText(b.dataset.offer);showToast('Promo code copied');}catch(_){showToast('Use code '+b.dataset.offer+' at checkout');}});
+  }catch(_){}
 });

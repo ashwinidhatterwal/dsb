@@ -47,11 +47,11 @@
     root.className = '';
     root.innerHTML = Array.from(groups.entries()).map(([cat, items]) => `
       <section>
-        <h2 class="catalog-category">${escapeHtml(cat)}</h2>
+        <h2 class="catalog-category"><a href="${DSB_SEO.categoryPath(cat)}">${escapeHtml(cat)}</a></h2>
         <div class="catalog-list">
           ${items.map(p => `<a class="catalog-item" href="${productHref(p)}">
             <strong>${escapeHtml(p.name)}</strong>
-            <span>${escapeHtml(p.subcategory || '')} · ${Object.keys(p.sizePrices||{}).length?'From ':''}${money(Object.keys(p.sizePrices||{}).length?Math.min(Number(p.price),...Object.values(p.sizePrices).map(Number).filter(n=>Number.isFinite(n)&&n>0)):p.price)} · ${isOutOfStock(p) ? 'Out of stock' : 'In stock'}</span>
+            <span>${escapeHtml(p.subcategory || '')} · ${money(p.price)} · ${isOutOfStock(p) ? 'Out of stock' : 'In stock'}</span>
           </a>`).join('')}
         </div>
       </section>`).join('');

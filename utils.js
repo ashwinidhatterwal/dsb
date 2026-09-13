@@ -4,9 +4,10 @@
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
 
+const currencyNumberFormat = new Intl.NumberFormat('en-IN');
 function money(n){
   const num = Number(n) || 0;
-  return '₹' + num.toLocaleString('en-IN');
+  return '₹' + currencyNumberFormat.format(num);
 }
 
 function escapeHtml(str){
@@ -50,6 +51,7 @@ function renderStars(rating, size){
 
 /* ---------------- Product sharing (Web Share API, with fallbacks) ---------------- */
 function preferredProductPath(id){
+  if(window.DSB_PAGE_LANGUAGE==='hi'&&window.DSB_HINDI_PRODUCTS?.has(String(id)))return 'hi/'+DSB_SEO.productPath(id);
   if(window.DSB_PUBLISHED_PRODUCTS?.has(String(id))){const hex=Array.from(new TextEncoder().encode(String(id)),b=>b.toString(16).padStart(2,'0')).join('');return `products/p-${hex}.html`;}
   return `product.html?id=${encodeURIComponent(id)}`;
 }
@@ -79,22 +81,16 @@ async function shareProduct(p){
 /* ---------------- Scroll-reveal ----------------
    Adds .in-view to any .reveal element once it scrolls near the viewport.
    Safe no-op wherever IntersectionObserver isn't available. */
+let revealObserver;
+const observedReveals=new WeakSet();
 function initScrollReveal(root){
-  const items = $$('.reveal', root || document);
-  if (!items.length) return;
-  if (!('IntersectionObserver' in window)){
-    items.forEach(el => el.classList.add('in-view'));
-    return;
-  }
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting){
-        entry.target.classList.add('in-view');
-        observer.unobserve(entry.target);
-      }
-    });
-  }, { rootMargin: '0px 0px -60px 0px', threshold: 0.1 });
-  items.forEach(el => observer.observe(el));
+  const items=$$('.reveal:not(.in-view)',root||document);
+  if(!items.length)return;
+  if(!('IntersectionObserver' in window) || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches){items.forEach(el=>el.classList.add('in-view'));return;}
+  if(!revealObserver)revealObserver=new IntersectionObserver(entries=>{
+    entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('in-view');revealObserver.unobserve(entry.target);}});
+  },{rootMargin:'0px 0px -60px 0px',threshold:.1});
+  items.forEach(el=>{if(!observedReveals.has(el)){observedReveals.add(el);revealObserver.observe(el);}});
 }
 
 
