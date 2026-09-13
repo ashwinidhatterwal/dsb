@@ -303,6 +303,7 @@ a{ color:inherit; }
 }
 .card .discount{
   position:absolute; top:6px; left:6px;
+  z-index:2;
   background: var(--mehendi);
   color:#fff;
   font-family: var(--font-utility);
@@ -313,6 +314,7 @@ a{ color:inherit; }
 }
 .card .subtag{
   position:absolute; bottom:6px; left:6px;
+  z-index:2;
   background: rgba(32,27,61,0.75);
   color: var(--cream);
   font-size:10px;
@@ -1435,7 +1437,7 @@ html[lang="hi"] .hero-compact .hero-title{line-height:1.4;padding-block:2px;}
 .seo-category{max-width:1120px;margin:auto;padding:24px 16px 60px}.seo-category h1{margin:24px 0 12px}.seo-category p{line-height:1.7}.seo-category-links{display:flex;gap:10px;overflow-x:auto;padding:14px 4px;scrollbar-width:thin}.seo-category-links a{display:inline-block;padding:8px 12px;border:1px solid #dbc8d0;border-radius:20px;color:inherit;text-decoration:none;white-space:nowrap}.seo-products{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin:24px 0}.seo-products .catalog-item{display:block;text-decoration:none;color:inherit;background:#fff;border:1px solid #eadce3;border-radius:14px;padding:14px}.seo-products img{width:100%;height:160px;object-fit:contain}.seo-products strong,.seo-products span{display:block;margin-top:8px}.product-specs{margin:18px 0}.product-specs div{display:grid;grid-template-columns:minmax(80px,35%) 1fr;gap:14px;border-bottom:1px solid #eadce3;padding:8px 0}.product-specs dt{font-weight:600}.product-specs dd{margin:0;white-space:pre-line;overflow-wrap:anywhere}@media(max-width:440px){.seo-products{grid-template-columns:repeat(2,minmax(0,1fr))}.seo-products img{height:130px}}
 
 /* Subtle photo feedback without cropping product imagery. */
-.card .imgwrap img{transition:transform .38s cubic-bezier(.22,.61,.36,1);will-change:transform;}
+.card .imgwrap img{position:relative;z-index:0;transition:transform .38s cubic-bezier(.22,.61,.36,1);will-change:transform;}
 .pd-slide{overflow:hidden;}
 .pd-slide img{transition:transform .42s cubic-bezier(.22,.61,.36,1);}
 @media(hover:hover) and (pointer:fine){.card:hover .imgwrap img{transform:scale(1.04);}.pd-slide:hover img{transform:scale(1.025);}}
