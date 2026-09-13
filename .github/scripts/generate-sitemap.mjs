@@ -92,7 +92,7 @@ async function main() {
     }
   }
 
-  const allowed=['id','name','namehindi','category','subcategory','price','mrp','image','images','description','stock','stockqty','tags','variantgroup','variantlabel','bundlecontents','sizeprices','brand','material','packsize','specifications','gtin','variantsize','variantcolor','descriptionhindi','sizes'];
+  const allowed=['id','name','namehindi','category','subcategory','price','mrp','image','images','description','stock','stockqty','tags','sizeprices','brand','material','packsize','specifications','gtin','descriptionhindi','sizes'];
   const rows=(Array.isArray(payload)?payload:payload.products).map(row=>Object.fromEntries(allowed.filter(k=>row[k]!==undefined).map(k=>[k,row[k]])));
   await fs.writeFile('.catalog-build.json',JSON.stringify(rows),'utf8');
   await fs.writeFile('.catalog-build-meta.json',JSON.stringify({api:apiBase,generatedAt}),'utf8');
