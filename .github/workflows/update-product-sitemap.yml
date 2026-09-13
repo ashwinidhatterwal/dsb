@@ -38,8 +38,8 @@ jobs:
           path: |
             .catalog-build.json
             .catalog-build-meta.json
-          key: dsb-catalog-v4-${{ github.run_id }}
-          restore-keys: dsb-catalog-v4-
+          key: dsb-catalog-v5-${{ github.run_id }}
+          restore-keys: dsb-catalog-v5-
       - name: Generate sitemap from live products
         run: node .github/scripts/generate-sitemap.mjs
       - name: Keep validated catalogue for temporary API outages
@@ -48,7 +48,7 @@ jobs:
           path: |
             .catalog-build.json
             .catalog-build-meta.json
-          key: dsb-catalog-v4-${{ github.run_id }}
+          key: dsb-catalog-v5-${{ github.run_id }}
       - name: Save updated sitemap
         shell: bash
         run: |
