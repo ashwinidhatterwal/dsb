@@ -14,10 +14,6 @@
     'Available offers':'उपलब्ध ऑफ़र',
     'Enter a code at checkout. Eligibility is checked when ordering.':'चेकआउट पर कोड डालें। ऑर्डर करते समय पात्रता जाँची जाएगी।',
     'Promo code copied':'प्रोमो कोड कॉपी हो गया',
-    'Combo includes':'कॉम्बो में शामिल',
-    'Combo':'कॉम्बो',
-    'Size / colour':'साइज़ / रंग',
-
     'Could not check promo codes. Please try again.':'प्रोमो कोड की जाँच नहीं हो सकी। कृपया फिर से कोशिश करें।',
     'Live availability is temporarily unavailable. Please retry before ordering.':'अभी उपलब्धता की जानकारी नहीं मिल रही है। ऑर्डर करने से पहले फिर से कोशिश करें।',
     'Connecting to the shop for current availability…':'वर्तमान उपलब्धता के लिए दुकान से जुड़ रहे हैं…',

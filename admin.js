@@ -328,12 +328,7 @@ function fillForm(p){
   $('#f-packsize').value=p.packsize || '';
   $('#f-specifications').value=p.specifications || '';
   $('#f-gtin').value=p.gtin || '';
-  $('#f-variantsize').value=p.variantsize || '';
-  $('#f-variantcolor').value=p.variantcolor || '';
   $('#f-descriptionhindi').value=p.descriptionhindi || '';
-  $('#f-variantgroup').value = p.variantgroup || '';
-  $('#f-variantlabel').value = p.variantlabel || '';
-  $('#f-bundlecontents').value = p.bundlecontents || '';
   $('#f-sizeprices').value = p.sizeprices || '';
   $('#f-sizes').value = p.sizes || '';
   $('#f-hasSizes').checked = !!String(p.sizes || '').trim();
@@ -372,8 +367,8 @@ function clearForm(){
   ['f-id','f-name','f-nameHindi','f-category','f-subcategory','f-price','f-mrp','f-costprice','f-image','f-description','f-stockqty','f-tags']
     .forEach(id => $('#' + id).value = '');
   $('#f-stock').value = 'in stock';
-  $('#f-brand').value='';  $('#f-material').value='';  $('#f-packsize').value='';  $('#f-specifications').value='';  $('#f-gtin').value='';  $('#f-variantsize').value='';  $('#f-variantcolor').value='';  $('#f-descriptionhindi').value='';
-  $('#f-variantgroup').value='';  $('#f-variantlabel').value='';  $('#f-bundlecontents').value='';  $('#f-sizeprices').value='';
+  $('#f-brand').value='';  $('#f-material').value='';  $('#f-packsize').value='';  $('#f-specifications').value='';  $('#f-gtin').value='';  $('#f-descriptionhindi').value='';
+  $('#f-sizeprices').value='';
   $('#f-sizes').value='';$('#f-hasSizes').checked=false;$('#sizeOptionsField').hidden=true;
   $('#f-imagefile').value = '';
   $('#uploadStatus').textContent = '';
@@ -513,13 +508,8 @@ async function saveProductTask(){
     packsize: $('#f-packsize').value.trim(),
     specifications: $('#f-specifications').value.trim(),
     gtin: $('#f-gtin').value.trim(),
-    variantsize: $('#f-variantsize').value.trim(),
-    variantcolor: $('#f-variantcolor').value.trim(),
     descriptionhindi: $('#f-descriptionhindi').value.trim(),
-    variantgroup: $('#f-variantgroup').value.trim(),
-    variantlabel: $('#f-variantlabel').value.trim(),
-    bundlecontents: $('#f-bundlecontents').value.trim(),
-    sizeprices: $('#f-sizeprices').value.trim(),
+    sizeprices: $('#f-hasSizes').checked ? $('#f-sizeprices').value.trim() : '',
     tags: $('#f-tags').value.trim(),
     sizes: $('#f-hasSizes').checked ? [...new Set($('#f-sizes').value.split(/[,\n]/).map(x=>x.trim()).filter(Boolean))].join(', ') : ''
   };

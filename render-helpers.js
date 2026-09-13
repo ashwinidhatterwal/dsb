@@ -46,13 +46,16 @@ function cardHtml(p,options={}){
   const disc = discountPct(p);
   const href = `${typeof preferredProductPath==='function'?preferredProductPath(p.id):`product.html?id=${encodeURIComponent(p.id)}`}`;
   const low = lowStockLabel(p);
-  const prices=String(p.sizeprices || '').split(',').map(e=>Number(e.split('=')[1])).filter(n=>Number.isFinite(n)&&n>0);
-  const displayedPrice=prices.length?Math.min(p.price,...prices):p.price;
+  const priceOverrides=Object.create(null);
+  String(p.sizeprices || '').split(',').forEach(entry=>{const pair=entry.split('=');const value=Number(pair[1]);if(pair.length===2&&Number.isFinite(value)&&value>0)priceOverrides[pair[0].trim()]=value;});
+  const sizePrices=(p.sizes||[]).map(size=>priceOverrides[size]||p.price);
+  const hasSizePrices=sizePrices.some(price=>price!==p.price);
+  const displayedPrice=sizePrices.length?Math.min(...sizePrices):p.price;
   return `
   <div class="card" data-id="${escapeHtml(p.id)}">
     <a class="imgwrap" href="${href}">
       ${disc ? `<span class="discount">${disc}% OFF</span>` : ''}
-      <span class="subtag">${escapeHtml(p.bundlecontents?'Combo':p.subcategory)}</span>
+      <span class="subtag">${escapeHtml(p.subcategory)}</span>
       <img src="${escapeHtml(productImageUrl(p.image,400))}" srcset="${escapeHtml(productImageUrl(p.image,200))} 200w, ${escapeHtml(productImageUrl(p.image,400))} 400w, ${escapeHtml(productImageUrl(p.image,600))} 600w" sizes="(max-width:600px) 46vw, 220px" alt="${escapeHtml(customerProductName(p))}" loading="${options.eager?'eager':'lazy'}" ${options.eager?'fetchpriority="high"':''} decoding="async" width="400" height="400">
     </a>
     <button type="button" class="card-share" data-share="${escapeHtml(p.id)}" aria-label="Share ${escapeHtml(p.name)}">
@@ -60,12 +63,11 @@ function cardHtml(p,options={}){
     </button>
     <div class="body">
       <a class="name" href="${href}">${escapeHtml(customerProductName(p))}</a>
-      ${p.variantlabel?`<div class="variant-label">${escapeHtml(p.variantlabel)}</div>`:''}
       ${customerProductSecondaryName(p) ? `<div class="name-hindi">${escapeHtml(customerProductSecondaryName(p))}</div>` : ''}
       <div class="card-rating-slot">${cardRatingHtml(p)}</div>
       <div class="prices">
-        <span class="price">${prices.length?'From ':''}${money(displayedPrice)}</span>
-        ${p.mrp > p.price ? `<span class="mrp">${money(p.mrp)}</span>` : ''}
+        <span class="price">${hasSizePrices?'From ':''}${money(displayedPrice)}</span>
+        ${p.mrp > displayedPrice ? `<span class="mrp">${money(p.mrp)}</span>` : ''}
       </div>
       ${low ? `<div class="low-stock">${escapeHtml(low)}</div>` : ''}
       <div class="card-actions">${cardActionsHtml(p)}</div>

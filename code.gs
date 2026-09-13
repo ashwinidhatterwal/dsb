@@ -70,15 +70,15 @@ const ALLOWED_ORDER_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'De
 // Set the ADMIN_KEY Script Property before deploying — the admin page uses it to
 // add/delete products and manage orders. Anyone who has this key can edit
 // your sheet and see customer order details.
-const ADMIN_KEY = 'ashwini'; // Prefer the ADMIN_KEY Script Property; never publish secrets in GitHub.
+const ADMIN_KEY = ''; // Prefer the ADMIN_KEY Script Property; never publish secrets in GitHub.
 
 // Optional — silently pings a Telegram chat/channel the instant a new order
 // comes in, so you don't have to keep the Sheet or admin page open to know.
 // Leave TELEGRAM_BOT_TOKEN blank to turn this off entirely; nothing else
 // about order-taking changes either way. See UPDATE.txt for how to get
 // a bot token and chat ID from @BotFather in about two minutes.
-const TELEGRAM_BOT_TOKEN = '7986254241:AAH0I0vCQe2LEe6dUf-u5gc8Bcw6DLyfoJg'; // e.g. '123456789:AAExampleTokenFromBotFather'
-const TELEGRAM_CHAT_ID = '629369496';   // your numeric chat ID, or '@yourchannel'
+const TELEGRAM_BOT_TOKEN = ''; // e.g. '123456789:AAExampleTokenFromBotFather'
+const TELEGRAM_CHAT_ID = '';   // your numeric chat ID, or '@yourchannel'
 
 function doGet(e) {
   const action = (e.parameter.action || 'products').toString();
@@ -269,7 +269,7 @@ function getAllProducts(includeCost) {
   if (includeCost) return rows;
   const publicRows = rows.filter(r=>!isArchived_(r)).map(r => {
     const copy={};
-    ['id','name','namehindi','category','subcategory','price','mrp','image','images','description','stock','stockqty','tags','brand','material','packsize','specifications','gtin','variantsize','variantcolor','descriptionhindi','variantgroup','variantlabel','bundlecontents','sizeprices','sizes'].forEach(key=>{if(r[key]!==undefined)copy[key]=r[key];});
+    ['id','name','namehindi','category','subcategory','price','mrp','image','images','description','stock','stockqty','tags','brand','material','packsize','specifications','gtin','descriptionhindi','sizeprices','sizes'].forEach(key=>{if(r[key]!==undefined)copy[key]=r[key];});
     return copy;
   });
   cachePutJson_(CATALOG_CACHE_KEY, publicRows, CATALOG_CACHE_TTL);
@@ -282,7 +282,7 @@ function addProduct(p,requestId) {
     const retired=SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeletedProductIds');
     if(p.id&&retired&&findRow_(retired,'id',String(p.id).trim()))throw new Error('This product ID was retired. Choose a new ID.');
     if(p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizes');
-    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'variantsize', 'variantcolor', 'descriptionhindi', 'variantgroup', 'variantlabel', 'bundlecontents', 'sizeprices'].forEach(k=>{if(p[k]!==undefined)ensureColumn_(getSheet_(PRODUCTS_SHEET),k);});
+    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices'].forEach(k=>{if(p[k]!==undefined)ensureColumn_(getSheet_(PRODUCTS_SHEET),k);});
     const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet);
     let reservation=null;
     if(requestId){
@@ -316,7 +316,7 @@ function updateProduct(p) {
   return withWriteLock_(function() {
     validateProductFields_(p, false);
     if(p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET),'sizes');
-    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'variantsize', 'variantcolor', 'descriptionhindi', 'variantgroup', 'variantlabel', 'bundlecontents', 'sizeprices'].forEach(k=>{if(p[k]!==undefined)ensureColumn_(getSheet_(PRODUCTS_SHEET),k);});
+    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices'].forEach(k=>{if(p[k]!==undefined)ensureColumn_(getSheet_(PRODUCTS_SHEET),k);});
     const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet);
     const row = findRow_(sheet, 'id', String(p.id || '').trim());
     if (!row) throw new Error('Product not found.');
@@ -969,9 +969,8 @@ function findRow_(sheet, column, value) {
   return hit ? hit.getRow() : 0;
 }
 function validateProductFields_(p, adding) {
-  ['brand', 'material', 'packsize', 'specifications', 'gtin', 'variantsize', 'variantcolor', 'descriptionhindi', 'variantgroup', 'variantlabel', 'bundlecontents', 'sizeprices'].forEach(k=>{if(p[k]!==undefined){p[k]=String(p[k]).trim();if(p[k].length>2000)throw new Error(k+' is too long.');}});
+  ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices'].forEach(k=>{if(p[k]!==undefined){p[k]=String(p[k]).trim();if(p[k].length>2000)throw new Error(k+' is too long.');}});
   if(p.gtin && !/^(?:\d{8}|\d{12}|\d{13}|\d{14})$/.test(p.gtin))throw new Error('GTIN must be 8, 12, 13 or 14 digits. Leave it blank if unknown.');
-  if(p.variantgroup && (!p.variantlabel || p.sizes))throw new Error('Grouped variants need a label and must not also use shared sizes.');
   if(p.sizeprices){const sizes=parseSizes_(p.sizes||'');p.sizeprices.split(',').forEach(entry=>{const pair=entry.trim().split('=');if(pair.length!==2 || !sizes.includes(pair[0].trim()) || !Number.isFinite(Number(pair[1])) || Number(pair[1])<=0)throw new Error('Size prices must use available sizes and positive prices: 32B=299.');});}
 
   if(p.sizes !== undefined){
@@ -1273,7 +1272,7 @@ function dispatchAdmin_(body,actor){
 }
 function isArchived_(p){return String(p.archived||'').toLowerCase()==='yes';}
 function productRevision_(p){
-  return hashText_(JSON.stringify(['id','name','namehindi','category','subcategory','price','mrp','costprice','image','images','description','stock','stockqty','tags','brand','material','packsize','specifications','gtin','variantsize','variantcolor','descriptionhindi','variantgroup','variantlabel','bundlecontents','sizeprices','sizes','archived'].map(k=>String(p[k]??''))));
+  return hashText_(JSON.stringify(['id','name','namehindi','category','subcategory','price','mrp','costprice','image','images','description','stock','stockqty','tags','brand','material','packsize','specifications','gtin','descriptionhindi','sizeprices','sizes','archived'].map(k=>String(p[k]??''))));
 }
 function adminProductsPage_(options){
   const all=getAllProducts(true),q=String(options.query||'').trim().toLowerCase().slice(0,120),category=String(options.category||''),stock=String(options.stock||'all');

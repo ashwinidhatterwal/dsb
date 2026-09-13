@@ -344,11 +344,6 @@ function setJsonLd(id, data){
 function renderPdActions(p){
   const priced=sizedCartProduct(p,selectedSize);
   const prices=$('#pdRoot .pd-prices');if(prices)prices.innerHTML=`<span class="price">${money(priced.price)}</span>${p.mrp>priced.price?`<span class="mrp">${money(p.mrp)}</span>`:''}`;
-  let merchandising=$('#variantMerchandising');
-  if(!merchandising){merchandising=document.createElement('div');merchandising.id='variantMerchandising';$('#pdActions').before(merchandising);}
-  const siblings=p.variantgroup?ALL_PRODUCTS.filter(x=>x.variantgroup===p.variantgroup):[];
-  const merchandisingHtml=(siblings.length?`<fieldset class="product-sizes"><legend>Size / colour</legend><div class="size-options">${siblings.map(x=>`<a class="size-option" href="${preferredProductPath(x.id)}" ${x.id===p.id?'aria-current="page"':''}>${escapeHtml(x.variantlabel)} · ${money(x.price)}${isOutOfStock(x)?' · Unavailable':''}</a>`).join('')}</div></fieldset>`:'')+(p.bundlecontents?`<div class="product-sizes"><strong>Combo includes</strong><p>${escapeHtml(p.bundlecontents)}</p></div>`:'');
-  if(merchandising.dataset.html!==merchandisingHtml){merchandising.innerHTML=merchandisingHtml;merchandising.dataset.html=merchandisingHtml;}
 
   if(isOutOfStock(p)){$('#pdActions').innerHTML='<button class="ghost-btn" disabled style="flex:1;">Currently unavailable</button>';return;}
   if(p.sizes?.length && !p.sizes.includes(selectedSize)){
@@ -396,9 +391,9 @@ function refreshCurrentProductCard(){
 
 /* ---------------- Related products ---------------- */
 function renderRelated(p){
-  let related = ALL_PRODUCTS.filter(x => x.id !== p.id && !isOutOfStock(x) && (!p.variantgroup || x.variantgroup!==p.variantgroup) && x.category === p.category);
+  let related = ALL_PRODUCTS.filter(x => x.id !== p.id && !isOutOfStock(x) && x.category === p.category);
   if (related.length < 4){
-    const extra = ALL_PRODUCTS.filter(x => x.id !== p.id && !isOutOfStock(x) && (!p.variantgroup || x.variantgroup!==p.variantgroup) && !related.includes(x)).slice(0, 8 - related.length);
+    const extra = ALL_PRODUCTS.filter(x => x.id !== p.id && !isOutOfStock(x) && !related.includes(x)).slice(0, 8 - related.length);
     related = related.concat(extra);
   }
   related = related.slice(0, 8);
