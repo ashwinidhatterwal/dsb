@@ -1,0 +1,21 @@
+CHECKOUT UPDATE — 14 September 2026
+
+1. Extract this ZIP and upload the project contents (including src, scripts and
+   .github) to your GitHub repository. Wait for the website deployment to finish.
+2. The PIN code field and admin price breakdown will then appear on the website.
+3. Ask me to update the live Apps Script backend after the website is updated.
+   Alternatively, copy root code.gs into the existing Apps Script project while
+   preserving private settings, then Deploy > Manage deployments > Edit >
+   New version > Deploy. Keep the same deployment URL.
+
+Do not deploy the backend first: the old checkout has no separate PIN field.
+No new Google Sheets columns are required. PIN is appended to address.
+Telegram price breakdown applies to notifications sent after backend deployment.
+Old Telegram messages are not changed. New order item summaries include prices.
+
+Private settings: use Project settings > Script properties for ADMIN_KEY,
+TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID. Real values must not go into GitHub.
+
+Checks: node scripts/build.mjs --check
+        node scripts/check.mjs
+        node scripts/check-checkout.mjs

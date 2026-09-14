@@ -1,0 +1,118 @@
+/* Shared by static publishing and live product pages; no extra API requests. */
+const DSB_SEO = (() => {
+  const basePath = id => 'products/p-' + Array.from(new TextEncoder().encode(String(id)), b => b.toString(16).padStart(2, '0')).join('') + '.html';
+  const categoryPath = category => 'categories/' + (String(category).trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'category') + '-' + Array.from(new TextEncoder().encode(String(category)), b => b.toString(16).padStart(2, '0')).join('') + '.html';
+  const val = (p, k) => String(p[k] ?? '').trim();
+  const details = p => [['Brand', 'brand'], ['Material', 'material'], ['Pack / quantity', 'packsize'], ['Product details', 'specifications']].filter(([, k]) => val(p, k)).map(([label, k]) => [label, val(p, k)]);
+  const name = p => String(p.name || '').trim();
+  const description = p => [val(p, 'description'), ...details(p).map(([k, v]) => k + ': ' + v)].filter(Boolean).join(' · ') || name(p) + ' at Dhatterwal Suhag Bhandar in Goluwala, Rajasthan. Contact the shop for further product details.';
+  const absolute = (src, site) => {
+    try {
+      const u = new URL(src, site + '/');
+      return /^https?:$/.test(u.protocol) && u.hostname !== 'placehold.co' ? u.href : '';
+    } catch (_) {
+      return '';
+    }
+  };
+  function pricing(p) {
+    const sizes = Array.isArray(p.sizes) ? p.sizes : val(p, 'sizes').split(/[,\n]/).map(x => x.trim()).filter(Boolean);
+    const overrides = Object.create(null);
+    val(p, 'sizeprices').split(',').forEach(entry => {
+      const pair = entry.split('='),
+        price = Number(pair[1]);
+      if (pair.length === 2 && sizes.includes(pair[0].trim()) && Number.isFinite(price) && price > 0 && price <= 10000000) overrides[pair[0].trim()] = price;
+    });
+    const priceFor = size => overrides[size] ?? Number(p.price);
+    const prices = sizes.length ? sizes.map(priceFor) : [Number(p.price)];
+    return {
+      sizes,
+      priceFor,
+      min: Math.min(...prices),
+      max: Math.max(...prices)
+    };
+  }
+  function product(p, rows, site, language = 'en') {
+    const url = site + '/' + (language === 'hi' ? 'hi/' : '') + basePath(p.id),
+      price = Number(p.price);
+    const out = String(p.stock).toLowerCase() === 'out of stock' || (p.stockqty ?? p.stockQty) != null && String(p.stockqty ?? p.stockQty) !== '' && Number(p.stockqty ?? p.stockQty) <= 0;
+    const images = (p.gallery || [p.image, ...val(p, 'images').split(',')]).map(x => x ? absolute(x.trim(), site) : '').filter(Boolean);
+    const result = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      '@id': url + '#product',
+      name: language === 'hi' ? p.namehindi || p.nameHindi : name(p),
+      description: language === 'hi' ? p.descriptionhindi : description(p),
+      sku: String(p.id),
+      url,
+      ...(images.length ? {
+        image: [...new Set(images)]
+      } : {}),
+      ...(val(p, 'brand') ? {
+        brand: {
+          '@type': 'Brand',
+          name: p.brand
+        }
+      } : {}),
+      ...(val(p, 'gtin') ? {
+        gtin: val(p, 'gtin')
+      } : {}),
+      ...(val(p, 'material') ? {
+        material: p.material
+      } : {}),
+      additionalProperty: details(p).filter(([k]) => ['Pack / quantity', 'Product details'].includes(k)).map(([name, value]) => ({
+        '@type': 'PropertyValue',
+        name,
+        value
+      }))
+    };
+    if (Number.isFinite(price) && price > 0) {
+      const offer = (n, url) => ({
+        '@type': 'Offer',
+        url,
+        priceCurrency: 'INR',
+        price: Number(n).toFixed(2),
+        availability: out ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
+        itemCondition: 'https://schema.org/NewCondition',
+        seller: {
+          '@type': 'Organization',
+          name: 'Dhatterwal Suhag Bhandar',
+          url: site + '/'
+        }
+      });
+      const prices = pricing(p);
+      result.offers = prices.sizes.length ? prices.sizes.map(size => offer(prices.priceFor(size), url + '?size=' + encodeURIComponent(size))) : offer(price, url);
+    }
+    return result;
+  }
+  const graph = (p, rows, site, language = 'en') => product(p, rows, site, language);
+  const breadcrumbs = (p, site, lang = 'en') => ({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [{
+      name: lang === 'hi' ? 'दुकान' : 'Shop',
+      item: site + '/'
+    }, {
+      name: p.category || 'Other',
+      item: site + '/' + categoryPath(p.category || 'Other')
+    }, {
+      name: p.name,
+      item: site + '/' + basePath(p.id)
+    }].map((x, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      ...x
+    }))
+  });
+  return {
+    productPath: basePath,
+    categoryPath,
+    details,
+    name,
+    description,
+    product,
+    graph,
+    breadcrumbs,
+    pricing
+  };
+})();
+if (typeof module !== 'undefined') module.exports = DSB_SEO;
