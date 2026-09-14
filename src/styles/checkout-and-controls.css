@@ -1,0 +1,301 @@
+/* Checkout review and accessible controls */
+.checkout-review {
+  padding:56px 22px 28px;
+  overflow-y:auto;
+  max-height:100dvh;
+  box-sizing:border-box;
+}
+.checkout-review h2 {
+  line-height:1.5;
+}
+.checkout-review p {
+  overflow-wrap:anywhere;
+  line-height:1.6;
+}
+.checkout-review ul {
+  padding-left:20px;
+  line-height:1.8;
+}
+.checkout-review .primary-btn,.checkout-review .ghost-btn {
+  display:block;
+  width:100%;
+  margin-top:14px;
+}
+.checkout-honeypot {
+  position:absolute;
+  width:1px;
+  height:1px;
+  overflow:hidden;
+  clip-path:inset(50%);
+}
+#checkoutError {
+  padding:12px 20px;
+}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible {
+  outline:3px solid #89235c;
+  outline-offset:3px;
+}
+.dash-status-seg.confirmed,.dash-status-seg.packed {
+  background:#6d58a8;
+}
+.dash-status-seg.shipped {
+  background:#357cad;
+}
+.dash-status-seg.delivered {
+  background:#26875a;
+}
+.product-sizes {
+  border:0;
+  padding:0;
+  margin:18px 0;
+  min-width:0;
+}
+.product-sizes legend {
+  font-weight:700;
+  margin-bottom:10px;
+}
+.size-options {
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.size-option {
+  min-width:48px;
+  min-height:44px;
+  padding:9px 14px;
+  border:1px solid #b691a5;
+  border-radius:12px;
+  background:#fff;
+  color:#302439;
+  font:inherit;
+  overflow-wrap:anywhere;
+  max-width:100%;
+}
+.size-option[aria-pressed="true"] {
+  background:#c60060;
+  color:white;
+  border:2px solid #880044;
+}
+.size-select-link {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-decoration:none;
+  min-height:40px;
+  flex:1;
+}
+.cart-drawer > .checkout-review,.cart-drawer > .order-confirm{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding:60px 22px calc(28px + env(safe-area-inset-bottom));
+  box-sizing:border-box;
+}
+.stepper,.card .stepper,.cart-item .stepper,.pd-actions .stepper{
+  display:inline-flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:0;
+  flex:0 0 auto;
+  min-width:112px;
+  height:44px;
+  box-sizing:border-box;
+  padding:3px;
+  border:1px solid rgba(48,36,57,.14);
+  border-radius:14px;
+  background:rgba(255,255,255,.94);
+  box-shadow:0 3px 10px rgba(48,36,57,.045);
+  overflow:hidden;
+}
+.stepper button,.card .stepper button,.cart-item .stepper button,.pd-actions .stepper button{
+  appearance:none;
+  display:grid;
+  place-items:center;
+  flex:0 0 36px;
+  width:36px;
+  height:36px;
+  padding:0;
+  margin:0;
+  border:0;
+  border-radius:10px;
+  background:transparent;
+  color:var(--indigo);
+  font:600 20px/1 var(--font-body);
+  touch-action:manipulation;
+  transition:background-color .18s ease,transform .18s ease;
+}
+.stepper span,.card .stepper span{
+  min-width:24px;
+  text-align:center;
+  padding:0 2px;
+  box-sizing:border-box;
+  font:700 13px/1 var(--font-body);
+  font-variant-numeric:tabular-nums;
+}
+.card .card-actions{
+  flex-wrap:wrap;
+}
+.card .card-actions > .stepper{
+  flex:1 0 88px;
+  min-width:88px;
+  height:36px;
+  padding:2px;
+}
+.card .stepper button{
+  flex-basis:26px;
+  font-size:18px;
+}
+.card .card-actions > .buynowbtn{
+  min-width:64px;
+  overflow-wrap:anywhere;
+}
+.stepper button:disabled{
+  opacity:.32;
+  cursor:default;
+}
+.pd-actions .stepper{
+  min-width:124px;
+}
+.cart-item .stepper{
+  min-width:112px;
+  height:44px;
+}
+.searchwrap input:focus,.searchwrap input:focus-visible,#searchInput2:focus,#searchInput2:focus-visible{
+  outline:none;
+  box-shadow:none;
+  border-color:transparent;
+}
+.searchwrap:focus-within{
+  border-color:rgba(81,77,99,.38);
+  box-shadow:0 0 0 3px rgba(81,77,99,.08);
+}
+.card-actions > *,.pd-actions > *{
+  animation:none;
+}
+.primary-btn,.ghost-btn,.iconbtn,.chip,.subchip,.card .addbtn,.card .buynowbtn{
+  transition:transform .2s cubic-bezier(.22,.61,.36,1),background-color .2s ease,box-shadow .2s ease;
+}
+.primary-btn:active,.ghost-btn:active,.iconbtn:active,.card .addbtn:active,.card .buynowbtn:active{
+  transform:scale(.98);
+}
+@media(hover:none){
+  .card:hover,.card:hover img,.chip:hover,.subchip:hover,.iconbtn:hover,.addbtn:hover{
+    transform:none;
+  }
+  .wa-float{
+    animation:none;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:.01ms!important;
+    scroll-behavior:auto!important;
+  }
+}
+/* Checkout-only ornament: transform animation leaves the layout stationary. */
+.checkout-wait-art{
+  position:relative;
+  display:grid;
+  place-items:center;
+  width:104px;
+  height:104px;
+  margin:20px auto 28px;
+}
+.checkout-wait-art span{
+  font-size:42px;
+  animation:checkoutBagFloat 2.4s ease-in-out infinite;
+}
+.checkout-wait-ring{
+  position:absolute;
+  inset:0;
+  border:2px solid rgba(200,0,96,.12);
+  border-top-color:var(--rani);
+  border-right-color:var(--marigold);
+  border-radius:50%;
+  animation:checkoutRingSpin 1.8s linear infinite;
+}
+@keyframes checkoutRingSpin{
+  to{
+    transform:rotate(360deg)}
+}
+@keyframes checkoutBagFloat{
+  50%{
+    transform:translateY(-5px)}
+}
+@media(prefers-reduced-motion:reduce){
+  .checkout-wait-art span,.checkout-wait-ring{
+    animation:none!important}
+}
+/* Consistent content space and touch targets, without changing page structure. */
+.card .name{
+  line-height:1.4;
+}
+.card-rating-slot{
+  min-height:18px;
+}
+.card .card-actions{
+  margin-top:auto;
+}
+.card .buynowbtn,.card .addbtn{
+  min-height:44px;
+}
+.checkout-review .cart-total-box{
+  border:1px solid rgba(200,0,96,.16);
+  background:#fff7fb;
+}
+.checkout-review .cart-total-box .total{
+  font-size:22px;
+  font-weight:800;
+}
+.checkout-review #editCheckoutBtn{
+  background:transparent;
+  box-shadow:none;
+}
+.hero:before,.hero:after,.hero-glow{
+  animation:none;
+  opacity:.16;
+}
+.card .discount{
+  box-shadow:none;
+}
+@media(max-width:380px){
+  .card .card-actions{
+    flex-direction:column;
+  }
+  .card .card-actions>.stepper{
+    flex:0 0 auto;
+    width:100%;
+  }
+  .cart-drawer .closebtn{
+    width:44px!important;
+    height:44px!important;
+  }
+}
+/* Shared add-action colours; no inherited pink text on a pink background. */
+.card .addbtn,.card .addbtn.in-cart,.card .buynowbtn,#pdAdd,#pdBuyNow{
+  background:linear-gradient(135deg,#c60060,#99004b);
+  color:#fff;
+  border:1px solid #a60050;
+  font-weight:700;
+  text-shadow:none;
+}
+.card .addbtn:hover,#pdAdd:hover{
+  background:linear-gradient(135deg,#ad0054,#850041);
+  color:#fff;
+}
+.card .addbtn:disabled,#pdAdd:disabled{
+  background:#eee8ec;
+  color:#615864;
+  border-color:#d5cbd2;
+  opacity:1!important;
+  box-shadow:none;
+}
+.card .stepper button{
+  width:44px;
+  flex-basis:44px;
+  min-height:44px;
+  height:44px;
+}

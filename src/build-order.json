@@ -1,0 +1,31 @@
+{
+  "backend": [
+    "src/backend/config.gs",
+    "src/backend/http.gs",
+    "src/backend/sheets.gs",
+    "src/backend/cache.gs",
+    "src/backend/products.gs",
+    "src/backend/reviews.gs",
+    "src/backend/promos.gs",
+    "src/backend/orders.gs",
+    "src/backend/checkout.gs",
+    "src/backend/transactions.gs",
+    "src/backend/telegram.gs",
+    "src/backend/admin-auth.gs"
+  ],
+  "styles": [
+    "src/styles/foundation.css",
+    "src/styles/navigation.css",
+    "src/styles/cards.css",
+    "src/styles/dialogs-and-checkout.css",
+    "src/styles/footer-and-loading.css",
+    "src/styles/product-and-shared-ui.css",
+    "src/styles/legacy-theme.css",
+    "src/styles/modal-layout.css",
+    "src/styles/loader-and-localization.css",
+    "src/styles/checkout-and-controls.css",
+    "src/styles/storefront-layout.css",
+    "src/styles/catalog-and-photo-effects.css",
+    "src/styles/home-brand-and-actions.css"
+  ]
+}

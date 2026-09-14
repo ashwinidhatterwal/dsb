@@ -1,0 +1,220 @@
+/* ---------- Product grid ---------- */
+.section-title{
+  font-family: var(--font-display);
+  font-size:17px;
+  margin: 4px 16px 8px;
+}
+.section-title h2{
+  font: inherit;
+  margin:0;
+}
+.section-title > *:first-child{
+  position:relative;
+  padding-bottom:8px;
+  display:inline-block;
+}
+.section-title > *:first-child::after{
+  content:"";
+  position:absolute;
+  left:0;
+  bottom:0;
+  width:34px;
+  height:3px;
+  border-radius:2px;
+  background: linear-gradient(90deg, var(--rani), var(--marigold), var(--turmeric));
+}
+.section-title small{
+  font-family: var(--font-utility);
+  font-weight:600;
+  font-size:12px;
+  color: var(--indigo-soft);
+}
+.grid{
+  display:grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap:10px;
+  padding: 0 12px 20px;
+}
+@media (min-width: 640px){
+  .grid{
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 960px){
+  .grid{
+    grid-template-columns: repeat(4, 1fr);
+    padding-left:24px;
+    padding-right:24px;
+  }
+}
+.card{
+  display:flex;
+  flex-direction:column;
+  position:relative;
+}
+.card:active{
+  box-shadow: 0 10px 22px rgba(32,27,61,0.14);
+  transform: translateY(-1px);
+}
+.card .imgwrap{
+  position:relative;
+  overflow:hidden;
+}
+.card-share{
+  position:absolute;
+  top:6px;
+  right:6px;
+  z-index:3;
+  width:26px;
+  height:26px;
+  border-radius:50%;
+  background: rgba(255,255,255,0.92);
+  border:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color: var(--indigo);
+  box-shadow:0 2px 6px rgba(32,27,61,0.18);
+  transition: transform .15s ease, background .15s ease;
+}
+.card-share:hover{
+  background:#fff;
+  color: var(--rani);
+}
+.card-share:active{
+  transform: scale(.88);
+}
+/* Smooth, futuristic hover on pointer devices — untouched on mobile taps. */
+@media (hover:hover) and (pointer:fine){
+  .card{
+    transition: box-shadow .32s cubic-bezier(.22,.61,.36,1), transform .32s cubic-bezier(.22,.61,.36,1);
+  }
+  .card:hover{
+    box-shadow: 0 16px 32px rgba(32,27,61,0.16);
+    transform: translateY(-5px);
+  }
+  .card:hover .imgwrap img{
+    transform: scale(1.08);
+  }
+}
+.card .discount{
+  position:absolute;
+  top:6px;
+  left:6px;
+  z-index:2;
+  background: var(--mehendi);
+  color:#fff;
+  font-family: var(--font-utility);
+  font-weight:700;
+  font-size:10.5px;
+  padding:2px 6px;
+  border-radius:6px;
+}
+.card .subtag{
+  position:absolute;
+  bottom:6px;
+  left:6px;
+  z-index:2;
+  background: rgba(32,27,61,0.75);
+  color: var(--cream);
+  font-size:10px;
+  font-family: var(--font-utility);
+  padding:2px 6px;
+  border-radius:6px;
+}
+.card .body{
+  padding:8px 9px 9px;
+  display:flex;
+  flex-direction:column;
+  flex:1;
+}
+.card-rating{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  font-size:10.5px;
+  color:#9b93b0;
+  font-family: var(--font-utility);
+}
+.card-rating .stars{
+  font-size:11px;
+  letter-spacing:0.5px;
+}
+.card .prices{
+  display:flex;
+  align-items:baseline;
+  gap:6px;
+  font-family: var(--font-utility);
+}
+.card .price{
+  font-weight:700;
+  font-size:15px;
+  color: var(--indigo);
+}
+.card .mrp{
+  font-size:11.5px;
+  text-decoration:line-through;
+  color:#9b93b0;
+}
+.card .card-actions{
+  align-items:stretch;
+}
+.card .card-actions > *{
+  flex:1;
+  min-width:0;
+}
+.card .addbtn{
+  border:1px solid var(--rani);
+  color: var(--rani);
+  padding:6px 4px;
+  font-family: var(--font-utility);
+  font-weight:700;
+  font-size:11.5px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+}
+.card .addbtn.in-cart{
+  background: var(--rani);
+  color:#fff;
+}
+.card .buynowbtn{
+  border:none;
+  background: linear-gradient(135deg, var(--rani), var(--rani-dark));
+  color:#fff;
+  border-radius:8px;
+  padding:6px 4px;
+  font-family: var(--font-utility);
+  font-weight:700;
+  font-size:11.5px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.card .stepper{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border:1px solid var(--rani);
+  border-radius:8px;
+  overflow:hidden;
+}
+.card .stepper button{
+  border:none;
+  background: var(--rani);
+  color:#fff;
+  font-weight:700;
+}
+.card .stepper span{
+  font-family: var(--font-utility);
+  font-weight:700;
+  font-size:13px;
+}
+.empty-state{
+  grid-column: 1 / -1;
+  text-align:center;
+  padding: 36px 16px;
+  color: var(--indigo-soft);
+  font-family: var(--font-utility);
+}

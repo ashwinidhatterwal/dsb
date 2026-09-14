@@ -1,0 +1,69 @@
+/* ---------- Hero ---------- */
+.hero{
+  position:relative;
+  background-size: 200% 200%;
+  animation: heroDrift 16s ease-in-out infinite;
+  color: var(--cream);
+}
+@keyframes heroDrift{
+  0%, 100%{
+    background-position: 20% 10%;
+  }
+  50%{
+    background-position: 62% 42%;
+  }
+}
+.cat-rail{
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding: 4px 16px 12px;
+  scrollbar-width:none;
+}
+.cat-rail::-webkit-scrollbar{
+  display:none;
+}
+.chip{
+  flex-shrink:0;
+  border:1px solid var(--line);
+  background:#fff;
+  color: var(--indigo);
+  padding: 7px 14px;
+  border-radius:999px;
+  font-family: var(--font-utility);
+  font-weight:600;
+  font-size:13px;
+  white-space:nowrap;
+}
+.chip.active{
+  background: var(--rani);
+  border-color: var(--rani);
+  color:#fff;
+}
+.subchip-row{
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding: 0 16px 12px;
+  scrollbar-width:none;
+}
+.subchip-row::-webkit-scrollbar{
+  display:none;
+}
+.subchip{
+  flex-shrink:0;
+  border:1px dashed var(--indigo-soft);
+  background:transparent;
+  color: var(--indigo-soft);
+  padding:5px 12px;
+  border-radius:999px;
+  font-size:12px;
+  font-family: var(--font-utility);
+  font-weight:600;
+  white-space:nowrap;
+}
+.subchip.active{
+  background: var(--marigold);
+  border-color: var(--marigold);
+  color: var(--indigo);
+}

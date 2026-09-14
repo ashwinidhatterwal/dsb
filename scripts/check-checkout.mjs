@@ -1,0 +1,38 @@
+import fs from 'node:fs/promises';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const read = p => fs.readFile(new URL('../' + p, import.meta.url), 'utf8');
+const backend = vm.createContext({console});
+vm.runInContext(await read('code.gs'), backend);
+const order = {customerName:'Test Customer',phone:'9876543210',address:'House 12, Main Road',pinCode:'110001',paymentMethod:'Cash on Delivery',itemsDetail:[{id:'P',qty:1}]};
+for (const pinCode of ['', '12345', '1234567', '012345', '11a001']) {
+  assert.equal(backend.normalizeAndValidateOrder_({...order,pinCode}).code,'validation_failed');
+}
+assert.equal(backend.normalizeAndValidateOrder_(order).address,'House 12, Main Road\nPIN: 110001');
+assert.equal(backend.normalizeAndValidateOrder_({...order,address:order.address+'\nPIN: 110001'}).address,'House 12, Main Road\nPIN: 110001');
+assert.equal(backend.normalizeAndValidateOrder_({...order,address:'x'.repeat(489)}).code,'validation_failed');
+const frontend = await read('cart-ui.js');
+const front = vm.createContext({checkoutState:{name:order.customerName,phone:order.phone,address:order.address,pinCode:order.pinCode,paymentMethod:'COD'},CartStore:{getAll:()=>({p:{product:{id:'P'},qty:1}})},$:()=>null});
+vm.runInContext(frontend.slice(frontend.indexOf('function checkoutOrderFromForm()'),frontend.indexOf('async function submitOrder()')),front);
+const payload = front.checkoutOrderFromForm();
+assert.equal(payload.address, 'House 12, Main Road\nPIN: 110001');
+assert.equal(front.validateCheckoutDetails(payload),null);
+assert.equal(front.validateCheckoutDetails({...payload,pinCode:''}).field,'custPinCode');
+assert.equal(front.validateCheckoutDetails({...payload,address:'\nPIN: 110001'}).field,'custAddress');
+assert.equal(backend.normalizeAndValidateOrder_(payload).address,payload.address);
+let sent;
+backend.PropertiesService={getScriptProperties:()=>({getProperty:key=>({TELEGRAM_BOT_TOKEN:'test-only',TELEGRAM_CHAT_ID:'test-only'}[key]||'')})};
+backend.UrlFetchApp={fetch:(_url,options)=>{sent=JSON.parse(options.payload).text;return {getResponseCode:()=>200,getContentText:()=>'{"ok":true}'}}};
+const record={orderid:'TEST',total:510,discount:50,deliverycharge:40,codcharge:20};
+assert(backend.notifyTelegramOrder_(record).ok);
+for (const text of ['Subtotal: ₹500.00','Discount: −₹50.00','Delivery: ₹40.00','COD fee: ₹20.00','Total: ₹510.00']) assert(sent.includes(text),text);
+backend.notifyTelegramOrder_({...record,total:500,discount:0,deliverycharge:0,codcharge:0});
+assert(sent.includes('Delivery: ₹0.00'));assert(sent.includes('COD fee: ₹0.00'));
+const adminSource=await read('admin.js');
+const admin=vm.createContext({escapeHtml:s=>String(s).replaceAll('<','&lt;').replaceAll('>','&gt;')});
+vm.runInContext(adminSource.slice(adminSource.indexOf('function orderPriceBreakdownHtml('),adminSource.indexOf('function renderOrderList(')),admin);
+const html=admin.orderPriceBreakdownHtml({...record,promocode:'<img>'});
+for(const value of ['₹500.00','−₹50.00','₹40.00','₹20.00','₹510.00','&lt;img&gt;']) assert(html.includes(value),value);
+const items=backend.buildValidatedOrderItems_([{id:'P',qty:2}],[['id','name','price','stock'],['P','Example',125,'in stock']]);
+assert(items.summary.includes('x2 @ ₹125.00 = ₹250.00'));
+console.log('PASS: PIN validation, address compatibility, Telegram/admin price breakdown and priced item summaries (mocked transport; no messages sent).');

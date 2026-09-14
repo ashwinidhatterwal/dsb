@@ -1,0 +1,134 @@
+/* Home: one compact action row, with a labelled quick-buy icon. */
+.quick-buy-icon{
+  display:none;
+}
+#shopMain .card .card-actions{
+  grid-template-columns:minmax(0,1fr) 44px;
+  grid-auto-rows:44px;
+  min-height:44px;
+  gap:6px;
+}
+#shopMain .card .card-actions>:only-child{
+  grid-column:1/-1;
+}
+#shopMain .card .addbtn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 8px;
+  border-radius:11px;
+  font-size:13px;
+  box-shadow:none;
+}
+#shopMain .card .buynowbtn{
+  width:44px;
+  padding:0;
+  border-radius:11px;
+  background:#fff7fa;
+  border-color:#e9c9d7;
+  color:#930c48;
+}
+#shopMain .card .buynowbtn span{
+  display:none;
+}
+#shopMain .card .quick-buy-icon{
+  display:block;
+  flex:none;
+}
+#shopMain .card .buynowbtn:hover{
+  background:#fbe7ef;
+}
+#shopMain .card .stepper{
+  border-radius:11px;
+}
+#shopMain .card .stepper span{
+  min-width:18px;
+  font-size:12px;
+}
+#shopMain .card .stepper button{
+  font-size:18px;
+}
+#shopMain .card .card-actions button:focus-visible{
+  outline:2px solid var(--rani);
+  outline-offset:2px;
+}
+/* Compact brand panel: quiet gold details and layered bangle outlines. */
+#shop-top.hero-compact{
+  isolation:isolate;
+  background:radial-gradient(ellipse at 82% 30%,rgba(192,83,112,.24),transparent 48%),linear-gradient(110deg,#291c30,#542338 64%,#772e49);
+  animation:none;
+  border-bottom:1px solid #caa578;
+  border-radius:0 0 24px 24px;
+}
+#shop-top.hero-compact::before,#shop-top.hero-compact::after{
+  content:"";
+  display:block;
+  position:absolute;
+  pointer-events:none;
+  z-index:-1;
+  border-radius:50%;
+  opacity:1;
+  animation:none;
+}
+#shop-top.hero-compact::before{
+  width:230px;
+  height:230px;
+  right:9%;
+  top:50%;
+  transform:translateY(-50%) rotate(-24deg);
+  border:1px solid rgba(225,185,134,.45);
+  box-shadow:0 0 0 15px rgba(225,185,134,.055),0 0 0 16px rgba(225,185,134,.25),0 0 0 33px rgba(225,185,134,.035),0 0 0 34px rgba(225,185,134,.16);
+}
+#shop-top.hero-compact::after{
+  width:180px;
+  height:180px;
+  right:4%;
+  top:44%;
+  transform:translateY(-50%);
+  border:1px solid rgba(225,185,134,.24);
+}
+#shop-top .hero-kicker{
+  color:#e4c69f;
+  font-size:11px;
+  letter-spacing:.2em;
+}
+#shop-top .hero-title{
+  font-weight:600;
+  letter-spacing:-.025em;
+  color:#fff7ed;
+}
+#shop-top .hero-title span{
+  color:#efd2a9;
+}
+#shop-top .shop-specialty{
+  color:#decbd4;
+}
+#shop-top .hero-links{
+  gap:22px;
+}
+#shop-top .hero-links a{
+  color:#f1dfd0;
+  text-decoration:none;
+  border-bottom:1px solid rgba(228,198,159,.35);
+  padding-bottom:2px;
+  font-size:13px;
+}
+#shop-top .hero-links a:hover{
+  color:white;
+  border-color:#efd2a9;
+}
+@media(max-width:640px){
+  #shop-top.hero-compact::before{
+    right:-125px;
+    width:210px;
+    height:210px;
+    opacity:.6;
+  }
+  #shop-top.hero-compact::after{
+    right:-130px;
+    opacity:.5;
+  }
+  #shop-top .hero-title{
+    max-width:90%;
+  }
+}

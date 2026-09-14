@@ -1,0 +1,372 @@
+/* Proper cart close button: fixed inside the drawer header and never overlaps content. */
+.cart-drawer .closebtn{
+  border:1px solid rgba(32,27,61,.12);
+  background:rgba(255,255,255,.96);
+  color:var(--indigo);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:18px;
+  line-height:1;
+  box-shadow:0 8px 22px rgba(32,27,61,.12);
+}
+.cart-drawer .closebtn:active{
+  transform:scale(.94);
+}
+.cart-drawer > h2{
+  min-height:38px;
+  display:flex;
+  align-items:center;
+}
+/* Home header search must stay a compact single line on phones. */
+#searchTrigger{
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+}
+#searchTrigger > span{
+  display:block;
+  min-width:0;
+  flex:1;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+@media (max-width:430px){
+  .stickybar{
+    gap:6px;
+    padding-left:10px;
+    padding-right:10px;
+  }
+  .stickybar .brandmark{
+    gap:5px;
+  }
+  .stickybar .brandmark .hide-sm{
+    display:none;
+  }
+  .stickybar .brandmark .glyph{
+    width:36px;
+    height:36px;
+    border-radius:12px;
+  }
+  #searchTrigger{
+    padding-left:11px;
+    padding-right:11px;
+  }
+  #searchTrigger > span{
+    font-size:12px !important;
+  }
+  #trackOrderTrigger, #cartTrigger{
+    width:40px;
+    height:40px;
+  }
+}
+/* =========================================================
+   V5.2 CART REGRESSION FIX
+   The V5 sticky checkout panel could cover the cart line items on mobile.
+   Keep one scroll container and let the cart items render in normal flow.
+   ========================================================= */
+.cart-drawer{
+  overflow-y:auto;
+  overflow-x:hidden;
+}
+/* Critical: the checkout form must NOT overlay #cartItems. */
+.cart-drawer .cart-summary{
+  position:static !important;
+  bottom:auto !important;
+  z-index:auto;
+  margin-top:14px;
+  padding:14px 0 0;
+  background:transparent;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+#cartItems{
+  position:relative;
+  z-index:1;
+  min-height:1px;
+}
+.cart-item{
+  position:relative;
+  z-index:1;
+}
+/* Reserve header space for the close button without covering the first item. */
+.cart-drawer > h2{
+  position:relative;
+  z-index:2;
+  padding-right:58px;
+  margin-bottom:12px;
+}
+@media (max-width:640px){
+  .cart-drawer{
+    max-height:94dvh;
+    border-radius:22px 22px 0 0;
+  }
+  .cart-item{
+    padding:10px 0;
+  }
+}
+/* =========================================================
+   V6 CART — stable two-region layout
+   Header never overlaps, items and checkout share one explicit scroll area,
+   and the background page remains independently locked.
+   ========================================================= */
+.overlay.open{
+  touch-action:auto;
+  overscroll-behavior:contain;
+}
+.cart-drawer{
+  display:flex !important;
+  flex-direction:column;
+  height:min(92dvh,760px);
+  max-height:92dvh;
+  padding:0 !important;
+  overflow:hidden !important;
+  background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(255,249,243,.98));
+}
+.cart-header{
+  flex:0 0 auto;
+  min-height:74px;
+  padding:16px 72px 14px 18px;
+  display:flex;
+  align-items:center;
+  border-bottom:1px solid rgba(32,27,61,.10);
+  position:relative;
+  background:rgba(255,255,255,.94);
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+  z-index:3;
+}
+.cart-header h2{
+  margin:2px 0 0 !important;
+  padding:0 !important;
+  min-height:0 !important;
+  font-size:21px;
+  line-height:1.15;
+}
+.cart-eyebrow{
+  font-family:var(--font-utility);
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.14em;
+  color:var(--rani);
+}
+.cart-drawer .closebtn{
+  position:absolute !important;
+  top:18px !important;
+  right:16px !important;
+  width:42px !important;
+  height:42px !important;
+  border-radius:14px !important;
+  z-index:5;
+}
+.cart-main{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding:0 16px calc(24px + env(safe-area-inset-bottom));
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+}
+.cart-items-section{
+  padding:14px 0 8px;
+}
+.cart-section-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-family:var(--font-utility);
+  font-size:11px;
+  color:var(--indigo-soft);
+  margin:0 2px 8px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+#cartItems{
+  margin:0;
+  display:flex;
+  flex-direction:column;
+  gap:9px;
+}
+.cart-item{
+  display:grid !important;
+  grid-template-columns:58px minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+  padding:10px !important;
+  border:1px solid rgba(32,27,61,.09);
+  border-radius:16px;
+  background:rgba(255,255,255,.78);
+  box-shadow:0 6px 20px rgba(32,27,61,.05);
+}
+.cart-item img{
+  width:58px !important;
+  height:58px !important;
+  border-radius:13px !important;
+}
+.cart-item .ci-name{
+  font-size:13px;
+  line-height:1.25;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.cart-item .ci-id{
+  margin-top:3px;
+  font-size:10.5px;
+}
+.cart-item .ci-price{
+  margin-top:5px;
+  font-size:13px;
+}
+.cart-item-actions{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:4px;
+}
+.cart-item .stepper{
+  width:92px;
+  border-radius:10px;
+}
+.cart-item .stepper button{
+  width:30px;
+  height:30px;
+}
+.cart-remove{
+  border:0;
+  background:transparent;
+  color:#b13b5c;
+  font-family:var(--font-utility);
+  font-size:10px;
+  padding:2px 4px;
+}
+.cart-summary{
+  position:static !important;
+  margin:14px 0 0 !important;
+  padding:18px 0 0 !important;
+  border-top:1px solid rgba(32,27,61,.12);
+  background:transparent !important;
+  backdrop-filter:none !important;
+}
+.cart-checkout-title h3{
+  margin:2px 0 14px;
+  font-family:var(--font-display);
+  font-size:18px;
+  color:var(--indigo);
+}
+.cart-summary .field{
+  margin-bottom:14px;
+}
+.cart-summary input,.cart-summary textarea{
+  background:#fff;
+  border:1px solid rgba(32,27,61,.13);
+  box-shadow:0 4px 14px rgba(32,27,61,.04);
+}
+.cart-summary textarea{
+  min-height:92px;
+}
+.cart-summary .optional{
+  font-weight:400;
+  color:var(--indigo-soft);
+}
+.pay-options{
+  display:grid;
+  gap:8px;
+}
+.pay-option{
+  min-height:58px;
+  display:flex !important;
+  align-items:center;
+  gap:12px;
+  border:1px solid rgba(32,27,61,.12);
+  border-radius:15px;
+  padding:0 16px;
+  background:#fff;
+  font-family:var(--font-utility);
+  font-weight:700;
+}
+.pay-option input{
+  width:20px;
+  height:20px;
+  accent-color:var(--rani);
+}
+.cart-total-box{
+  border-radius:16px;
+  padding:13px 14px;
+  margin:16px 0 12px;
+  background:linear-gradient(135deg,rgba(124,58,237,.06),rgba(200,17,99,.07));
+  border:1px solid rgba(124,58,237,.10);
+}
+.cart-summary .row{
+  margin-bottom:7px;
+}
+.cart-summary .row.total{
+  padding-top:9px;
+  margin-top:6px;
+  border-top:1px dashed rgba(32,27,61,.16);
+  font-size:20px;
+}
+#orderWaBtn{
+  min-height:58px;
+  margin-top:0 !important;
+  border-radius:16px;
+}
+.cart-clear{
+  width:100%;
+  margin-top:9px !important;
+  min-height:48px;
+  border-radius:14px;
+}
+.cart-empty{
+  padding:72px 20px;
+  text-align:center;
+  line-height:1.7;
+}
+.cart-empty strong{
+  display:block;
+  font-family:var(--font-display);
+  font-size:19px;
+  color:var(--indigo);
+}
+.cart-empty-icon{
+  font-size:38px;
+  margin-bottom:10px;
+}
+@media(max-width:640px){
+  .cart-drawer{
+    height:94dvh;
+    max-height:94dvh;
+    border-radius:24px 24px 0 0 !important;
+  }
+  .cart-header{
+    padding-left:16px;
+  }
+  .cart-main{
+    padding-left:14px;
+    padding-right:14px;
+  }
+  .cart-item{
+    grid-template-columns:52px minmax(0,1fr);
+  }
+  .cart-item img{
+    width:52px !important;
+    height:52px !important;
+  }
+  .cart-item-actions{
+    grid-column:2;
+    flex-direction:row;
+    justify-content:space-between;
+    width:100%;
+    align-items:center;
+  }
+  .cart-item .stepper{
+    order:2;
+  }
+  .cart-remove{
+    order:1;
+    padding-left:0;
+  }
+}

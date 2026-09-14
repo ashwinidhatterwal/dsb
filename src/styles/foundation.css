@@ -1,0 +1,161 @@
+/* ===========================================================
+   Dhatterwal Suhag Bhandar — design tokens
+   Palette named after the bazaar: cream paper, rani pink (bridal),
+   marigold, indigo night, mehendi green.
+   =========================================================== */
+:root{
+  --cream: #FFF6E9;
+  --cream-2: #FFEFD8;
+  --rani: #C81163;
+  --rani-dark: #970D4B;
+  --marigold: #F2A93B;
+  --marigold-dark: #D68C1F;
+  --indigo: #201B3D;
+  --indigo-soft: #423B66;
+  --mehendi: #3E7C59;
+  --turmeric: #FFC93C;
+  --line: rgba(32,27,61,0.10);
+  --shadow: 0 6px 20px rgba(32,27,61,0.10);
+  --radius: 14px;
+  --font-display: "Baloo 2", "Hind", sans-serif;
+  --font-body: "Hind", sans-serif;
+  --font-utility: "Rajdhani", sans-serif;
+}
+*{
+  box-sizing: border-box;
+}
+html{
+  scroll-behavior: smooth;
+}
+body{
+  margin:0;
+  color: var(--indigo);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: 70px;
+  /* room for bottom cart bar on small screens */
+  animation: pageIn .45s cubic-bezier(.22,.61,.36,1) both;
+}
+@keyframes pageIn{
+  from{
+    opacity:0;
+  }
+  to{
+    opacity:1;
+  }
+}
+/* Smooth native crossfade between pages, where the browser supports it.
+   No-op (silently ignored) everywhere else. */
+@view-transition{
+  navigation: auto;
+}
+::view-transition-old(root),
+::view-transition-new(root){
+  animation-duration: .32s;
+  animation-timing-function: cubic-bezier(.22,.61,.36,1);
+}
+img{
+  max-width:100%;
+  display:block;
+}
+button{
+  font-family: inherit;
+  cursor:pointer;
+}
+a{
+  color:inherit;
+}
+@media (prefers-reduced-motion: reduce){
+  *{
+    animation-duration:0.001ms !important;
+    transition-duration:0.001ms !important;
+  }
+}
+/* ---------- Lehariya wave divider (signature element) ---------- */
+.lehariya{
+  width:100%;
+  height:16px;
+  display:block;
+}
+/* ---------- Sticky slim bar: search + cart only ---------- */
+.stickybar{
+  position: sticky;
+  top:0;
+  z-index: 60;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  transition: background .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+.stickybar.solid{
+  border-bottom: 1px solid var(--line);
+}
+.stickybar .brandmark{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-family: var(--font-display);
+  font-weight:700;
+  font-size:15px;
+  color: var(--rani);
+  white-space:nowrap;
+  flex-shrink:0;
+}
+.stickybar .brandmark .glyph{
+  background: linear-gradient(135deg, var(--rani), var(--marigold));
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  font-size:14px;
+  flex-shrink:0;
+}
+.searchwrap{
+  flex:1;
+  display:flex;
+  align-items:center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 12px;
+  gap:8px;
+}
+.searchwrap input{
+  border:none;
+  outline:none;
+  flex:1;
+  font-family: var(--font-body);
+  font-size:14px;
+  background:transparent;
+  color: var(--indigo);
+}
+.searchwrap svg{
+  flex-shrink:0;
+  opacity:.65;
+}
+.iconbtn{
+  position:relative;
+  border:none;
+  background: transparent;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+  color: var(--indigo);
+}
+.iconbtn .badge{
+  position:absolute;
+  top:-2px;
+  right:-2px;
+  min-width:16px;
+  height:16px;
+  padding:0 3px;
+  border-radius:999px;
+  background: var(--rani);
+  color:#fff;
+  font-family: var(--font-utility);
+  font-weight:700;
+  font-size:10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  line-height:1;
+}
