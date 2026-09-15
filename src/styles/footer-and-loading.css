@@ -61,3 +61,5 @@ footer a{
     background-position:0 0;
   }
 }
+
+.footer-instagram{display:inline-flex;align-items:center;gap:6px;margin:1px 0 8px;color:var(--cream);font-weight:700}.footer-instagram svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8}.footer-instagram .ig-dot{fill:currentColor;stroke:none}

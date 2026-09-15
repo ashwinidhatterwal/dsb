@@ -76,7 +76,8 @@ const DSB_SEO = (() => {
         seller: {
           '@type': 'Organization',
           name: 'Dhatterwal Suhag Bhandar',
-          url: site + '/'
+          url: site + '/',
+          sameAs: ['https://www.instagram.com/dhatterwalsuhag/']
         }
       });
       const prices = pricing(p);
