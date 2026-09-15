@@ -106,11 +106,6 @@
   align-items:center;
   justify-content:center;
   text-align:center}
-.confirm-message{
-  max-width:440px;
-  margin:10px auto 0;
-  line-height:1.6;
-  color:var(--muted,#666)}
 .confirm-actions{
   display:grid;
   gap:9px;

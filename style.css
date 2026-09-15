@@ -1471,6 +1471,50 @@ a.name{
   max-width:34ch;
   margin:0 auto;
 }
+.confirm-steps{
+  list-style:none;
+  margin:16px 0 0;
+  padding:0;
+  text-align:left;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.confirm-steps li{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+}
+.confirm-steps .step-dot{
+  flex:0 0 auto;
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  background: var(--line);
+  color: var(--indigo);
+  font-size:12px;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin-top:1px;
+}
+.confirm-steps li.done .step-dot{
+  background: var(--mehendi);
+  color:#fff;
+}
+.confirm-steps li div{
+  display:flex;
+  flex-direction:column;
+  gap:1px;
+}
+.confirm-steps li strong{
+  font-size:13.5px;
+}
+.confirm-steps li span{
+  font-size:12.5px;
+  color: var(--indigo-soft);
+}
 .card .low-stock{
   font-family: var(--font-utility);
   font-size:10.5px;
@@ -2385,11 +2429,6 @@ body.modal-open{
   align-items:center;
   justify-content:center;
   text-align:center}
-.confirm-message{
-  max-width:440px;
-  margin:10px auto 0;
-  line-height:1.6;
-  color:var(--muted,#666)}
 .confirm-actions{
   display:grid;
   gap:9px;
@@ -3226,6 +3265,67 @@ html[lang="hi"] .hero-compact .hero-title{
   cursor:pointer}
 .shop-offers small{
   width:100%}
+/* Live catalogue (catalog.html) — shares brand tokens with the rest of the
+   site instead of one-off colours, so it reads as the same shop, not a
+   separate plain listing page. .seo-products .catalog-item (below) overrides
+   this for the build-time SEO/crawler version of the same markup. */
+.catalog-wrap{
+  max-width:1080px;
+  margin:0 auto;
+  padding:20px 16px 64px;
+}
+.catalog-head{
+  margin-bottom:18px;
+}
+.catalog-head h1{
+  font-family: var(--font-display);
+  margin:0 0 6px;
+}
+.catalog-head p{
+  color: var(--indigo-soft);
+  margin:0;
+}
+.catalog-list{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:12px;
+}
+.catalog-item{
+  display:block;
+  padding:14px;
+  border:1px solid var(--line);
+  border-radius: var(--radius);
+  background:#fff;
+  text-decoration:none;
+  color: inherit;
+  transition: box-shadow .2s ease, transform .2s ease;
+}
+.catalog-item:hover{
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+.catalog-item strong{
+  display:block;
+  margin-bottom:5px;
+  font-family: var(--font-display);
+}
+.catalog-item span{
+  font-size:13px;
+  color: var(--indigo-soft);
+}
+.catalog-status{
+  padding:20px 0;
+  color: var(--indigo-soft);
+}
+.catalog-category{
+  margin:28px 0 10px;
+  font-size:19px;
+  font-family: var(--font-display);
+}
+.catalog-category a{
+  color: inherit;
+  text-decoration:none;
+}
 /* Crawlable category and specification layouts. */
 .seo-category{
   max-width:1120px;

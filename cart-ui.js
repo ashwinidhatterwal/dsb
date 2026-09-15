@@ -147,15 +147,20 @@ function playAddFlourish(imgEl, {
 }
 
 /* ---------------- Track your order ---------------- */
-function openTrackOrder() {
+function openTrackOrder(prefillOrderId) {
   const overlay = $('#trackOverlay');
   if (!overlay) return;
+  closeCart();
   overlay.classList.add('open');
   $('#trackForm').style.display = 'block';
   $('#trackResult').style.display = 'none';
   $('#trackError').style.display = 'none';
+  const idField = $('#trackOrderId');
+  if (prefillOrderId) idField.value = prefillOrderId;
   openDialogFocus(overlay, closeTrackOrder);
-  $('#trackOrderId').focus();
+  // If we already know the order ID, send focus to the phone field instead —
+  // that's the one thing left for the customer to type.
+  (prefillOrderId ? $('#trackPhone') : idField)?.focus();
 }
 function closeTrackOrder() {
   const overlay = $('#trackOverlay');
@@ -235,7 +240,7 @@ function renderTrackResult(o) {
       <a class="primary-btn whatsapp-btn" style="width:100%; margin-top:14px; text-decoration:none;" href="https://wa.me/${CONFIG.WHATSAPP_NUMBER}?text=${waText}" target="_blank" rel="noopener">📲 Ask about this order</a>
     </div>
   `;
-  $('#trackAnotherBtn').addEventListener('click', openTrackOrder);
+  $('#trackAnotherBtn').addEventListener('click', () => openTrackOrder());
 }
 document.addEventListener('DOMContentLoaded', () => {
   const trigger = $('#trackOrderTrigger');
@@ -243,8 +248,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeBtn = $('#trackOverlayClose');
   const submitBtn = $('#trackSubmitBtn');
   const overlay = $('#trackOverlay');
-  if (trigger) trigger.addEventListener('click', openTrackOrder);
-  if (heroTrigger) heroTrigger.addEventListener('click', openTrackOrder);
+  if (trigger) trigger.addEventListener('click', () => openTrackOrder());
+  if (heroTrigger) heroTrigger.addEventListener('click', () => openTrackOrder());
   if (closeBtn) closeBtn.addEventListener('click', closeTrackOrder);
   if (submitBtn) submitBtn.addEventListener('click', submitTrackOrder);
   if (overlay) overlay.addEventListener('click', e => {
@@ -583,16 +588,30 @@ function renderCartDrawer() {
 function renderOrderConfirmation(receipt) {
   const wrap = $('#cartContent');
   const orderId = receipt && receipt.orderId ? receipt.orderId : '';
+  const shopPhone = formatShopPhone(CONFIG.WHATSAPP_NUMBER);
+  const isUpi = receipt.paymentMethod === 'UPI' && CONFIG.UPI_ID;
+  // A short, concrete "what happens next" — replaces a single vague line.
+  // Step 1 is already true by the time this screen shows; step 2 tells the
+  // customer exactly which channel and which number to expect contact from,
+  // so a real shop message doesn't look like a scam text.
+  const stepsHtml = `
+    <ol class="confirm-steps">
+      <li class="done"><span class="step-dot">✓</span><div><strong>Order saved</strong><span>Your items, address and total are recorded.</span></div></li>
+      <li><span class="step-dot">2</span><div><strong>Confirmation on WhatsApp</strong><span>${shopPhone ? `We'll message you from <strong>${escapeHtml(shopPhone)}</strong>` : "We'll message you on WhatsApp"} to confirm your delivery details${isUpi ? ' and payment' : ''} before it's dispatched.</span></div></li>
+      <li><span class="step-dot">3</span><div><strong>Delivery</strong><span>${isUpi ? "Once confirmed, we'll get your order ready and out for delivery." : `Pay ${money(receipt.total)} in cash when your order arrives.`}</span></div></li>
+    </ol>`;
+  const paymentBox = isUpi ? `<div class="upi-box"><p><strong>Payment not yet confirmed.</strong> Use the link below to pay ${money(receipt.total)} — the shop checks and confirms your payment manually on WhatsApp, it isn't automatic. Already paid for this order? Please don't pay again.</p><div class="upi-qr" id="upiQr" role="img" aria-label="UPI payment QR code">Preparing payment QR…</div><a class="primary-btn" href="${escapeHtml(buildUpiLink(receipt.total, orderId))}">Open UPI app</a><p class="hint">UPI ID: ${escapeHtml(CONFIG.UPI_ID)} · Reference: ${escapeHtml(orderId)}</p></div>` : '';
   wrap.innerHTML = `
     <button class="closebtn" id="cartClose" aria-label="Close">✕</button>
     <div class="order-confirm" data-i18n-skip>
       <div class="confirm-icon">✓</div>
       <h2>Your order has been received</h2>
       ${orderId ? `<p class="confirm-id">Order ID: <strong>${escapeHtml(orderId)}</strong></p>` : ''}
-      <p class="confirm-message">Your order is saved. The shop will contact you on WhatsApp to confirm delivery details.</p>
       <p><strong>Order total: ${money(receipt.total)}</strong></p>
-      ${receipt.paymentMethod === 'UPI' && CONFIG.UPI_ID ? `<div class="upi-box"><p>Payment is not yet verified. Pay ${money(receipt.total)} using the link below. If you have already paid for this order, do not pay again.</p><div class="upi-qr" id="upiQr" role="img" aria-label="UPI payment QR code">Preparing payment QR…</div><a class="primary-btn" href="${escapeHtml(buildUpiLink(receipt.total, orderId))}">Open UPI app</a><p>UPI ID: ${escapeHtml(CONFIG.UPI_ID)} · Reference: ${escapeHtml(orderId)}</p></div>` : ''}
+      ${stepsHtml}
+      ${paymentBox}
       <div class="confirm-actions">
+        ${orderId ? `<button class="ghost-btn" id="confirmTrackBtn" type="button">📦 Track this order</button>` : ''}
         <button class="primary-btn" id="downloadReceiptBtn" type="button">⬇ Download order slip</button>
         <button class="ghost-btn" id="printReceiptBtn" type="button">Print / Save as PDF</button>
         <button class="ghost-btn" id="confirmCloseBtn" type="button">Continue shopping</button>
@@ -603,9 +622,10 @@ function renderOrderConfirmation(receipt) {
   $('#confirmCloseBtn').addEventListener('click', close);
   $('#downloadReceiptBtn').addEventListener('click', () => downloadReceipt(receipt));
   $('#printReceiptBtn').addEventListener('click', () => downloadReceipt(receipt, true));
+  $('#confirmTrackBtn')?.addEventListener('click', () => openTrackOrder(orderId));
   document.dispatchEvent(new CustomEvent('dsb:ordercomplete'));
   $('#downloadReceiptBtn').focus();
-  if (receipt.paymentMethod === 'UPI' && CONFIG.UPI_ID) renderPaymentQr(buildUpiLink(receipt.total, orderId));
+  if (isUpi) renderPaymentQr(buildUpiLink(receipt.total, orderId));
 }
 function downloadReceipt(receipt, print = false) {
   if (!receipt) return;

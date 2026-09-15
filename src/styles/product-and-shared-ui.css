@@ -627,6 +627,50 @@ a.name{
   max-width:34ch;
   margin:0 auto;
 }
+.confirm-steps{
+  list-style:none;
+  margin:16px 0 0;
+  padding:0;
+  text-align:left;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.confirm-steps li{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+}
+.confirm-steps .step-dot{
+  flex:0 0 auto;
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  background: var(--line);
+  color: var(--indigo);
+  font-size:12px;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin-top:1px;
+}
+.confirm-steps li.done .step-dot{
+  background: var(--mehendi);
+  color:#fff;
+}
+.confirm-steps li div{
+  display:flex;
+  flex-direction:column;
+  gap:1px;
+}
+.confirm-steps li strong{
+  font-size:13.5px;
+}
+.confirm-steps li span{
+  font-size:12.5px;
+  color: var(--indigo-soft);
+}
 .card .low-stock{
   font-family: var(--font-utility);
   font-size:10.5px;

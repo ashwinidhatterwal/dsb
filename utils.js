@@ -17,6 +17,18 @@ function escapeHtml(str) {
     "'": '&#39;'
   })[m]);
 }
+function formatShopPhone(raw) {
+  // CONFIG.WHATSAPP_NUMBER is stored as country code + number with no
+  // separators (e.g. '918000519440'). Display it the way a customer would
+  // expect to see it, so they can recognise the number when the shop
+  // messages them: '+91 80005 19440'.
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) {
+    const local = digits.slice(2);
+    return `+91 ${local.slice(0, 5)} ${local.slice(5)}`;
+  }
+  return raw ? `+${digits}` : '';
+}
 function formatDateTime(value) {
   const d = new Date(value);
   if (isNaN(d.getTime())) return String(value || '');
