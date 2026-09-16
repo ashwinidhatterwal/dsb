@@ -159,3 +159,17 @@ a{
   justify-content:center;
   line-height:1;
 }
+
+/* Small shared utilities used by the static storefront pages. Keeping these
+   here avoids repeating presentation declarations in every HTML document. */
+.is-hidden{display:none!important}
+.full-width{width:100%}
+.text-left{text-align:left}
+.panel-padding{padding:16px}
+.overlay-title{flex:1;font-family:var(--font-display);font-weight:700;font-size:16px;color:var(--indigo)}
+.search-placeholder{color:#8a83a0;font-size:13px}
+.text-small{font-size:12px}
+.borderless{border:0}
+.flex-1{flex:1}
+.mt-24{margin-top:24px}
+.product-loading-state{padding:60px 16px}

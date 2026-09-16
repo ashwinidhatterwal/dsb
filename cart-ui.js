@@ -52,10 +52,19 @@ let cartAdjustments = {
 function updateCartBadge() {
   const badge = $('#cartBadge');
   if (!badge) return;
-  const prevCount = Number(badge.textContent) || 0;
+
   const count = CartStore.count();
-  badge.textContent = count;
-  badge.style.display = count > 0 ? 'flex' : 'none';
+  const prevCount = Number(badge.dataset.count) || 0;
+  const trigger = $('#cartTrigger');
+
+  badge.dataset.count = String(count);
+  badge.textContent = count > 99 ? '99+' : String(count);
+  badge.classList.toggle('is-hidden', count === 0);
+
+  if (trigger) {
+    trigger.setAttribute('aria-label', count > 0 ? `Cart, ${count} item${count === 1 ? '' : 's'}` : 'Cart');
+  }
+
   if (count > prevCount) {
     badge.classList.remove('bump');
     void badge.offsetWidth; // restart the animation even if it's already mid-play

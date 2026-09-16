@@ -39,7 +39,7 @@ export async function generateStaticProducts(destination,rows,template,site){
  for(const category of categories){
   const items=products.filter(p=>(p.category||'Other')===category),title=category+' in Goluwala | Dhatterwal Suhag Bhandar',desc=`Browse ${category.toLowerCase()} from Dhatterwal Suhag Bhandar in Goluwala, Rajasthan. View product details, prices and available choices before ordering.`,url=site+'/'+seo.categoryPath(category);
   const body=`<h1>${esc(category)} in Goluwala</h1><p>${esc(desc)}</p><a class="primary-btn" href="index.html?category=${encodeURIComponent(category)}">Shop this category</a><p>Delivery charges are shown before order confirmation. <a href="contact.html">Ask about delivery to your area</a>.</p><div class="seo-products">${items.map(p=>item(p,site)).join('')}</div><p><a href="returns.html">Read returns and refund conditions</a></p>`;
-  const schema={'@context':'https://schema.org','@type':'CollectionPage',name:title,url,mainEntity:{'@type':'ItemList',numberOfItems:items.length,itemListElement:items.map((p,i)=>({'@type':'ListItem',position:i+1,url:site+'/'+productPath(p.id)}))}};
+  const schema={'@context':'https://schema.org','@graph':[{'@type':'CollectionPage','@id':url+'#page',name:title,description:desc,url,isPartOf:{'@type':'WebSite','@id':site+'/#website'}},{'@type':'BreadcrumbList',itemListElement:[{'@type':'ListItem',position:1,name:'Shop',item:site+'/'},{'@type':'ListItem',position:2,name:category,item:url}]},{'@type':'ItemList',numberOfItems:items.length,itemListElement:items.map((p,i)=>({'@type':'ListItem',position:i+1,name:seo.name(p),url:site+'/'+productPath(p.id)}))}]};
   await fs.writeFile(path.join(destination,seo.categoryPath(category)),page(title,desc,url,body,site,'en',schema));
  }
  const categoryLinks=categories.map(c=>`<a href="${esc(seo.categoryPath(c))}">${esc(c)}</a>`).join('');
@@ -47,6 +47,18 @@ export async function generateStaticProducts(destination,rows,template,site){
  const homeFile=path.join(destination,'index.html');let home=await fs.readFile(homeFile,'utf8');home=home.replace('</head>',alternates(site+'/',site+'/hi/')+'</head>');await fs.writeFile(homeFile,home);
  const hiBody=`<h1>धत्तरवाल सुहाग भंडार</h1><p>गोलूवाला, राजस्थान में आपकी स्थानीय दुकान। उत्पाद देखें और ऑनलाइन ऑर्डर करें।</p><nav class="seo-category-links">${categories.map(c=>`<a href="${esc(seo.categoryPath(c))}">${esc(hiCategory(c))}</a>`).join('')}</nav>${hindi.length?`<h2>उत्पाद और जानकारी</h2><div class="seo-products">${hindi.map(p=>item(p,site,true)).join('')}</div>`:''}<p>डिलीवरी शुल्क ऑर्डर की पुष्टि से पहले दिखाए जाते हैं। रिटर्न की शर्तें जानने के लिए <a href="returns.html">रिटर्न पेज</a> देखें।</p><p><a href="index.html">English · ऑनलाइन दुकान खोलें</a> · <a href="contact.html">दुकान से संपर्क करें</a></p>`;
  await fs.writeFile(path.join(destination,'hi/index.html'),page('धत्तरवाल सुहाग भंडार | गोलूवाला','गोलूवाला, राजस्थान की धत्तरवाल सुहाग भंडार दुकान के उत्पाद देखें। ऑनलाइन ऑर्डर और दुकान से संपर्क की सुविधा।',site+'/hi/',hiBody,site,'hi',{'@context':'https://schema.org','@type':'WebPage',inLanguage:'hi-IN',name:'धत्तरवाल सुहाग भंडार'},alternates(site+'/',site+'/hi/')));
+ // Google Merchant Center compatible RSS feed. It is generated from the same
+ // validated catalogue snapshot as the static product pages, so search and
+ // shopping surfaces never receive a separate hand-maintained product list.
+ const merchantItems=products.flatMap(p=>{
+   const pricing=seo.pricing(p), image=/^https:\/\//.test(p.image||'')?optimizeImage(p.image,1200):'';
+   if(!image || !Number.isFinite(pricing.min) || pricing.min<=0)return [];
+   const out=String(p.stock).toLowerCase()==='out of stock'||((p.stockqty??p.stockQty)!=null&&String(p.stockqty??p.stockQty)!==''&&Number(p.stockqty??p.stockQty)<=0);
+   const tag=(name,value)=>`<g:${name}>${esc(value)}</g:${name}>`;
+   return [`<item><title>${esc(seo.name(p))}</title><description>${esc(seo.description(p))}</description><link>${esc(site+'/'+productPath(p.id))}</link>${tag('id',p.id)}${tag('image_link',image)}${tag('availability',out?'out_of_stock':'in_stock')}${tag('condition','new')}${tag('price',pricing.min.toFixed(2)+' INR')}${p.brand?tag('brand',p.brand):''}${p.gtin?tag('gtin',p.gtin):tag('identifier_exists','no')}${p.category?tag('product_type',p.category):''}</item>`];
+ }).join('');
+ const merchant=`<?xml version="1.0" encoding="UTF-8"?>\n<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0"><channel><title>Dhatterwal Suhag Bhandar</title><link>${esc(site)}/</link><description>Live product catalogue</description>${merchantItems}</channel></rss>\n`;
+ await fs.writeFile(path.join(destination,'merchant-feed.xml'),merchant);
  return products.length;
 }
 function optimizeImage(src,width){try{const u=new URL(src),asset=u.pathname.split('/image/upload/')[1],first=asset?.split('/')[0]||'';if(u.hostname==='res.cloudinary.com'&&asset&&!(/^(?:[a-z]{1,4}_|\$)/.test(first)&&!/^v\d+$/.test(first)))u.pathname=u.pathname.replace('/image/upload/',`/image/upload/f_auto,q_auto,c_limit,w_${width}/`);return u.href;}catch(_){return src;}}
