@@ -70,17 +70,16 @@ function renderStars(rating, size) {
 }
 
 /* ---------------- Product sharing (Web Share API, with fallbacks) ---------------- */
-function preferredProductPath(id) {
-  if (window.DSB_PAGE_LANGUAGE === 'hi' && window.DSB_HINDI_PRODUCTS?.has(String(id))) return 'hi/' + DSB_SEO.productPath(id);
-  if (window.DSB_PUBLISHED_PRODUCTS?.has(String(id))) {
-    const hex = Array.from(new TextEncoder().encode(String(id)), b => b.toString(16).padStart(2, '0')).join('');
-    return `products/p-${hex}.html`;
-  }
+function preferredProductPath(productOrId) {
+  const p = productOrId && typeof productOrId === 'object' ? productOrId : null;
+  const id = String(p ? p.id : productOrId);
+  if (window.DSB_PAGE_LANGUAGE === 'hi' && window.DSB_HINDI_PRODUCTS?.has(id) && p) return 'hi/' + DSB_SEO.productPath(p);
+  if (window.DSB_PUBLISHED_PRODUCTS?.has(id) && p) return DSB_SEO.productPath(p);
   return `product.html?id=${encodeURIComponent(id)}`;
 }
 function productUrl(p) {
   const base = typeof CONFIG !== 'undefined' && CONFIG.SITE_URL ? CONFIG.SITE_URL : location.origin;
-  return `${base}/${preferredProductPath(p.id)}`;
+  return `${base}/${preferredProductPath(p)}`;
 }
 async function shareProduct(p) {
   const url = productUrl(p);

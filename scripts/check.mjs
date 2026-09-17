@@ -45,7 +45,12 @@ assert.equal(backend.buildValidatedOrderItems_([{id:'P',size:'S',qty:2},{id:'P',
 const destination = await fs.mkdtemp(path.join(os.tmpdir(), 'dsb-check-'));
 try {
   for (const file of ['index.html','catalog.html']) await fs.copyFile(path.join(root,file),path.join(destination,file));
-  await generateStaticProducts(destination,[{...context.fixture,sizes:'S,M',category:'Bangles'}],await read('product.html'),'https://suhagbhandar.in');
+  const publishedProduct={...context.fixture,sizes:'S,M',category:'Bangles'};
+  await generateStaticProducts(destination,[publishedProduct],await read('product.html'),'https://suhagbhandar.in');
+  assert.equal(run("DSB_SEO.productPath({id:'DSB-0031',name:'Red Bridal Bangle Set'})"),'products/red-bridal-bangle-set-DSB-0031.html');
+  assert(await fs.stat(path.join(destination,'products/example-P.html')));
+  const legacy=await fs.readFile(path.join(destination,run("DSB_SEO.legacyProductPath('P')")),'utf8');
+  assert(legacy.includes('https://suhagbhandar.in/products/example-P.html'));
   assert((await fs.readFile(path.join(destination,'catalog.html'),'utf8')).includes('From ₹299.00'));
   const home=await fs.readFile(path.join(destination,'index.html'),'utf8');
   assert(home.includes('id="catRail"'));

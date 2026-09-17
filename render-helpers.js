@@ -20,7 +20,7 @@ function cardActionsHtml(p) {
   if (isOutOfStock(p)) {
     return `<button class="addbtn" disabled style="opacity:.5; cursor:not-allowed;">Out of stock</button>`;
   }
-  if (p.sizes?.length) return `<a class="addbtn size-select-link" href="${typeof preferredProductPath === 'function' ? preferredProductPath(p.id) : `product.html?id=${encodeURIComponent(p.id)}`}">Choose size</a>`;
+  if (p.sizes?.length) return `<a class="addbtn size-select-link" href="${typeof preferredProductPath === 'function' ? preferredProductPath(p) : `product.html?id=${encodeURIComponent(p.id)}`}">Choose size</a>`;
   const qty = CartStore.qtyFor(p.id);
   const maxReached = p.stockQty !== null && qty >= p.stockQty;
   return qty > 0 ? `<div class="stepper" data-id="${escapeHtml(p.id)}">
@@ -40,7 +40,7 @@ function cardRatingHtml(p) {
 }
 function cardHtml(p, options = {}) {
   const disc = discountPct(p);
-  const href = `${typeof preferredProductPath === 'function' ? preferredProductPath(p.id) : `product.html?id=${encodeURIComponent(p.id)}`}`;
+  const href = `${typeof preferredProductPath === 'function' ? preferredProductPath(p) : `product.html?id=${encodeURIComponent(p.id)}`}`;
   const low = lowStockLabel(p);
   const prices = DSB_SEO.pricing(p);
   const hasSizePrices = prices.min !== prices.max;

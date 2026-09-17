@@ -7,8 +7,9 @@ const json=v=>JSON.stringify(v).replaceAll('<','\\u003c');
 const hiCategory=c=>({'Bangle':'चूड़ियाँ','Bangles':'चूड़ियाँ','Lingerie':'अंतर्वस्त्र','Cosmetics':'सौंदर्य प्रसाधन','Hair Care':'बालों की देखभाल','Personal Care':'व्यक्तिगत देखभाल','Stationery':'स्टेशनरी','Baby Products':'शिशु उत्पाद','Hair accessories':'बालों की सजावट','Other':'अन्य उत्पाद'}[c]||c);
 const localized=p=>p.namehindi&&p.descriptionhindi;
 const alternates=(en,hi)=>hi?`<link rel="alternate" hreflang="en-IN" href="${esc(en)}"><link rel="alternate" hreflang="hi-IN" href="${esc(hi)}"><link rel="alternate" hreflang="x-default" href="${esc(en)}">`:'';
+const redirectPage=(target,title='Product moved')=>`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex,follow"><link rel="canonical" href="${esc(target)}"><meta http-equiv="refresh" content="0;url=${esc(target)}"><title>${esc(title)}</title><script>location.replace(${json(target)}+location.search+location.hash)</script></head><body><p>This product page has moved. <a href="${esc(target)}">Continue to the product</a>.</p></body></html>`;
 const specs=p=>`<dl class="product-specs">${seo.details(p).map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
-const item=(p,site,hi=false)=>{const prices=seo.pricing(p);return `<a class="catalog-item" href="${esc((hi&&localized(p)?'hi/':'')+productPath(p.id))}">${p.image&&/^https:\/\//.test(p.image)?`<img src="${esc(optimizeImage(p.image,400))}" alt="${esc(hi?p.namehindi:seo.name(p))}" loading="lazy" decoding="async" width="160" height="160">`:''}<strong>${esc(hi?p.namehindi:seo.name(p))}</strong><span>${prices.min!==prices.max?(hi?'शुरुआती कीमत ':'From '):''}₹${prices.min.toFixed(2)}</span></a>`;};
+const item=(p,site,hi=false)=>{const prices=seo.pricing(p);return `<a class="catalog-item" href="${esc((hi&&localized(p)?'hi/':'')+productPath(p))}">${p.image&&/^https:\/\//.test(p.image)?`<img src="${esc(optimizeImage(p.image,400))}" alt="${esc(hi?p.namehindi:seo.name(p))}" loading="lazy" decoding="async" width="160" height="160">`:''}<strong>${esc(hi?p.namehindi:seo.name(p))}</strong><span>${prices.min!==prices.max?(hi?'शुरुआती कीमत ':'From '):''}₹${prices.min.toFixed(2)}</span></a>`;};
 function page(title,description,url,body,site,lang='en',schema={},alternate=''){
  return `<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="${esc(site)}/"><title>${esc(title)}</title><meta name="description" content="${esc(description)}"><meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="${esc(url)}">${alternate}<meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:url" content="${esc(url)}"><meta property="og:image" content="${esc(site)}/social-card.png"><meta name="twitter:card" content="summary_large_image"><link rel="icon" href="favicon-48.png"><link rel="stylesheet" href="style.css?v=20260914checkout"><script type="application/ld+json">${json(schema)}</script></head><body><main class="seo-category"><nav><a href="${lang==='hi'?'hi/':'index.html'}">${lang==='hi'?'दुकान':'Shop'}</a> · <a href="catalog.html">${lang==='hi'?'सभी उत्पाद':'All products'}</a> · <a href="contact.html">${lang==='hi'?'संपर्क':'Contact'}</a></nav>${body}</main></body></html>`;
 }
@@ -18,7 +19,7 @@ export async function generateStaticProducts(destination,rows,template,site){
  await fs.mkdir(path.join(destination,'products'),{recursive:true});await fs.mkdir(path.join(destination,'hi/products'),{recursive:true});await fs.mkdir(path.join(destination,'categories'),{recursive:true});
  const hindi=products.filter(localized);
  for(const p of products){
-  const en=site+'/'+productPath(p.id),hi=localized(p)?site+'/hi/'+productPath(p.id):'';
+  const en=site+'/'+productPath(p),hi=localized(p)?site+'/hi/'+productPath(p):'';
   for(const lang of (hi?['en','hi']:['en'])){
    const isHi=lang==='hi',url=isHi?hi:en,title=(isHi?p.namehindi:seo.name(p))+' | '+(isHi?'धत्तरवाल सुहाग भंडार':'Dhatterwal Suhag Bhandar'),description=isHi?p.descriptionhindi:seo.description(p);
    const image=/^https:\/\//.test(p.image||'')?optimizeImage(p.image,1200):'';
@@ -32,14 +33,17 @@ export async function generateStaticProducts(destination,rows,template,site){
    if(!html.includes('data-prerendered'))throw Error('Template target missing');
    const productGraph=seo.graph(p,products,site,lang);const graph={'@context':'https://schema.org','@graph':[...(productGraph['@graph']||[productGraph]),seo.breadcrumbs(p,site,lang)]};
    html=html.replace('</head>',`${alternates(en,hi)}<script>window.DSB_PAGE_LANGUAGE=${json(lang)};window.DSB_LANGUAGE_ALTERNATE=${json(hi?isHi?en:hi:null)};</script><script type="application/ld+json" id="staticProductLd">${json(graph)}</script></head>`);
-   await fs.writeFile(path.join(destination,(isHi?'hi/':'')+productPath(p.id)),html);
+   await fs.writeFile(path.join(destination,(isHi?'hi/':'')+productPath(p)),html);
+   const legacyPath=(isHi?'hi/':'')+seo.legacyProductPath(p.id);
+   const target=(isHi?hi:en);
+   await fs.writeFile(path.join(destination,legacyPath),redirectPage(target,isHi?'उत्पाद पेज स्थानांतरित हुआ':'Product page moved'));
   }
  }
  const categories=[...new Set(products.map(p=>p.category||'Other'))];
  for(const category of categories){
   const items=products.filter(p=>(p.category||'Other')===category),title=category+' in Goluwala | Dhatterwal Suhag Bhandar',desc=`Browse ${category.toLowerCase()} from Dhatterwal Suhag Bhandar in Goluwala, Rajasthan. View product details, prices and available choices before ordering.`,url=site+'/'+seo.categoryPath(category);
   const body=`<h1>${esc(category)} in Goluwala</h1><p>${esc(desc)}</p><a class="primary-btn" href="index.html?category=${encodeURIComponent(category)}">Shop this category</a><p>Delivery charges are shown before order confirmation. <a href="contact.html">Ask about delivery to your area</a>.</p><div class="seo-products">${items.map(p=>item(p,site)).join('')}</div><p><a href="returns.html">Read returns and refund conditions</a></p>`;
-  const schema={'@context':'https://schema.org','@graph':[{'@type':'CollectionPage','@id':url+'#page',name:title,description:desc,url,isPartOf:{'@type':'WebSite','@id':site+'/#website'}},{'@type':'BreadcrumbList',itemListElement:[{'@type':'ListItem',position:1,name:'Shop',item:site+'/'},{'@type':'ListItem',position:2,name:category,item:url}]},{'@type':'ItemList',numberOfItems:items.length,itemListElement:items.map((p,i)=>({'@type':'ListItem',position:i+1,name:seo.name(p),url:site+'/'+productPath(p.id)}))}]};
+  const schema={'@context':'https://schema.org','@graph':[{'@type':'CollectionPage','@id':url+'#page',name:title,description:desc,url,isPartOf:{'@type':'WebSite','@id':site+'/#website'}},{'@type':'BreadcrumbList',itemListElement:[{'@type':'ListItem',position:1,name:'Shop',item:site+'/'},{'@type':'ListItem',position:2,name:category,item:url}]},{'@type':'ItemList',numberOfItems:items.length,itemListElement:items.map((p,i)=>({'@type':'ListItem',position:i+1,name:seo.name(p),url:site+'/'+productPath(p)}))}]};
   await fs.writeFile(path.join(destination,seo.categoryPath(category)),page(title,desc,url,body,site,'en',schema));
  }
  const categoryLinks=categories.map(c=>`<a href="${esc(seo.categoryPath(c))}">${esc(c)}</a>`).join('');
@@ -55,7 +59,7 @@ export async function generateStaticProducts(destination,rows,template,site){
    if(!image || !Number.isFinite(pricing.min) || pricing.min<=0)return [];
    const out=String(p.stock).toLowerCase()==='out of stock'||((p.stockqty??p.stockQty)!=null&&String(p.stockqty??p.stockQty)!==''&&Number(p.stockqty??p.stockQty)<=0);
    const tag=(name,value)=>`<g:${name}>${esc(value)}</g:${name}>`;
-   return [`<item><title>${esc(seo.name(p))}</title><description>${esc(seo.description(p))}</description><link>${esc(site+'/'+productPath(p.id))}</link>${tag('id',p.id)}${tag('image_link',image)}${tag('availability',out?'out_of_stock':'in_stock')}${tag('condition','new')}${tag('price',pricing.min.toFixed(2)+' INR')}${p.brand?tag('brand',p.brand):''}${p.gtin?tag('gtin',p.gtin):tag('identifier_exists','no')}${p.category?tag('product_type',p.category):''}</item>`];
+   return [`<item><title>${esc(seo.name(p))}</title><description>${esc(seo.description(p))}</description><link>${esc(site+'/'+productPath(p))}</link>${tag('id',p.id)}${tag('image_link',image)}${tag('availability',out?'out_of_stock':'in_stock')}${tag('condition','new')}${tag('price',pricing.min.toFixed(2)+' INR')}${p.brand?tag('brand',p.brand):''}${p.gtin?tag('gtin',p.gtin):tag('identifier_exists','no')}${p.category?tag('product_type',p.category):''}</item>`];
  }).join('');
  const merchant=`<?xml version="1.0" encoding="UTF-8"?>\n<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0"><channel><title>Dhatterwal Suhag Bhandar</title><link>${esc(site)}/</link><description>Live product catalogue</description>${merchantItems}</channel></rss>\n`;
  await fs.writeFile(path.join(destination,'merchant-feed.xml'),merchant);

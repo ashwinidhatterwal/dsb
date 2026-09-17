@@ -1,6 +1,17 @@
 /* Shared by static publishing and live product pages; no extra API requests. */
 const DSB_SEO = (() => {
-  const basePath = id => 'products/p-' + Array.from(new TextEncoder().encode(String(id)), b => b.toString(16).padStart(2, '0')).join('') + '.html';
+  const legacyProductPath = id => 'products/p-' + Array.from(new TextEncoder().encode(String(id)), b => b.toString(16).padStart(2, '0')).join('') + '.html';
+  const slugify = value => String(value ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-').slice(0, 80) || 'product';
+  const safeProductId = id => {
+    const value = String(id ?? '').trim();
+    return /^[A-Za-z0-9_-]+$/.test(value) ? value : 'id-' + Array.from(new TextEncoder().encode(value), b => b.toString(16).padStart(2, '0')).join('');
+  };
+  const basePath = (productOrId, productName = '') => {
+    const isProduct = productOrId && typeof productOrId === 'object';
+    const id = isProduct ? productOrId.id : productOrId;
+    const name = isProduct ? productOrId.name : productName;
+    return name ? `products/${slugify(name)}-${safeProductId(id)}.html` : legacyProductPath(id);
+  };
   const categoryPath = category => 'categories/' + (String(category).trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'category') + '-' + Array.from(new TextEncoder().encode(String(category)), b => b.toString(16).padStart(2, '0')).join('') + '.html';
   const val = (p, k) => String(p[k] ?? '').trim();
   const details = p => [['Brand', 'brand'], ['Material', 'material'], ['Pack / quantity', 'packsize'], ['Product details', 'specifications']].filter(([, k]) => val(p, k)).map(([label, k]) => [label, val(p, k)]);
@@ -32,7 +43,7 @@ const DSB_SEO = (() => {
     };
   }
   function product(p, rows, site, language = 'en') {
-    const url = site + '/' + (language === 'hi' ? 'hi/' : '') + basePath(p.id),
+    const url = site + '/' + (language === 'hi' ? 'hi/' : '') + basePath(p),
       price = Number(p.price);
     const out = String(p.stock).toLowerCase() === 'out of stock' || (p.stockqty ?? p.stockQty) != null && String(p.stockqty ?? p.stockQty) !== '' && Number(p.stockqty ?? p.stockQty) <= 0;
     const images = (p.gallery || [p.image, ...val(p, 'images').split(',')]).map(x => x ? absolute(x.trim(), site) : '').filter(Boolean);
@@ -97,7 +108,7 @@ const DSB_SEO = (() => {
       item: site + '/' + categoryPath(p.category || 'Other')
     }, {
       name: p.name,
-      item: site + '/' + basePath(p.id)
+      item: site + '/' + basePath(p)
     }].map((x, i) => ({
       '@type': 'ListItem',
       position: i + 1,
@@ -106,6 +117,8 @@ const DSB_SEO = (() => {
   });
   return {
     productPath: basePath,
+    legacyProductPath,
+    slugify,
     categoryPath,
     details,
     name,
