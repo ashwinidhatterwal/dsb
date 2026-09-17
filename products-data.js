@@ -23,6 +23,7 @@ function normalizeRows(rows) {
       specifications: String(r.specifications || '').trim(),
       gtin: String(r.gtin || '').trim(),
       descriptionhindi: String(r.descriptionhindi || '').trim(),
+      instagramurl: String(r.instagramurl || r.instagramUrl || '').trim(),
       sizeprices: String(r.sizeprices || '').trim(),
       sizes: [...new Set(String(r.sizes ?? r.Sizes ?? '').split(/[,\n]/).map(x => x.trim()).filter(Boolean))],
       nameHindi: String(r.namehindi ?? r.nameHindi ?? '').trim(),

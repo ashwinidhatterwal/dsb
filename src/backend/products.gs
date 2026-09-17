@@ -9,7 +9,7 @@ function getAllProducts(includeCost) {
   if (includeCost) return rows;
   const publicRows = rows.filter(r => !isArchived_(r)).map(r => {
     const copy = {};
-    ['id', 'name', 'namehindi', 'category', 'subcategory', 'price', 'mrp', 'image', 'images', 'description', 'stock', 'stockqty', 'tags', 'brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices', 'sizes'].forEach(key => {
+    ['id', 'name', 'namehindi', 'category', 'subcategory', 'price', 'mrp', 'image', 'images', 'description', 'stock', 'stockqty', 'tags', 'brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'instagramurl', 'sizeprices', 'sizes'].forEach(key => {
       if (r[key] !== undefined) copy[key] = r[key];
     });
     return copy;
@@ -23,7 +23,7 @@ function addProduct(p, requestId) {
     const retired = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeletedProductIds');
     if (p.id && retired && findRow_(retired, 'id', String(p.id).trim())) throw new Error('This product ID was retired. Choose a new ID.');
     if (p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET), 'sizes');
-    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices'].forEach(k => {
+    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'instagramurl', 'sizeprices'].forEach(k => {
       if (p[k] !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET), k);
     });
     const sheet = getSheet_(PRODUCTS_SHEET),
@@ -95,7 +95,7 @@ function updateProduct(p) {
   return withWriteLock_(function () {
     validateProductFields_(p, false);
     if (p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET), 'sizes');
-    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices'].forEach(k => {
+    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'instagramurl', 'sizeprices'].forEach(k => {
       if (p[k] !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET), k);
     });
     const sheet = getSheet_(PRODUCTS_SHEET),
@@ -165,12 +165,13 @@ function deleteProduct(id, expectedRevision) {
   });
 }
 function validateProductFields_(p, adding) {
-  ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices'].forEach(k => {
+  ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'instagramurl', 'sizeprices'].forEach(k => {
     if (p[k] !== undefined) {
       p[k] = String(p[k]).trim();
       if (p[k].length > 2000) throw new Error(k + ' is too long.');
     }
   });
+  if (p.instagramurl && !/^https:\/\/(?:www\.)?instagram\.com\/(?:p|reel|tv)\/[A-Za-z0-9_-]+\/?(?:[?#].*)?$/i.test(p.instagramurl)) throw new Error('Instagram URL must be a public Reel or Post link.');
   if (p.gtin && !/^(?:\d{8}|\d{12}|\d{13}|\d{14})$/.test(p.gtin)) throw new Error('GTIN must be 8, 12, 13 or 14 digits. Leave it blank if unknown.');
   if (p.sizeprices) {
     const sizes = parseSizes_(p.sizes || '');
@@ -200,7 +201,7 @@ function isArchived_(p) {
   return String(p.archived || '').toLowerCase() === 'yes';
 }
 function productRevision_(p) {
-  return hashText_(JSON.stringify(['id', 'name', 'namehindi', 'category', 'subcategory', 'price', 'mrp', 'costprice', 'image', 'images', 'description', 'stock', 'stockqty', 'tags', 'brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices', 'sizes', 'archived'].map(k => String(p[k] ?? ''))));
+  return hashText_(JSON.stringify(['id', 'name', 'namehindi', 'category', 'subcategory', 'price', 'mrp', 'costprice', 'image', 'images', 'description', 'stock', 'stockqty', 'tags', 'brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'instagramurl', 'sizeprices', 'sizes', 'archived'].map(k => String(p[k] ?? ''))));
 }
 function adminProductsPage_(options) {
   const all = getAllProducts(true),
