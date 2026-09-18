@@ -235,7 +235,10 @@
       });
     } catch (err) {
       statusEl.className = 'statusline bad';
-      statusEl.textContent = err?.message || String(err);
+      const message = err?.message || String(err);
+      statusEl.textContent = /unknown action/i.test(message)
+        ? 'AI backend is not deployed yet. Update Apps Script with the latest code.gs and redeploy the web app, then reconnect the admin panel.'
+        : message;
     } finally {
       setBusy(false);
     }

@@ -103,10 +103,36 @@ The admin product editor can generate a reviewable product draft from the main p
 
 1. Create an OpenAI API key for your API project.
 2. In the Google Apps Script project, open **Project settings** > **Script properties** > **Edit script properties**.
-3. Add `OPENAI_API_KEY` with the secret API key as its value.
-4. Optional: add `OPENAI_MODEL` to override the default `gpt-5.6-luna` model.
+3. Add `AI_API_KEY` with the provider API key as its value. (`OPENAI_API_KEY` is still accepted for backward compatibility.)
+4. Add `AI_MODEL` with the model id you want to use.
+5. Add `AI_BASE_URL` with the provider's OpenAI-compatible API base, for example `https://api.openai.com/v1`.
+6. Add `AI_API_TYPE` as either `responses` or `chat_completions`.
 5. Replace/redeploy the generated root `code.gs` so the AI backend action is available.
 
-Never put `OPENAI_API_KEY` in `admin.html`, JavaScript, GitHub, or any browser-side configuration. The browser sends only the authenticated product request to Apps Script; Apps Script calls OpenAI server-side.
+Never put `AI_API_KEY` (or any provider key) in `admin.html`, JavaScript, GitHub, or browser-side configuration. The browser sends only the authenticated product request to Apps Script; Apps Script calls the configured AI provider server-side.
+
+After every update that changes `code.gs`, copy the new root `code.gs` into the Apps Script project and create a new web-app deployment/version before testing new backend actions. If the admin shows **AI backend is not deployed yet** (or an older **unknown action** message), the GitHub frontend is newer than the deployed Apps Script backend.
 
 In **Admin > Add product**, choose/upload the main product photo, optionally add one or more **AI-only reference photos** inside the AI dialog, enter any facts you know (for example `brass, ₹240, sizes 2.4, 2.6, 2.8`), then press **Generate with AI**. AI-only reference photos help the model inspect another angle, packaging, a label, or a close-up, but they are not saved to the product gallery. Review the generated fields before choosing **Apply to product form**, then use the normal **Save product** button.
+
+### Switching AI providers or models without editing code
+
+After this version is deployed, change only Apps Script **Script properties**:
+
+- `AI_API_KEY` — provider API key
+- `AI_BASE_URL` — OpenAI-compatible API base URL (the code appends `/responses` or `/chat/completions` unless the full endpoint is already supplied)
+- `AI_MODEL` — exact model id from that provider
+- `AI_API_TYPE` — `responses` or `chat_completions`
+
+Changing only `AI_MODEL` is enough to switch between compatible models on the same provider. Changing provider normally means updating all four properties. The configured model must support image/vision input if you want product-photo analysis. Chat-completions providers that do not support JSON Schema are retried once with prompt-enforced JSON.
+
+Example for the native OpenAI setup:
+
+```text
+AI_BASE_URL=https://api.openai.com/v1
+AI_API_TYPE=responses
+AI_MODEL=gpt-5.6-luna
+AI_API_KEY=your-secret-key
+```
+
+For another OpenAI-compatible provider, use that provider's base URL and exact model id instead.

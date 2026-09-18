@@ -1,11 +1,17 @@
 /* AI product draft generation. Bundled into code.gs by scripts/build.mjs.
- * OPENAI_API_KEY stays in Apps Script Script Properties and is never sent to
- * the browser. OPENAI_MODEL may optionally override the default model.
+ * Provider/model selection is controlled by Apps Script Script Properties.
+ * Secrets stay server-side and are never sent to the browser.
+ *
+ * Preferred properties:
+ *   AI_API_KEY   - provider API key
+ *   AI_BASE_URL  - e.g. https://api.openai.com/v1 or another OpenAI-compatible base
+ *   AI_MODEL     - provider model id
+ *   AI_API_TYPE  - responses | chat_completions
+ *
+ * Backward compatibility: OPENAI_API_KEY and OPENAI_MODEL are still accepted.
  */
 function generateAiProductDraft_(body, actor) {
-  const apiKey = secret_('OPENAI_API_KEY', '');
-  if (!apiKey) throw new Error('AI autofill is not configured. Add OPENAI_API_KEY in Apps Script > Project settings > Script properties.');
-
+  const config = aiProviderConfig_();
   rateLimit_('ai-product:' + String(actor && actor.name || 'admin'), 30, 3600);
 
   const imageUrl = String(body.imageUrl || '').trim();
@@ -17,71 +23,18 @@ function generateAiProductDraft_(body, actor) {
   }
   if (imageUrl && !/^https:\/\//i.test(imageUrl)) throw new Error('The product image must be an HTTPS URL.');
 
-  const model = String(secret_('OPENAI_MODEL', 'gpt-5.6-luna')).trim() || 'gpt-5.6-luna';
-  const content = [{
-    type: 'input_text',
-    text: aiProductPrompt_(notes, existing, referenceUrls.length)
-  }];
-  if (imageUrl) content.push({
-    type: 'input_image',
-    detail: 'auto',
-    image_url: imageUrl
-  });
-  referenceUrls.forEach(function(url) {
-    content.push({
-      type: 'input_image',
-      detail: 'auto',
-      image_url: url
-    });
-  });
+  const prompt = aiProductPrompt_(notes, existing, referenceUrls.length);
+  const imageUrls = [];
+  if (imageUrl) imageUrls.push(imageUrl);
+  referenceUrls.forEach(function(url) { imageUrls.push(url); });
 
-  const payload = {
-    model: model,
-    store: false,
-    max_output_tokens: 2200,
-    input: [{
-      role: 'user',
-      content: content
-    }],
-    text: {
-      format: {
-        type: 'json_schema',
-        name: 'dsb_product_draft',
-        strict: true,
-        schema: aiProductSchema_()
-      }
-    }
-  };
-
-  const response = UrlFetchApp.fetch('https://api.openai.com/v1/responses', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      Authorization: 'Bearer ' + apiKey
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
-
-  const status = response.getResponseCode();
-  const raw = response.getContentText();
-  let data;
-  try {
-    data = JSON.parse(raw);
-  } catch (_) {
-    throw new Error('OpenAI returned an unreadable response.');
-  }
-  if (status < 200 || status >= 300) {
-    const message = data && data.error && data.error.message ? String(data.error.message) : 'OpenAI request failed.';
-    throw new Error('AI generation failed: ' + message.slice(0, 300));
-  }
-
-  const outputText = extractOpenAiOutputText_(data);
-  if (!outputText) throw new Error('AI generation returned no product draft.');
+  const result = config.apiType === 'chat_completions'
+    ? callAiChatCompletions_(config, prompt, imageUrls)
+    : callAiResponses_(config, prompt, imageUrls);
 
   let parsed;
   try {
-    parsed = JSON.parse(outputText);
+    parsed = JSON.parse(result.outputText);
   } catch (_) {
     throw new Error('AI generation returned invalid structured data.');
   }
@@ -94,8 +47,157 @@ function generateAiProductDraft_(body, actor) {
     success: true,
     draft: draft,
     warnings: warnings,
-    model: model
+    model: config.model,
+    provider: config.providerLabel,
+    apiType: config.apiType
   };
+}
+
+function aiProviderConfig_() {
+  const apiKey = String(secret_('AI_API_KEY', secret_('OPENAI_API_KEY', '')) || '').trim();
+  if (!apiKey) throw new Error('AI autofill is not configured. Add AI_API_KEY (or OPENAI_API_KEY) in Apps Script > Project settings > Script properties.');
+
+  let baseUrl = String(secret_('AI_BASE_URL', 'https://api.openai.com/v1') || '').trim().replace(/\/+$/, '');
+  if (!/^https:\/\//i.test(baseUrl)) throw new Error('AI_BASE_URL must be an HTTPS URL.');
+
+  const model = String(secret_('AI_MODEL', secret_('OPENAI_MODEL', 'gpt-5.6-luna')) || '').trim();
+  if (!model) throw new Error('AI_MODEL is empty. Set a model id in Apps Script Script Properties.');
+
+  let apiType = String(secret_('AI_API_TYPE', 'responses') || '').trim().toLowerCase().replace(/[ -]+/g, '_');
+  if (apiType === 'chat' || apiType === 'chat_completion' || apiType === 'chatcompletion' || apiType === 'chat_completions') apiType = 'chat_completions';
+  if (apiType === 'response' || apiType === 'responses') apiType = 'responses';
+  if (apiType !== 'responses' && apiType !== 'chat_completions') throw new Error('AI_API_TYPE must be "responses" or "chat_completions".');
+
+  const endpoint = aiEndpoint_(baseUrl, apiType);
+  const providerLabel = aiProviderLabel_(baseUrl);
+  return { apiKey: apiKey, baseUrl: baseUrl, endpoint: endpoint, model: model, apiType: apiType, providerLabel: providerLabel };
+}
+
+function aiEndpoint_(baseUrl, apiType) {
+  const lower = baseUrl.toLowerCase();
+  if (/\/(responses|chat\/completions)$/.test(lower)) return baseUrl;
+  return baseUrl + (apiType === 'chat_completions' ? '/chat/completions' : '/responses');
+}
+
+function aiProviderLabel_(baseUrl) {
+  try {
+    return String(baseUrl).replace(/^https?:\/\//i, '').split('/')[0].slice(0, 100);
+  } catch (_) {
+    return 'configured provider';
+  }
+}
+
+function aiRequestHeaders_(config) {
+  return { Authorization: 'Bearer ' + config.apiKey };
+}
+
+function callAiResponses_(config, prompt, imageUrls) {
+  const content = [{ type: 'input_text', text: prompt }];
+  imageUrls.forEach(function(url) {
+    content.push({ type: 'input_image', detail: 'auto', image_url: url });
+  });
+  const payload = {
+    model: config.model,
+    store: false,
+    max_output_tokens: 2200,
+    input: [{ role: 'user', content: content }],
+    text: {
+      format: {
+        type: 'json_schema',
+        name: 'dsb_product_draft',
+        strict: true,
+        schema: aiProductSchema_()
+      }
+    }
+  };
+  const data = aiFetchJson_(config, payload);
+  const outputText = extractOpenAiOutputText_(data);
+  if (!outputText) throw new Error('AI generation returned no product draft.');
+  return { outputText: outputText };
+}
+
+function callAiChatCompletions_(config, prompt, imageUrls) {
+  const content = [{ type: 'text', text: prompt + '\n\nReturn only valid JSON matching the requested product-draft schema; do not wrap it in markdown.' }];
+  imageUrls.forEach(function(url) {
+    content.push({ type: 'image_url', image_url: { url: url, detail: 'auto' } });
+  });
+  const payload = {
+    model: config.model,
+    messages: [{ role: 'user', content: content }],
+    max_tokens: 2200,
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: 'dsb_product_draft',
+        strict: true,
+        schema: aiProductSchema_()
+      }
+    }
+  };
+
+  let data;
+  try {
+    data = aiFetchJson_(config, payload);
+  } catch (err) {
+    // Some OpenAI-compatible providers/models support vision but not json_schema.
+    // Retry once with prompt-enforced JSON so changing models usually needs only
+    // Script Property edits rather than code changes.
+    const message = String(err && err.message || '');
+    if (!/response_format|json_schema|schema|unsupported|unknown parameter|invalid parameter/i.test(message)) throw err;
+    delete payload.response_format;
+    data = aiFetchJson_(config, payload);
+  }
+
+  const outputText = extractChatCompletionText_(data);
+  if (!outputText) throw new Error('AI generation returned no product draft.');
+  return { outputText: stripJsonFence_(outputText) };
+}
+
+function aiFetchJson_(config, payload) {
+  const response = UrlFetchApp.fetch(config.endpoint, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: aiRequestHeaders_(config),
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+  const status = response.getResponseCode();
+  const raw = response.getContentText();
+  let data;
+  try { data = JSON.parse(raw); }
+  catch (_) { throw new Error('AI provider returned an unreadable response.'); }
+  if (status < 200 || status >= 300) {
+    const message = aiProviderErrorMessage_(data) || ('HTTP ' + status);
+    throw new Error('AI generation failed: ' + message.slice(0, 400));
+  }
+  return data;
+}
+
+function aiProviderErrorMessage_(data) {
+  if (!data) return '';
+  if (data.error && typeof data.error.message === 'string') return data.error.message;
+  if (typeof data.message === 'string') return data.message;
+  if (data.error && typeof data.error === 'string') return data.error;
+  return '';
+}
+
+function extractChatCompletionText_(data) {
+  const choice = data && Array.isArray(data.choices) ? data.choices[0] : null;
+  const content = choice && choice.message ? choice.message.content : '';
+  if (typeof content === 'string') return content.trim();
+  if (Array.isArray(content)) {
+    return content.map(function(part) {
+      if (!part) return '';
+      if (typeof part.text === 'string') return part.text;
+      if (part.type === 'text' && typeof part.content === 'string') return part.content;
+      return '';
+    }).join('').trim();
+  }
+  return '';
+}
+
+function stripJsonFence_(text) {
+  return String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
 }
 
 function sanitizeAiReferenceUrls_(value) {

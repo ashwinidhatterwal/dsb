@@ -19,8 +19,12 @@ assert(client.includes('referenceUrls') && client.includes('aiReferenceUrls'), '
 assert(client.includes('window.DSBAutofill.openDraft'), 'AI draft does not use review-first autofill flow');
 assert(autofill.includes('DSBAutofill = Object.freeze({ openDraft })'), 'Autofill review API is missing');
 assert(!backend.includes('sk-'), 'Potential API key literal found in AI backend');
-assert(backend.includes("secret_('OPENAI_API_KEY'"), 'OpenAI API key is not read from Script Properties');
-assert(backend.includes("store: false"), 'OpenAI request should explicitly disable storage');
+assert(backend.includes("secret_('AI_API_KEY'"), 'Generic AI API key is not read from Script Properties');
+assert(backend.includes("secret_('AI_BASE_URL'"), 'AI base URL is not configurable');
+assert(backend.includes("secret_('AI_MODEL'"), 'AI model is not configurable');
+assert(backend.includes("secret_('AI_API_TYPE'"), 'AI API type is not configurable');
+assert(backend.includes('callAiResponses_') && backend.includes('callAiChatCompletions_'), 'Both supported API adapters are required');
+assert(backend.includes("store: false"), 'Responses request should explicitly disable storage');
 assert(backend.includes('sanitizeAiReferenceUrls_'), 'AI backend reference photo sanitizer is missing');
 
 const context = { console };
@@ -47,5 +51,11 @@ assert.equal(cleaned.extra, undefined);
 const refs = Array.from(context.sanitizeAiReferenceUrls_(['http://bad', 'https://a.example/1.jpg', 'https://a.example/1.jpg', 'https://b.example/2.jpg']));
 assert.deepEqual(refs, ['https://a.example/1.jpg', 'https://b.example/2.jpg']);
 assert(context.aiProductPrompt_('note', { price: 240 }, 2).includes('Supplemental reference photos: 2.'));
+
+
+assert.equal(context.aiEndpoint_('https://api.example.com/v1', 'responses'), 'https://api.example.com/v1/responses');
+assert.equal(context.aiEndpoint_('https://api.example.com/v1', 'chat_completions'), 'https://api.example.com/v1/chat/completions');
+assert.equal(context.aiEndpoint_('https://api.example.com/v1/chat/completions', 'chat_completions'), 'https://api.example.com/v1/chat/completions');
+assert.equal(context.stripJsonFence_('```json\n{"ok":true}\n```'), '{"ok":true}');
 
 console.log('AI product autofill checks passed.');
