@@ -6,7 +6,7 @@
  * Dhatterwal Suhag Bhandar — Google Sheet backend
  * ------------------------------------------------
  * Paste this into Extensions > Apps Script on your product Google Sheet,
- * then deploy as a Web App. See UPDATE.txt for step-by-step instructions.
+ * then deploy as a Web App. See SETUP.md for deployment instructions.
  *
  * Sheet tabs expected in this spreadsheet:
  *
@@ -79,7 +79,7 @@ const ADMIN_KEY = ''; // Prefer the ADMIN_KEY Script Property; never publish sec
 // Optional — silently pings a Telegram chat/channel the instant a new order
 // comes in, so you don't have to keep the Sheet or admin page open to know.
 // Leave TELEGRAM_BOT_TOKEN blank to turn this off entirely; nothing else
-// about order-taking changes either way. See UPDATE.txt for how to get
+// about order-taking changes either way. See SETUP.md for how to get
 // a bot token and chat ID from @BotFather in about two minutes.
 const TELEGRAM_BOT_TOKEN = ''; // e.g. '123456789:AAExampleTokenFromBotFather'
 const TELEGRAM_CHAT_ID = ''; // your numeric chat ID, or '@yourchannel'

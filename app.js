@@ -1,7 +1,7 @@
 /* =========================================================
    Dhatterwal Suhag Bhandar — storefront (index) logic
    Shared config/cart/product/rendering code lives in:
-   config.js, utils.js, cart.js, products-data.js, render-helpers.js, cart-ui.js
+   config.js, utils.js, cart.js, products-data.js, render-helpers.js, cart-ui-core/drawer/checkout
    ========================================================= */
 let CATEGORIES = {}; // { category: Set(subcategories) }
 let activeCategory = 'All';

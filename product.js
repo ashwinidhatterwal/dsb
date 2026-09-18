@@ -440,7 +440,7 @@ function renderPdActions(p) {
   if (goCart) goCart.addEventListener('click', openCart);
 }
 
-// Called by cart-ui.js whenever the cart changes from the drawer,
+// Called by the shared cart UI whenever the cart changes from the drawer,
 // so this page's own add/stepper controls stay in sync.
 function refreshCurrentProductCard() {
   if (CURRENT_PRODUCT) renderPdActions(CURRENT_PRODUCT);

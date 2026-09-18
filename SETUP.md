@@ -2,7 +2,7 @@
 
 ## Update an existing shop
 
-For this PIN-code release, follow `UPDATE.txt`: upload the website files first
+For deployment, upload the website files first
 and wait for GitHub Actions to publish, then update and redeploy root `code.gs`.
 The old checkout has no PIN field, so deploying the stricter backend first
 would prevent customers from ordering. Preserve existing Script Properties,

@@ -725,3 +725,100 @@ input[type=checkbox]:disabled {
 .order-price-breakdown dd { margin: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .order-price-breakdown .order-price-total { border-top: 1px solid currentColor; margin-top: 6px; padding-top: 8px; font-weight: 700; }
 .oaddress { white-space: pre-line; }
+
+/* ChatGPT product autofill ------------------------------------------------ */
+.add-product-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+.add-product-heading .admin-section-title { margin-bottom: 0; }
+.autofill-open-btn {
+  flex: 0 0 auto;
+  border-color: #56847d;
+  background: #203d3b;
+  color: #d9f3ed;
+}
+.autofill-hint { margin: 0 0 14px; }
+.autofill-dialog {
+  width: min(620px, calc(100vw - 24px));
+  max-height: min(82vh, 760px);
+  overflow: auto;
+  border: 1px solid #415d68;
+  border-radius: 18px;
+  padding: 18px;
+  background: #142330;
+  color: #eef4f7;
+  box-shadow: 0 24px 80px rgba(0,0,0,.45);
+}
+.autofill-dialog::backdrop {
+  background: rgba(3,9,15,.72);
+  backdrop-filter: blur(5px);
+}
+.autofill-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.autofill-dialog-head h2 { margin: 2px 0 0; font-size: 22px; }
+.autofill-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #435a69;
+  background: #1c2d3a;
+  color: #dce7ed;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.autofill-input {
+  width: 100%;
+  min-height: 190px;
+  resize: vertical;
+  margin-top: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.autofill-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+.autofill-preview {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 12px;
+}
+.autofill-preview-row {
+  display: grid;
+  grid-template-columns: minmax(110px, .55fr) minmax(0, 1.45fr);
+  gap: 12px;
+  align-items: start;
+  padding: 9px 10px;
+  border: 1px solid #344b59;
+  background: #192b38;
+  border-radius: 10px;
+}
+.autofill-preview-row span { color: #aebfca; font-size: 12px; }
+.autofill-preview-row strong {
+  color: #f2f7f9;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.autofill-apply { width: 100%; }
+.autofill-apply:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 560px) {
+  .add-product-heading { align-items: stretch; flex-direction: column; }
+  .autofill-open-btn { width: 100%; }
+  .autofill-dialog { padding: 14px; border-radius: 15px; }
+  .autofill-preview-row { grid-template-columns: 1fr; gap: 3px; }
+}

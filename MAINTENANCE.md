@@ -23,16 +23,26 @@ Upload the whole project, including `.github`, `scripts`, and `src`, to the exis
 | `cart.js` | Persistent cart and stock-aware mutations |
 | `products-data.js` | Catalogue loading, caching and normalized products |
 | `render-helpers.js` | Product cards and their actions |
-| `cart-ui.js` | Cart drawer, checkout, order confirmation and receipt |
+| `cart-ui-core.js` | Cart state, badge animation, tracking, promo/fee helpers and drawer lifecycle |
+| `cart-ui-drawer.js` | Cart rendering, order confirmation and downloadable receipt |
+| `cart-ui-checkout.js` | Checkout validation/submission, retry recovery and payment QR |
 | `app.js` | Home categories, sorting, search and carousels |
 | `product.js` | Product gallery, sizes, reviews and page actions |
 | `catalog.js` | Live catalogue page |
-| `admin.js` | Admin connection, products and orders |
+| `admin.js` | Admin connection, products, orders and editor wiring |
+| `admin-dashboard.js` | Dashboard metrics, summaries and visualizations |
 | `admin-workspace.js` | Admin drafts, archive and payment verification |
+| `admin-autofill.js` | Review-first ChatGPT/JSON product detail parser and form autofill |
 | `i18n.js` | English/Hindi presentation |
 | `pwa-install.js` | Install prompt, including its own widget stylesheet |
 
 Existing script loading order remains deliberate: configuration and utilities precede consumers; `seo.js` must load before any size-price calculation is invoked. `cart.js` defines functions before SEO loads but does not call pricing at definition time. Do not add `async` to these scripts.
+
+`i18n.js` intentionally remains a single file because it is primarily translation data rather than mixed application logic; splitting it would add ordering overhead without materially improving maintenance.
+
+## Product autofill
+
+The Add product screen includes **Paste from ChatGPT**. It accepts JSON, simple `Label: value` text, or copied ChatGPT `Form field / Value to enter` tables, previews recognized fields, and only applies them after confirmation. Instruction placeholders such as `Enter actual stock` and `Leave blank` are ignored. It never saves automatically. Keep parsing logic in `admin-autofill.js`; do not mix it into `admin.js`. Unknown labels are ignored rather than guessed, which helps prevent accidental field corruption.
 
 ## Style map
 
@@ -48,7 +58,7 @@ Apps Script functions still share their original global scope. File separation i
 
 ## Safe release checklist
 
-Run the build consistency check, `node scripts/check.mjs`, and `node scripts/check-checkout.mjs`. Check the home page at phone and desktop widths, choose a priced size, add/remove cart quantities, and inspect the admin editor before publishing. Local checks do not execute live Google APIs or send orders/notifications.
+Run the build consistency check, `node scripts/check.mjs`, `node scripts/check-checkout.mjs`, and `node scripts/check-autofill.mjs`. Check the home page at phone and desktop widths, choose a priced size, add/remove cart quantities, and inspect the admin editor before publishing. Local checks do not execute live Google APIs or send orders/notifications.
 
 When changing a deployed asset, update the version query in HTML and the static-page template. Preserve the `.github` publishing workflow, which excludes developer sources from the public website.
 
@@ -68,8 +78,7 @@ Keep `src/`, `scripts/`, and `.github/`: they are the maintained sources, checks
 and publishing workflow. Root `code.gs` and `style.css` are generated deployment
 files, not obsolete duplicates. `sample-products.json` is the configured local
 preview fallback. Keep `THIRD-PARTY-NOTICES.txt` for bundled software attribution.
-Use `UPDATE.txt` for this release, `SETUP.md` for shop operations, and this file
-for code maintenance.
+Use `SETUP.md` for shop operations and this file for code maintenance. Release-specific update notes are intentionally not kept in the repository once merged.
 
 The following obsolete files were removed from this ZIP. Uploading a ZIP's
 contents to an existing GitHub repository does not delete old repository files;
@@ -81,6 +90,7 @@ remove these same paths there if you want the repository to match:
 - `SETUP-GUIDE.md`
 - `TELEGRAM-SETUP.txt`
 - `TEST-RESULTS.txt`
+- `UPDATE.txt`
 - `UPDATE-INSTRUCTIONS.md`
 - `UPDATE-STEPS.txt`
 - `V8.1-HARDENED-MIGRATION.md`

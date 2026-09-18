@@ -37,6 +37,7 @@ jobs:
           node scripts/build.mjs --check
           node scripts/check.mjs
           node scripts/check-checkout.mjs
+          node scripts/check-autofill.mjs
       - name: Restore last validated catalogue
         uses: actions/cache/restore@v4
         with:
