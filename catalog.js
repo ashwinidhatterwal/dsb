@@ -8,10 +8,10 @@
     }
   }
   function productHref(p) {
-    return preferredProductPath(p);
+    return preferredProductPath(p.id);
   }
   function productUrl(p) {
-    return `${CONFIG.SITE_URL}/${preferredProductPath(p)}`;
+    return `${CONFIG.SITE_URL}/${preferredProductPath(p.id)}`;
   }
   function injectItemList(products) {
     const old = document.getElementById('catalogItemListLd');

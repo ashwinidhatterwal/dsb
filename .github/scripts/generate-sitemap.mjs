@@ -87,12 +87,12 @@ async function main() {
   if (productIds.length === 0) {
     let old = '';
     try { old = await fs.readFile(SITEMAP_PATH, 'utf8'); } catch {}
-    if (old.includes('/product.html?id=') || old.includes('/products/')) {
+    if (old.includes('/product.html?id=') || old.includes('/products/p-')) {
       throw new Error('Products API returned zero products; refusing to remove existing product URLs automatically.');
     }
   }
 
-  const allowed=['id','name','namehindi','category','subcategory','price','mrp','image','images','description','stock','stockqty','tags','sizeprices','brand','material','packsize','specifications','gtin','descriptionhindi','sizes','instagramurl'];
+  const allowed=['id','name','namehindi','category','subcategory','price','mrp','image','images','description','stock','stockqty','tags','sizeprices','brand','material','packsize','specifications','gtin','descriptionhindi','sizes'];
   const rows=(Array.isArray(payload)?payload:payload.products).map(row=>Object.fromEntries(allowed.filter(k=>row[k]!==undefined).map(k=>[k,row[k]])));
   await fs.writeFile('.catalog-build.json',JSON.stringify(rows),'utf8');
   await fs.writeFile('.catalog-build-meta.json',JSON.stringify({api:apiBase,generatedAt}),'utf8');
@@ -107,10 +107,10 @@ async function main() {
   ];
 
   const rowsById=new Map(rows.map(p=>[String(p.id),p]));
-  const productEntries = productIds.map(id => {
-    const product=rowsById.get(id);
-    return entry(`${siteBase}/${seo.productPath(product)}`, 'weekly', '0.8', [...new Set([product?.image,...String(product?.images||'').split(',')].map(u=>String(u||'').trim()).filter(u=>/^https:\/\//.test(u)))]);
-  });
+  const productEntries = productIds.map(id =>
+    // URLSearchParams gives the same safe ID encoding used by the storefront.
+    entry(`${siteBase}/products/p-${Buffer.from(String(id)).toString('hex')}.html`, 'weekly', '0.8', [...new Set([rowsById.get(id)?.image,...String(rowsById.get(id)?.images||'').split(',')].map(u=>String(u||'').trim()).filter(u=>/^https:\/\//.test(u)))])
+  );
 
   const output = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -119,7 +119,7 @@ async function main() {
     ...productEntries,
     ...[...new Set(rows.map(p=>p.category||'Other'))].map(c=>entry(siteBase+'/'+seo.categoryPath(c),'weekly','0.7')),
     entry(siteBase+'/hi/','weekly','0.7'),
-    ...rows.filter(p=>p.namehindi&&p.descriptionhindi).map(p=>entry(siteBase+'/hi/'+seo.productPath(p),'weekly','0.6')),
+    ...rows.filter(p=>p.namehindi&&p.descriptionhindi).map(p=>entry(siteBase+'/hi/'+seo.productPath(p.id),'weekly','0.6')),
     '</urlset>',
     ''
   ].join('\n');

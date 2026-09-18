@@ -458,7 +458,6 @@ function fillForm(p) {
   $('#f-specifications').value = p.specifications || '';
   $('#f-gtin').value = p.gtin || '';
   $('#f-descriptionhindi').value = p.descriptionhindi || '';
-  $('#f-instagramurl').value = p.instagramurl || '';
   $('#f-sizeprices').value = p.sizeprices || '';
   $('#f-sizes').value = p.sizes || '';
   $('#f-hasSizes').checked = !!String(p.sizes || '').trim();
@@ -504,7 +503,6 @@ function clearForm() {
   $('#f-specifications').value = '';
   $('#f-gtin').value = '';
   $('#f-descriptionhindi').value = '';
-  $('#f-instagramurl').value = '';
   $('#f-sizeprices').value = '';
   $('#f-sizes').value = '';
   $('#f-hasSizes').checked = false;
@@ -658,15 +656,10 @@ async function saveProductTask() {
     specifications: $('#f-specifications').value.trim(),
     gtin: $('#f-gtin').value.trim(),
     descriptionhindi: $('#f-descriptionhindi').value.trim(),
-    instagramurl: $('#f-instagramurl').value.trim(),
     sizeprices: $('#f-hasSizes').checked ? $('#f-sizeprices').value.trim() : '',
     tags: $('#f-tags').value.trim(),
     sizes: $('#f-hasSizes').checked ? [...new Set($('#f-sizes').value.split(/[,\n]/).map(x => x.trim()).filter(Boolean))].join(', ') : ''
   };
-  if (product.instagramurl && !/^https:\/\/(?:www\.)?instagram\.com\/(?:p|reel|tv)\/[A-Za-z0-9_-]+\/?(?:[?#].*)?$/i.test(product.instagramurl)) {
-    status(statusEl, 'Paste a valid public Instagram Reel or Post URL.', false);
-    return;
-  }
   if ($('#f-hasSizes').checked && !product.sizes) {
     status(statusEl, 'Enter at least one size or turn off size selection.', false);
     return;
