@@ -148,21 +148,6 @@ body{
 .pd-info{
   min-width:0;
 }
-.pd-delivery{
-  margin:18px 0 10px;
-  padding:14px;
-  background:#fff2f7;
-  border:1px solid #efd1de;
-  border-radius:12px;
-  font-size:14px;
-  line-height:1.6;
-}
-.pd-delivery p{
-  margin:0 0 6px;
-}
-.pd-delivery a{
-  color:#970d4b;
-}
 .pd-title{
   font-size:26px;
 }

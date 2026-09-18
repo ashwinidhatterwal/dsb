@@ -9,17 +9,6 @@ let galleryResizeObserver = null;
 function getProductIdFromUrl() {
   return document.documentElement.dataset.productId || new URLSearchParams(location.search).get('id') || '';
 }
-function productIsHindi() {
-  return !!(window.DSB_I18N && DSB_I18N.isHindi());
-}
-function productDescription(p) {
-  const fallback = productIsHindi() ? 'ऑर्डर करने से पहले उत्पाद की जानकारी के लिए दुकान से संपर्क करें।' : 'Contact the shop for product details before ordering.';
-  return (productIsHindi() ? p.descriptionhindi || p.description : p.description || p.descriptionhindi) || fallback;
-}
-function instagramEmbedUrl(url) {
-  const match = String(url || '').trim().match(/^https:\/\/(?:www\.)?instagram\.com\/(p|reel|tv)\/([A-Za-z0-9_-]+)\/?/i);
-  return match ? `https://www.instagram.com/${match[1].toLowerCase()}/${match[2]}/embed/` : '';
-}
 
 // renderStars() lives in utils.js now — shared with product cards.
 
@@ -137,14 +126,16 @@ function renderProduct(p) {
           Size guide
         </button>` : ''}
       </div>
-      <p class="pd-desc">${escapeHtml(productDescription(p))}</p>
-      <dl class="product-specs">${DSB_SEO.details(p).map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}</dl>
-      <div class="pd-id">Product ID: ${escapeHtml(p.id)}</div>
-      <div class="pd-actions" id="pdActions"></div>
-      <div class="pd-delivery" id="pdDelivery"><p>Delivery charges are shown before you confirm your order.</p><a href="contact.html">Ask about delivery to your area</a> · <a href="returns.html">Returns &amp; exchanges</a></div>
+      <div class="pd-purchase" id="pdPurchase">
+        <div class="pd-actions" id="pdActions"></div>
+      </div>
+      <div class="pd-details">
+        <p class="pd-desc">${escapeHtml((window.DSB_PAGE_LANGUAGE === 'hi' ? p.descriptionhindi : p.description) || 'Contact the shop for product details before ordering.')}</p>
+        <dl class="product-specs">${DSB_SEO.details(p).map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}</dl>
+        <div class="pd-id">Product ID: ${escapeHtml(p.id)}</div>
+      </div>
       </div>
     </div>
-    ${instagramEmbedUrl(p.instagramurl) ? `<section class="product-instagram" aria-labelledby="productInstagramTitle"><div class="section-title"><h2 id="productInstagramTitle">${productIsHindi() ? 'Instagram पर देखें' : 'See it on Instagram'}</h2></div><div class="product-instagram-frame"><iframe src="${escapeHtml(instagramEmbedUrl(p.instagramurl))}" title="${escapeHtml(productIsHindi() ? 'इस उत्पाद से जुड़ी Instagram पोस्ट' : 'Instagram post for this product')}" loading="lazy" allowtransparency="true" allowfullscreen="true" frameborder="0" scrolling="no"></iframe></div><a class="product-instagram-link" href="${escapeHtml(p.instagramurl)}" target="_blank" rel="noopener noreferrer">${productIsHindi() ? '@dhatterwalsuhag पर खोलें' : 'Open on @dhatterwalsuhag'}</a></section>` : ''}
     <div class="related-section" id="relatedSection" style="display:none;">
       <div class="section-title"><h2>You may also like</h2></div>
       <div class="related-rail" id="relatedRail"></div>
@@ -182,13 +173,6 @@ function renderProduct(p) {
   if (sizeBtn) sizeBtn.addEventListener('click', openSizeGuide);
   updateSeoTags(p);
   updateStructuredData(p, []);
-  fetchCheckoutConfigIfNeeded().then(cfg => {
-    const el = $('#pdDelivery');
-    if (!cfg || !el) return;
-    const line = document.createElement('p');
-    line.textContent = `Delivery: ${money(cfg.deliveryCharge)} below ${money(cfg.deliveryFreeAbove)} after discounts; free at or above that amount. Cash on Delivery: ${money(cfg.codCharge)} extra.`;
-    el.querySelector('p').replaceWith(line);
-  });
 }
 
 /* ---------------- Size guide ---------------- */
@@ -319,8 +303,8 @@ function updateSeoTags(p) {
       return p.image;
     }
   })();
-  const title = `${productIsHindi() ? p.nameHindi || p.name : DSB_SEO.name(p)} — ${CONFIG.SHOP_NAME}`;
-  const productDescription = productIsHindi() ? p.descriptionhindi || p.description : DSB_SEO.description(p);
+  const title = `${window.DSB_PAGE_LANGUAGE === 'hi' ? p.nameHindi || p.name : DSB_SEO.name(p)} — ${CONFIG.SHOP_NAME}`;
+  const productDescription = window.DSB_PAGE_LANGUAGE === 'hi' ? p.descriptionhindi || p.description : DSB_SEO.description(p);
   const desc = productDescription && productDescription.trim() ? productDescription.trim().slice(0, 170) : `Buy ${p.name} from ${CONFIG.SHOP_NAME} in Goluwala, Rajasthan — order online.`;
   document.title = title;
   const setMeta = (id, attr, value) => {
@@ -595,13 +579,6 @@ document.addEventListener('dsb:languagechange', () => {
   document.querySelectorAll('.pd-slide img').forEach(img => img.alt = customerProductName(p));
   const secondary = $('#pdRoot .pd-title-hindi');
   if (secondary) secondary.textContent = customerProductSecondaryName(p);
-  const desc = $('#pdRoot .pd-desc');
-  if (desc) desc.textContent = productDescription(p);
-  const igTitle = $('#productInstagramTitle');
-  if (igTitle) igTitle.textContent = productIsHindi() ? 'Instagram पर देखें' : 'See it on Instagram';
-  const igLink = $('.product-instagram-link');
-  if (igLink) igLink.textContent = productIsHindi() ? '@dhatterwalsuhag पर खोलें' : 'Open on @dhatterwalsuhag';
-  updateSeoTags(p);
   document.querySelectorAll('.card[data-id]').forEach(card => {
     const product = PRODUCT_BY_ID.get(card.dataset.id);
     if (!product) return;
@@ -675,7 +652,7 @@ function updateSizeOptions(p) {
   if (!field) {
     field = document.createElement('fieldset');
     field.className = 'product-sizes';
-    $('#pdActions').before(field);
+    $('#pdPurchase').prepend(field);
   }
   const signature = JSON.stringify([p.sizes, selectedSize]);
   if (field.dataset.signature === signature) return;

@@ -91,7 +91,7 @@ function renderCarousel(sectionId, railId, list) {
     return;
   }
   section.style.display = '';
-  rail.innerHTML = list.map(cardHtml).join('');
+  rail.innerHTML = list.map(p => cardHtml(p, { homeCard: true })).join('');
   bindCardEvents($$('.card', rail), list);
 }
 function applyCategoryFromUrl() {
@@ -167,7 +167,8 @@ function createPager(container, sentinelEl) {
     }
     const template = document.createElement('template');
     template.innerHTML = next.map((p, i) => cardHtml(p, {
-      eager: container.id === 'productGrid' && renderedCount === 0 && i < 2
+      eager: container.id === 'productGrid' && renderedCount === 0 && i < 2,
+      homeCard: container.id === 'productGrid'
     })).join('');
     const cards = Array.from(template.content.children);
     container.appendChild(template.content);

@@ -75,71 +75,42 @@ function prefersReducedMotion() {
   return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-// Animates a round clone of a product photo flying — slowly, continuously
-// shrinking, accelerating toward the end — into the cart icon, where it
-// gets "swallowed" with a gulp-like bounce. Falls back to just calling
-// onLand() immediately if the browser prefers less motion, or if anything
-// needed for the animation isn't available.
+// Refined add-to-cart motion: a small product token glides toward the cart
+// while the cart and badge respond with restrained micro-interactions.
 function flyToCart(imgEl, onLand) {
-  const fallback = () => {
-    if (onLand) onLand();
-  };
-  if (!imgEl || prefersReducedMotion()) {
-    fallback();
-    return;
-  }
+  const fallback = () => { if (onLand) onLand(); };
+  if (!imgEl || prefersReducedMotion()) { fallback(); return; }
   const cartIcon = $('#cartTrigger');
-  if (!cartIcon) {
-    fallback();
-    return;
-  }
+  if (!cartIcon) { fallback(); return; }
   const startRect = imgEl.getBoundingClientRect();
   const endRect = cartIcon.getBoundingClientRect();
-  if (!startRect.width || !endRect.width) {
-    fallback();
-    return;
-  }
-  const size = Math.max(46, Math.min(startRect.width, startRect.height) * 0.8);
-  const startX = startRect.left + (startRect.width - size) / 2;
-  const startY = startRect.top + (startRect.height - size) / 2;
-  const clone = document.createElement('div');
-  clone.className = 'fly-clone';
-  clone.style.cssText = `left:${startX}px; top:${startY}px; width:${size}px; height:${size}px;`;
-  const cloneImg = imgEl.cloneNode(true);
-  cloneImg.removeAttribute('loading');
-  cloneImg.style.cssText = 'width:100%; height:100%; object-fit:cover; display:block;';
-  clone.appendChild(cloneImg);
-  document.body.appendChild(clone);
-  const startCenterX = startX + size / 2;
-  const startCenterY = startY + size / 2;
-  const endCenterX = endRect.left + endRect.width / 2;
-  const endCenterY = endRect.top + endRect.height / 2;
-  const dx = endCenterX - startCenterX;
-  const dy = endCenterY - startCenterY;
-  const arcLift = Math.min(100, Math.abs(dy) * 0.5 + 40); // gentle rise that flattens out as it nears the cart
+  if (!startRect.width || !endRect.width) { fallback(); return; }
 
-  // Sample a continuous curve; only transform and opacity animate.
-  const frames = Array.from({
-    length: 21
-  }, (_, i) => {
-    const t = i / 20;
-    return {
-      transform: `translate(${dx * t}px, ${dy * t - Math.sin(Math.PI * t) * arcLift * .55}px) scale(${1 - .96 * t})`,
-      opacity: t > .8 ? (1 - t) / .2 : 1,
-      offset: t
-    };
-  });
-  const anim = clone.animate(frames, {
-    duration: 520,
-    easing: 'cubic-bezier(.2,.65,.35,1)'
-  });
+  const size = 22;
+  const startX = startRect.right - size - 10;
+  const startY = startRect.bottom - size - 10;
+  const token = document.createElement('div');
+  token.className = 'cart-flight-token';
+  token.style.cssText = `left:${startX}px;top:${startY}px;width:${size}px;height:${size}px;background-image:url("${String(imgEl.currentSrc || imgEl.src || '').replace(/"/g, '%22')}")`;
+  document.body.appendChild(token);
+
+  const dx = endRect.left + endRect.width / 2 - (startX + size / 2);
+  const dy = endRect.top + endRect.height / 2 - (startY + size / 2);
+  const curve = Math.min(54, Math.max(24, Math.abs(dx) * .08));
+  const frames = [
+    { transform:'translate3d(0,0,0) scale(1)', opacity:.94, offset:0 },
+    { transform:`translate3d(${dx*.46}px,${dy*.46-curve}px,0) scale(.86)`, opacity:.9, offset:.46 },
+    { transform:`translate3d(${dx}px,${dy}px,0) scale(.48)`, opacity:.2, offset:1 }
+  ];
+  const anim = token.animate(frames, { duration:430, easing:'cubic-bezier(.22,.72,.22,1)' });
   anim.onfinish = () => {
-    clone.remove();
-    cartIcon.classList.remove('cart-hit');
-    void cartIcon.offsetWidth; // restart the gulp bounce even if it's already mid-play
-    cartIcon.classList.add('cart-hit');
+    token.remove();
+    cartIcon.classList.remove('cart-settle');
+    void cartIcon.offsetWidth;
+    cartIcon.classList.add('cart-settle');
     if (onLand) onLand();
   };
+  anim.oncancel = () => token.remove();
 }
 
 // Shared "fly into the cart, then react" sequencing used by every Add/Buy
