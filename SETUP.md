@@ -96,3 +96,17 @@ paste an image URL. API, UPI and delivery settings remain in their existing loca
 
 This package passed local regression and integration checks. Live device rendering,
 production uploads and deployment permissions were not browser-tested here.
+
+## AI product autofill (optional)
+
+The admin product editor can generate a reviewable product draft from the main product photo, a few notes, and fields you already filled in. It never saves a generated product automatically.
+
+1. Create an OpenAI API key for your API project.
+2. In the Google Apps Script project, open **Project settings** > **Script properties** > **Edit script properties**.
+3. Add `OPENAI_API_KEY` with the secret API key as its value.
+4. Optional: add `OPENAI_MODEL` to override the default `gpt-5.6-luna` model.
+5. Replace/redeploy the generated root `code.gs` so the AI backend action is available.
+
+Never put `OPENAI_API_KEY` in `admin.html`, JavaScript, GitHub, or any browser-side configuration. The browser sends only the authenticated product request to Apps Script; Apps Script calls OpenAI server-side.
+
+In **Admin > Add product**, choose/upload the main product photo, optionally add one or more **AI-only reference photos** inside the AI dialog, enter any facts you know (for example `brass, ₹240, sizes 2.4, 2.6, 2.8`), then press **Generate with AI**. AI-only reference photos help the model inspect another angle, packaging, a label, or a close-up, but they are not saved to the product gallery. Review the generated fields before choosing **Apply to product form**, then use the normal **Save product** button.

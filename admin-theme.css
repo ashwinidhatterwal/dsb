@@ -822,3 +822,35 @@ input[type=checkbox]:disabled {
   .autofill-dialog { padding: 14px; border-radius: 15px; }
   .autofill-preview-row { grid-template-columns: 1fr; gap: 3px; }
 }
+
+/* AI-assisted product entry ------------------------------------------------ */
+.product-smart-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.ai-generate-open-btn {
+  width: auto;
+  padding-inline: 14px;
+  background: linear-gradient(135deg, #2d615c, #2d4d65);
+  border-color: #65958f;
+  color: #f5fbfa;
+  box-shadow: 0 8px 22px rgba(10, 33, 43, .24);
+}
+.ai-product-dialog .ai-image-state {
+  margin: 12px 0 4px;
+  padding: 10px 12px;
+  border: 1px solid #385564;
+  border-radius: 10px;
+  background: #192b38;
+  color: #c9d9df;
+  font-size: 13px;
+}
+.ai-notes-input { min-height: 120px; }
+.ai-security-note { margin: 8px 0 12px; color: #9eb4bf; }
+@media (max-width: 560px) {
+  .product-smart-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+  .product-smart-actions button { width: 100%; min-width: 0; }
+}

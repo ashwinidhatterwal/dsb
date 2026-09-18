@@ -20,7 +20,7 @@ function authenticateAdmin_(key) {
 }
 function assertAdminPermission_(actor, action) {
   const reads = ['adminSession', 'adminProducts', 'adminProductsPage', 'adminOrders', 'adminDashboard'];
-  const edits = ['add', 'update', 'archiveProduct', 'updateOrderStatus'];
+  const edits = ['add', 'update', 'archiveProduct', 'updateOrderStatus', 'aiProductDraft'];
   if (actor.role === 'admin' || reads.includes(action) || actor.role === 'editor' && edits.includes(action)) return;
   throw new Error('Your staff role does not allow this action.');
 }
@@ -36,6 +36,7 @@ function dispatchAdmin_(body, actor) {
   if (action === 'adminProductsPage') return adminProductsPage_(body.options || {});
   if (action === 'adminOrders') return getAllOrders(body.options);
   if (action === 'adminDashboard') return getDashboardData();
+  if (action === 'aiProductDraft') return generateAiProductDraft_(body, actor);
   if (action === 'add') return addProduct(body.product || {}, body.requestId);
   if (action === 'update') {
     if (!body.product?.expected_revision && body.clientVersion >= 7) throw new Error('Refresh and reopen the product before saving.');

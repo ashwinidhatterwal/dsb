@@ -33,6 +33,8 @@
 
   const LABEL_ALIASES = new Map(Object.entries({
     'product id': 'id', 'id': 'id',
+    'namehindi': 'namehindi', 'costprice': 'costprice', 'stockqty': 'stockqty', 'packsize': 'packsize',
+    'descriptionhindi': 'descriptionhindi', 'sizeprices': 'sizeprices', 'hassizes': 'hasSizes',
     'name': 'name', 'product name': 'name', 'title': 'name',
     'name hindi': 'namehindi', 'hindi name': 'namehindi', 'name in hindi': 'namehindi', 'product name hindi': 'namehindi',
     'category': 'category', 'subcategory': 'subcategory', 'sub category': 'subcategory',
@@ -386,6 +388,22 @@
     $('#autofillStatus').textContent = '';
     renderPreview({});
   }
+
+  function openDraft(data, meta = {}) {
+    parsedDraft = canonicalize(data || {});
+    if (!Object.keys(parsedDraft).length) throw new Error('The generated draft did not contain any supported product fields.');
+    renderPreview(parsedDraft);
+    const warnings = Array.isArray(meta.warnings) ? meta.warnings.filter(Boolean) : [];
+    const source = meta.source ? String(meta.source) : 'Draft';
+    const model = meta.model ? ` · ${String(meta.model)}` : '';
+    const warningText = warnings.length ? ` Review notes: ${warnings.join(' • ')}` : '';
+    const statusEl = $('#autofillStatus');
+    statusEl.textContent = `${source}${model}: ${Object.keys(parsedDraft).length} field${Object.keys(parsedDraft).length === 1 ? '' : 's'} ready for review.${warningText}`;
+    statusEl.className = warnings.length ? 'statusline' : 'statusline good';
+    openDialog();
+  }
+
+  if (typeof window !== 'undefined') window.DSBAutofill = Object.freeze({ openDraft });
 
   document.addEventListener('DOMContentLoaded', () => {
     $('#autofillOpenBtn')?.addEventListener('click', openDialog);

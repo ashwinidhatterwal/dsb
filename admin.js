@@ -515,6 +515,7 @@ function clearForm() {
   $('#extraUploadStatus').textContent = '';
   currentExtraImages = [];
   renderExtraImagesPreview();
+  if (window.DSBAIProductAssist?.resetReferencePhotos) window.DSBAIProductAssist.resetReferencePhotos();
   $('#addTabTitle').textContent = 'Add a product';
   $('#saveStatus').textContent = '';
 }

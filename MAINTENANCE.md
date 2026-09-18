@@ -101,3 +101,9 @@ remove these same paths there if you want the repository to match:
 - `products-template-for-google-sheets.csv`
 - `promos-template-for-google-sheets.csv`
 - `reviews-template-for-google-sheets.csv`
+
+## AI product draft architecture
+
+`admin-ai.js` owns only the AI generation UI and sends an authenticated `aiProductDraft` request to Apps Script. It reuses `admin-autofill.js` for preview/apply so there is one review path for pasted and generated data. The dialog can also accept AI-only reference photos, which help analysis but are not saved to the product gallery. Keep that temporary reference-photo state inside `admin-ai.js` rather than spreading it through `admin.js`. `src/backend/ai-product.gs` owns the OpenAI Responses API call, structured-output schema, reference-photo sanitization, and response parsing. The API key is read only from the `OPENAI_API_KEY` Script Property; `OPENAI_MODEL` optionally overrides the default model. Keep secrets out of repository files.
+
+AI generation is deliberately non-destructive: it does not write Sheets, save products, or overwrite the editor until the user reviews the draft and presses Apply. Commercial facts such as price, stock, MRP and cost price are instructed to remain blank unless supported by user-provided/existing facts.
