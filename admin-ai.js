@@ -219,6 +219,13 @@
     return () => { if (timer) clearInterval(timer); timer = null; };
   }
 
+  function selectedAiModel() {
+    const selected = document.querySelector('input[name="aiModel"]:checked');
+    const model = String(selected?.value || 'gemini-3.5-flash-lite').trim().toLowerCase();
+    const allowed = new Set(['gemini-3.8-flash', 'gemini-3-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite']);
+    return allowed.has(model) ? model : 'gemini-3.5-flash-lite';
+  }
+
   function selectedReasoningEffort() {
     const selected = document.querySelector('input[name="aiQuality"]:checked');
     const effort = String(selected?.value || 'low').toLowerCase();
@@ -239,6 +246,7 @@
       const notes = $('#aiProductNotes').value.trim();
       const existing = currentProductFacts();
       const reasoningEffort = selectedReasoningEffort();
+      const requestedModel = selectedAiModel();
       if (!imageUrl && !referenceUrls.length && !notes && !Object.keys(existing).length) {
         throw new Error('Add a product photo, AI-only reference photo, a short note, or fill at least one product field first.');
       }
@@ -260,7 +268,8 @@
           referenceUrls: optimizedReferenceUrls,
           notes,
           existing,
-          reasoningEffort
+          reasoningEffort,
+          requestedModel
         }),
         timeoutMs: 120000
       });

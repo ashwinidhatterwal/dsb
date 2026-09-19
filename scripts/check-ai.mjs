@@ -95,6 +95,14 @@ assert.equal(context.sanitizeAiReasoningEffort_('medium'), 'medium');
 assert.equal(context.sanitizeAiReasoningEffort_('high'), 'high');
 assert.equal(context.sanitizeAiReasoningEffort_('extreme'), '');
 
+
+assert(html.includes('name="aiModel"') && html.includes('gemini-3.8-flash') && html.includes('gemini-3-flash') && html.includes('gemini-3.6-flash') && html.includes('gemini-3.5-flash-lite'), 'Gemini model selector is missing');
+assert(client.includes('selectedAiModel') && client.includes('requestedModel'), 'AI client does not send the selected model');
+assert.equal(context.sanitizeAiRequestedModel_('GEMINI-3.8-FLASH'), 'gemini-3.8-flash');
+assert.equal(context.sanitizeAiRequestedModel_('gemini-3.5-flash-lite'), 'gemini-3.5-flash-lite');
+assert.equal(context.sanitizeAiRequestedModel_('not-allowed'), '');
+assert(backend.includes('requestedModel && config.isGemini'), 'Per-request Gemini model override is not gated to Gemini');
+
 console.log('AI product autofill checks passed.');
 
 assert(backend.includes("if (!config.isGemini && config.imageDetail) image.detail = config.imageDetail"), 'Gemini image payload must omit unsupported detail hint');

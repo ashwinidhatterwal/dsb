@@ -1858,6 +1858,8 @@ function generateAiProductDraft_(body, actor) {
   const config = aiProviderConfig_();
   const requestedReasoningEffort = sanitizeAiReasoningEffort_(body && body.reasoningEffort);
   if (requestedReasoningEffort) config.reasoningEffort = requestedReasoningEffort;
+  const requestedModel = sanitizeAiRequestedModel_(body && body.requestedModel);
+  if (requestedModel && config.isGemini) config.model = requestedModel;
   rateLimit_('ai-product:' + String(actor && actor.name || 'admin'), 30, 3600);
 
   const imageUrl = String(body.imageUrl || '').trim();
@@ -1899,6 +1901,12 @@ function generateAiProductDraft_(body, actor) {
 function sanitizeAiReasoningEffort_(value) {
   const effort = String(value || '').trim().toLowerCase();
   return /^(low|medium|high)$/.test(effort) ? effort : '';
+}
+
+function sanitizeAiRequestedModel_(value) {
+  const model = String(value || '').trim().toLowerCase();
+  const allowed = ['gemini-3.8-flash', 'gemini-3-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
+  return allowed.indexOf(model) !== -1 ? model : '';
 }
 
 function aiProviderConfig_() {
