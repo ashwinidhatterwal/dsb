@@ -79,3 +79,6 @@ assert(backend.includes("type: 'json_schema'") && backend.includes('config.isGem
 assert(backend.includes('reasoning_effort'), 'Gemini low reasoning-effort optimization is missing');
 
 console.log('AI product autofill checks passed.');
+
+assert(backend.includes("if (!config.isGemini && config.imageDetail) image.detail = config.imageDetail"), 'Gemini image payload must omit unsupported detail hint');
+assert(backend.includes('geminiBadRequest'), 'Gemini HTTP 400 compatibility fallback is missing');

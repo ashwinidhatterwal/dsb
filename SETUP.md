@@ -144,3 +144,7 @@ For another OpenAI-compatible provider, use that provider's base URL and exact m
 ### Gemini/OpenAI-compatible reliability
 
 For Gemini through the OpenAI-compatible endpoint, use `AI_API_TYPE=chat_completions` and `AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`. The backend automatically prefers Gemini JSON-Schema structured output and uses low reasoning effort by default for faster product extraction. Optional `AI_REASONING_EFFORT` values include `low`, `medium`, or `high`; `low` is recommended here. If a provider truncates long bilingual drafts, raise `AI_MAX_OUTPUT_TOKENS` to `1600`.
+
+### Gemini compatibility note
+
+For `AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai` with `AI_API_TYPE=chat_completions`, the backend sends Gemini's documented `image_url.url` shape and omits the OpenAI-specific image `detail` hint. If a Gemini model rejects structured-output parameters with HTTP 400, DSB retries once with a minimal JSON-instruction payload and keeps server-side draft validation enabled.

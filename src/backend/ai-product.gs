@@ -126,7 +126,12 @@ function callAiResponses_(config, prompt, imageUrls) {
 function callAiChatCompletions_(config, prompt, imageUrls) {
   const content = [{ type: 'text', text: prompt + '\n\nReturn exactly one JSON object with keys "draft" and "warnings". No markdown or commentary.' }];
   imageUrls.forEach(function(url) {
-    content.push({ type: 'image_url', image_url: { url: url, detail: config.imageDetail } });
+    // Gemini's documented OpenAI-compatible image format accepts image_url.url.
+    // Do not send OpenAI's optional detail hint to Gemini; some Gemini models
+    // reject it with HTTP 400. Other compatible providers may still use it.
+    const image = { url: url };
+    if (!config.isGemini && config.imageDetail) image.detail = config.imageDetail;
+    content.push({ type: 'image_url', image_url: image });
   });
 
   const payload = {
@@ -163,9 +168,17 @@ function callAiChatCompletions_(config, prompt, imageUrls) {
     data = aiFetchJson_(config, payload);
   } catch (err) {
     const message = String(err && err.message || '');
-    if (structuredUnsupported || !/response_format|json_object|json_schema|schema|unsupported|unknown parameter|invalid parameter/i.test(message)) throw err;
+    const structuredProblem = /response_format|json_object|json_schema|schema|unsupported|unknown parameter|invalid parameter/i.test(message);
+    const geminiBadRequest = config.isGemini && /HTTP\s*400|INVALID_ARGUMENT|bad request/i.test(message);
+    if (structuredUnsupported || (!structuredProblem && !geminiBadRequest)) throw err;
+
+    // Compatibility fallback: retry once with the smallest documented Gemini/OpenAI
+    // payload. This avoids trapping users on a model-specific 400 while keeping the
+    // normal path fast. Prompt instructions still require JSON and cleanAiDraft_
+    // remains the authoritative server-side validator.
     cache.put(key, 'unsupported', 21600);
     delete payload.response_format;
+    if (config.isGemini) delete payload.reasoning_effort;
     data = aiFetchJson_(config, payload);
   }
 
@@ -227,7 +240,15 @@ function aiProviderErrorMessage_(data) {
   if (data.error && typeof data.error.message === 'string') return data.error.message;
   if (typeof data.message === 'string') return data.message;
   if (data.error && typeof data.error === 'string') return data.error;
-  return '';
+  // Some compatibility gateways nest useful validation details. Surface a short,
+  // sanitized representation so the admin sees the real cause instead of HTTP 400.
+  try {
+    const candidate = data.error || data;
+    const text = JSON.stringify(candidate);
+    return text && text !== '{}' ? text.slice(0, 350) : '';
+  } catch (_) {
+    return '';
+  }
 }
 
 function extractChatCompletionText_(data) {
