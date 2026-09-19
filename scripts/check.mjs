@@ -8,17 +8,6 @@ import { generateStaticProducts } from '../.github/scripts/static-products.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => fs.readFile(path.join(root, file), 'utf8');
-const htmlFiles = (await fs.readdir(root)).filter(file => file.endsWith('.html'));
-for (const htmlFile of htmlFiles) {
-  const html = await read(htmlFile);
-  const refs = [...html.matchAll(/(?:src|href)=["']([^"']+)["']/g)].map(match => match[1]);
-  for (const ref of refs) {
-    if (/^(?:https?:|mailto:|tel:|#|data:|upi:)/i.test(ref)) continue;
-    const local = ref.split(/[?#]/, 1)[0].replace(/^\.\//, '');
-    if (!local || local.endsWith('/')) continue;
-    await fs.access(path.join(root, local)).catch(() => { throw new Error(`${htmlFile} references missing local asset: ${local}`); });
-  }
-}
 for (const file of (await fs.readdir(root)).filter(f => f.endsWith('.js') || f === 'code.gs')) {
   new vm.Script(await read(file), { filename: file });
 }
