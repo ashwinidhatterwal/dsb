@@ -75,8 +75,8 @@ function aiProviderConfig_() {
 
   const detailRaw = String(secret_('AI_IMAGE_DETAIL', 'low') || 'low').trim().toLowerCase();
   const imageDetail = /^(low|high|auto)$/.test(detailRaw) ? detailRaw : 'low';
-  const tokenRaw = Number(secret_('AI_MAX_OUTPUT_TOKENS', '1200'));
-  const maxOutputTokens = Number.isFinite(tokenRaw) ? Math.max(700, Math.min(1800, Math.floor(tokenRaw))) : 1200;
+  const tokenRaw = Number(secret_('AI_MAX_OUTPUT_TOKENS', '5000'));
+  const maxOutputTokens = Number.isFinite(tokenRaw) ? Math.max(700, Math.min(5000, Math.floor(tokenRaw))) : 5000;
   const endpoint = aiEndpoint_(baseUrl, apiType);
   const isGemini = aiIsGeminiBaseUrl_(baseUrl);
   const reasoningRaw = String(secret_('AI_REASONING_EFFORT', isGemini ? 'low' : '') || '').trim().toLowerCase();
@@ -196,7 +196,7 @@ function callAiChatCompletions_(config, prompt, imageUrls) {
   const outputText = extractChatCompletionText_(data);
   if (!outputText) throw new Error('AI generation returned no product draft.');
   if (/length|max_tokens|max_output_tokens/i.test(finishReason)) {
-    throw new Error('AI response was cut off before the product draft finished. Increase AI_MAX_OUTPUT_TOKENS (try 1600) or use shorter notes.');
+    throw new Error('AI response was cut off before the product draft finished. Increase AI_MAX_OUTPUT_TOKENS (up to 5000) or use shorter notes.');
   }
   return { outputText: outputText };
 }
@@ -356,7 +356,7 @@ function aiParseStructuredOutput_(value) {
       } catch (_) {}
     }
   }
-  throw new Error('AI generation returned invalid structured data. Try again; if it repeats, set AI_MAX_OUTPUT_TOKENS to 1600.');
+  throw new Error('AI generation returned invalid structured data. Try again; if it repeats, set AI_MAX_OUTPUT_TOKENS up to 5000.');
 }
 
 function aiExtractBalancedJsonObject_(text) {

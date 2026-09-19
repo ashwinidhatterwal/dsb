@@ -61,9 +61,10 @@ assert.equal(context.stripJsonFence_('```json\n{"ok":true}\n```'), '{"ok":true}'
 
 assert(client.includes('aiOptimizedImageUrl') && client.includes('w_1280,c_limit'), 'AI image optimization is missing');
 assert(client.includes('startProgress') && client.includes('elapsed'), 'Live AI elapsed-time progress is missing');
-assert(client.includes('timeoutMs: 65000'), 'AI client timeout should be bounded');
+assert(client.includes('timeoutMs: 120000'), 'AI client timeout should be bounded');
 assert(backend.includes("secret_('AI_IMAGE_DETAIL'"), 'AI image detail is not configurable');
 assert(backend.includes("secret_('AI_MAX_OUTPUT_TOKENS'"), 'AI output token cap is not configurable');
+assert(backend.includes('Math.min(5000'), 'AI output token ceiling should allow up to 5000 tokens'); // 5000-token ceiling
 assert(backend.includes("payload.response_format = { type: 'json_object' }"), 'Non-Gemini chat-completions should retain compact JSON object mode');
 assert(!backend.includes('max_tokens: 2200'), 'Old oversized chat token budget remains');
 

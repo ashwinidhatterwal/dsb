@@ -262,7 +262,7 @@
           existing,
           reasoningEffort
         }),
-        timeoutMs: 65000
+        timeoutMs: 120000
       });
       const data = await response.json();
       if (data?.error) throw new Error(data.error);
@@ -288,7 +288,7 @@
       statusEl.className = 'statusline bad';
       const message = err?.message || String(err);
       if (/timeout|timed out|aborted/i.test(message)) {
-        statusEl.textContent = 'The AI provider took too long (over about 65 seconds). Try again, use a faster model, or reduce reference photos.';
+        statusEl.textContent = 'The AI provider took too long (over about 120 seconds). Try again, use a faster model, or reduce reference photos.';
       } else {
         statusEl.textContent = /unknown action/i.test(message)
           ? 'AI backend is not deployed yet. Update Apps Script with the latest code.gs and redeploy the web app, then reconnect the admin panel.'
