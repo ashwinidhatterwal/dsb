@@ -219,6 +219,12 @@
     return () => { if (timer) clearInterval(timer); timer = null; };
   }
 
+  function selectedReasoningEffort() {
+    const selected = document.querySelector('input[name="aiQuality"]:checked');
+    const effort = String(selected?.value || 'low').toLowerCase();
+    return /^(low|medium|high)$/.test(effort) ? effort : 'low';
+  }
+
   async function generateDraft() {
     if (busy) return;
     const statusEl = $('#aiStatus');
@@ -232,6 +238,7 @@
       const referenceUrls = aiReferenceUrls.slice();
       const notes = $('#aiProductNotes').value.trim();
       const existing = currentProductFacts();
+      const reasoningEffort = selectedReasoningEffort();
       if (!imageUrl && !referenceUrls.length && !notes && !Object.keys(existing).length) {
         throw new Error('Add a product photo, AI-only reference photo, a short note, or fill at least one product field first.');
       }
@@ -241,6 +248,7 @@
       const optimizedReferenceUrls = referenceUrls.map(aiOptimizedImageUrl);
       const imageCount = (aiImageUrl ? 1 : 0) + optimizedReferenceUrls.length;
       stopProgress = startProgress(statusEl, imageCount);
+      statusEl.dataset.quality = reasoningEffort;
 
       const response = await adminFetch(API_URL, {
         method: 'POST',
@@ -251,7 +259,8 @@
           imageUrl: aiImageUrl,
           referenceUrls: optimizedReferenceUrls,
           notes,
-          existing
+          existing,
+          reasoningEffort
         }),
         timeoutMs: 65000
       });

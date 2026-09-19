@@ -86,6 +86,14 @@ assert.equal(context.aiExtractBalancedJsonObject_('x {"a":"} still string","b":{
 assert(backend.includes("type: 'json_schema'") && backend.includes('config.isGemini'), 'Gemini should prefer JSON Schema structured output');
 assert(backend.includes('reasoning_effort'), 'Gemini low reasoning-effort optimization is missing');
 
+
+assert(html.includes('name="aiQuality"') && html.includes('value="low"') && html.includes('value="medium"') && html.includes('value="high"'), 'AI Fast/Better/Best selector is missing');
+assert(client.includes('selectedReasoningEffort') && client.includes('reasoningEffort'), 'AI client does not send per-request reasoning effort');
+assert.equal(context.sanitizeAiReasoningEffort_('LOW'), 'low');
+assert.equal(context.sanitizeAiReasoningEffort_('medium'), 'medium');
+assert.equal(context.sanitizeAiReasoningEffort_('high'), 'high');
+assert.equal(context.sanitizeAiReasoningEffort_('extreme'), '');
+
 console.log('AI product autofill checks passed.');
 
 assert(backend.includes("if (!config.isGemini && config.imageDetail) image.detail = config.imageDetail"), 'Gemini image payload must omit unsupported detail hint');

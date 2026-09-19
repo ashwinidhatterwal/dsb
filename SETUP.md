@@ -152,3 +152,13 @@ For `AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai` with `
 ### Gemini image compatibility
 
 When `AI_BASE_URL` points to `generativelanguage.googleapis.com`, the backend fetches the already-compressed AI image and sends it to Gemini as an inline base64 image. This follows Gemini's OpenAI-compatible vision request format and does not change the product image stored on the storefront.
+
+### Per-product AI quality
+
+The admin AI dialog now has **Fast / Better / Best** quality controls. These override `AI_REASONING_EFFORT` only for that one Generate request:
+
+- **Fast** → `low` (recommended for normal product entry)
+- **Better** → `medium`
+- **Best** → `high` (slowest; use for difficult/ambiguous products)
+
+`AI_REASONING_EFFORT` in Script Properties remains the backend fallback for clients that do not send a per-request selection. No redeploy is needed just to change the Script Property.

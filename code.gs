@@ -1856,6 +1856,8 @@ function getTelegramHealth_() {
 function generateAiProductDraft_(body, actor) {
   const startedAt = Date.now();
   const config = aiProviderConfig_();
+  const requestedReasoningEffort = sanitizeAiReasoningEffort_(body && body.reasoningEffort);
+  if (requestedReasoningEffort) config.reasoningEffort = requestedReasoningEffort;
   rateLimit_('ai-product:' + String(actor && actor.name || 'admin'), 30, 3600);
 
   const imageUrl = String(body.imageUrl || '').trim();
@@ -1889,8 +1891,14 @@ function generateAiProductDraft_(body, actor) {
     model: config.model,
     provider: config.providerLabel,
     apiType: config.apiType,
+    reasoningEffort: config.reasoningEffort || '',
     elapsedMs: Math.max(0, Date.now() - startedAt)
   };
+}
+
+function sanitizeAiReasoningEffort_(value) {
+  const effort = String(value || '').trim().toLowerCase();
+  return /^(low|medium|high)$/.test(effort) ? effort : '';
 }
 
 function aiProviderConfig_() {
