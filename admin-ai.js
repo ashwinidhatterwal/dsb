@@ -238,8 +238,8 @@
 
       // Send lightweight Cloudinary derivatives only to AI. Product/storefront URLs stay untouched.
       const aiImageUrl = aiOptimizedImageUrl(imageUrl);
-      const aiReferenceUrls = referenceUrls.map(aiOptimizedImageUrl);
-      const imageCount = (aiImageUrl ? 1 : 0) + aiReferenceUrls.length;
+      const optimizedReferenceUrls = referenceUrls.map(aiOptimizedImageUrl);
+      const imageCount = (aiImageUrl ? 1 : 0) + optimizedReferenceUrls.length;
       stopProgress = startProgress(statusEl, imageCount);
 
       const response = await adminFetch(API_URL, {
@@ -249,7 +249,7 @@
           key: ADMIN_KEY,
           action: 'aiProductDraft',
           imageUrl: aiImageUrl,
-          referenceUrls: aiReferenceUrls,
+          referenceUrls: optimizedReferenceUrls,
           notes,
           existing
         }),
