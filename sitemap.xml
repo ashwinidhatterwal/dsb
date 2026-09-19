@@ -1256,6 +1256,24 @@
     <image:image><image:loc>https://res.cloudinary.com/malfl6xv/image/upload/v1789815886/ojoitxtpto2f4ad8fxdh.jpg</image:loc></image:image>
   </url>
   <url>
+    <loc>https://suhagbhandar.in/products/p-4453422d30323039.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <image:image><image:loc>https://res.cloudinary.com/malfl6xv/image/upload/v1789816515/vagsiqdvkw3eurgyt5zp.jpg</image:loc></image:image>
+  </url>
+  <url>
+    <loc>https://suhagbhandar.in/products/p-4453422d30323130.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <image:image><image:loc>https://res.cloudinary.com/malfl6xv/image/upload/v1789817993/txuv0yf763vcqo7cvluu.jpg</image:loc></image:image>
+  </url>
+  <url>
+    <loc>https://suhagbhandar.in/products/p-4453422d30323131.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <image:image><image:loc>https://res.cloudinary.com/malfl6xv/image/upload/v1789818393/w1jjng5joov7ukz2mxka.jpg</image:loc></image:image>
+  </url>
+  <url>
     <loc>https://suhagbhandar.in/categories/personal-care-506572736f6e616c2043617265.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -1302,6 +1320,11 @@
   </url>
   <url>
     <loc>https://suhagbhandar.in/categories/home-care-486f6d652043617265.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://suhagbhandar.in/categories/jewellery-4a6577656c6c657279.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1817,6 +1840,21 @@
   </url>
   <url>
     <loc>https://suhagbhandar.in/hi/products/p-4453422d30323038.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://suhagbhandar.in/hi/products/p-4453422d30323039.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://suhagbhandar.in/hi/products/p-4453422d30323130.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://suhagbhandar.in/hi/products/p-4453422d30323131.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
