@@ -64,7 +64,18 @@ assert(client.includes('startProgress') && client.includes('elapsed'), 'Live AI 
 assert(client.includes('timeoutMs: 65000'), 'AI client timeout should be bounded');
 assert(backend.includes("secret_('AI_IMAGE_DETAIL'"), 'AI image detail is not configurable');
 assert(backend.includes("secret_('AI_MAX_OUTPUT_TOKENS'"), 'AI output token cap is not configurable');
-assert(backend.includes("response_format: { type: 'json_object' }"), 'Chat-completions should use compact JSON object mode');
+assert(backend.includes("payload.response_format = { type: 'json_object' }"), 'Non-Gemini chat-completions should retain compact JSON object mode');
 assert(!backend.includes('max_tokens: 2200'), 'Old oversized chat token budget remains');
+
+
+assert.equal(context.aiIsGeminiBaseUrl_('https://generativelanguage.googleapis.com/v1beta/openai'), true);
+assert.equal(context.aiIsGeminiBaseUrl_('https://api.openai.com/v1'), false);
+assert.equal(context.aiParseStructuredOutput_('{"draft":{"name":"A"},"warnings":[]}').draft.name, 'A');
+assert.equal(context.aiParseStructuredOutput_('```json\n{"draft":{"name":"B"},"warnings":[]}\n```').draft.name, 'B');
+assert.equal(context.aiParseStructuredOutput_('Here is the result:\n{"draft":{"name":"C"},"warnings":[]}\nDone.').draft.name, 'C');
+assert.equal(context.aiParseStructuredOutput_('"{\\"draft\\":{\\"name\\":\\"D\\"},\\"warnings\\":[]}"').draft.name, 'D');
+assert.equal(context.aiExtractBalancedJsonObject_('x {"a":"} still string","b":{"c":1}} y'), '{"a":"} still string","b":{"c":1}}');
+assert(backend.includes("type: 'json_schema'") && backend.includes('config.isGemini'), 'Gemini should prefer JSON Schema structured output');
+assert(backend.includes('reasoning_effort'), 'Gemini low reasoning-effort optimization is missing');
 
 console.log('AI product autofill checks passed.');

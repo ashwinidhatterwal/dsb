@@ -33,12 +33,7 @@ function generateAiProductDraft_(body, actor) {
     ? callAiChatCompletions_(config, prompt, imageUrls)
     : callAiResponses_(config, prompt, imageUrls);
 
-  let parsed;
-  try {
-    parsed = JSON.parse(result.outputText);
-  } catch (_) {
-    throw new Error('AI generation returned invalid structured data.');
-  }
+  const parsed = aiParseStructuredOutput_(result.outputText);
 
   const draft = cleanAiDraft_(parsed.draft || {});
   if (!Object.keys(draft).length) throw new Error('AI could not confidently fill any supported product fields. Add a little more information and try again.');
@@ -75,6 +70,9 @@ function aiProviderConfig_() {
   const tokenRaw = Number(secret_('AI_MAX_OUTPUT_TOKENS', '1200'));
   const maxOutputTokens = Number.isFinite(tokenRaw) ? Math.max(700, Math.min(1800, Math.floor(tokenRaw))) : 1200;
   const endpoint = aiEndpoint_(baseUrl, apiType);
+  const isGemini = aiIsGeminiBaseUrl_(baseUrl);
+  const reasoningRaw = String(secret_('AI_REASONING_EFFORT', isGemini ? 'low' : '') || '').trim().toLowerCase();
+  const reasoningEffort = /^(none|minimal|low|medium|high)$/.test(reasoningRaw) ? reasoningRaw : '';
   return {
     apiKey: apiKey,
     baseUrl: baseUrl,
@@ -83,13 +81,19 @@ function aiProviderConfig_() {
     apiType: apiType,
     providerLabel: aiProviderLabel_(baseUrl),
     imageDetail: imageDetail,
-    maxOutputTokens: maxOutputTokens
+    maxOutputTokens: maxOutputTokens,
+    isGemini: isGemini,
+    reasoningEffort: reasoningEffort
   };
 }
 
 function aiEndpoint_(baseUrl, apiType) {
   if (/\/(responses|chat\/completions)$/i.test(baseUrl)) return baseUrl;
   return baseUrl + (apiType === 'chat_completions' ? '/chat/completions' : '/responses');
+}
+
+function aiIsGeminiBaseUrl_(baseUrl) {
+  return /(^|\.)generativelanguage\.googleapis\.com$/i.test(aiProviderLabel_(baseUrl));
 }
 
 function aiProviderLabel_(baseUrl) {
@@ -120,41 +124,63 @@ function callAiResponses_(config, prompt, imageUrls) {
 }
 
 function callAiChatCompletions_(config, prompt, imageUrls) {
-  // JSON Object mode is dramatically smaller and more widely supported than
-  // shipping the full JSON Schema to every OpenAI-compatible provider.
-  // cleanAiDraft_ remains the server-side validator/sanitizer.
-  const content = [{ type: 'text', text: prompt + '\n\nReturn exactly one JSON object with keys "draft" and "warnings". No markdown.' }];
+  const content = [{ type: 'text', text: prompt + '\n\nReturn exactly one JSON object with keys "draft" and "warnings". No markdown or commentary.' }];
   imageUrls.forEach(function(url) {
     content.push({ type: 'image_url', image_url: { url: url, detail: config.imageDetail } });
   });
+
   const payload = {
     model: config.model,
     messages: [{ role: 'user', content: content }],
-    max_tokens: config.maxOutputTokens,
-    response_format: { type: 'json_object' }
+    max_tokens: config.maxOutputTokens
   };
 
+  // Gemini's OpenAI-compatible endpoint supports JSON Schema structured
+  // output. Prefer it there because it prevents malformed/truncated envelopes.
+  // Other compatible providers stay on the smaller json_object mode.
+  const schemaMode = config.isGemini ? 'json-schema' : 'json-object';
+  if (config.isGemini) {
+    payload.response_format = {
+      type: 'json_schema',
+      json_schema: {
+        name: 'dsb_product_draft',
+        strict: true,
+        schema: aiProductSchema_()
+      }
+    };
+    if (config.reasoningEffort) payload.reasoning_effort = config.reasoningEffort;
+  } else {
+    payload.response_format = { type: 'json_object' };
+  }
+
   const cache = CacheService.getScriptCache();
-  const key = aiCapabilityKey_(config, 'json-object');
-  const jsonModeUnsupported = cache.get(key) === 'unsupported';
-  if (jsonModeUnsupported) delete payload.response_format;
+  const key = aiCapabilityKey_(config, schemaMode);
+  const structuredUnsupported = cache.get(key) === 'unsupported';
+  if (structuredUnsupported) delete payload.response_format;
 
   let data;
   try {
     data = aiFetchJson_(config, payload);
   } catch (err) {
-    // A few compatible providers do not implement response_format at all.
-    // Remember that fact so only the first request ever pays the fallback cost.
     const message = String(err && err.message || '');
-    if (jsonModeUnsupported || !/response_format|json_object|unsupported|unknown parameter|invalid parameter/i.test(message)) throw err;
+    if (structuredUnsupported || !/response_format|json_object|json_schema|schema|unsupported|unknown parameter|invalid parameter/i.test(message)) throw err;
     cache.put(key, 'unsupported', 21600);
     delete payload.response_format;
     data = aiFetchJson_(config, payload);
   }
 
+  const finishReason = aiChatFinishReason_(data);
   const outputText = extractChatCompletionText_(data);
   if (!outputText) throw new Error('AI generation returned no product draft.');
-  return { outputText: stripJsonFence_(outputText) };
+  if (/length|max_tokens|max_output_tokens/i.test(finishReason)) {
+    throw new Error('AI response was cut off before the product draft finished. Increase AI_MAX_OUTPUT_TOKENS (try 1600) or use shorter notes.');
+  }
+  return { outputText: outputText };
+}
+
+function aiChatFinishReason_(data) {
+  const choice = data && Array.isArray(data.choices) ? data.choices[0] : null;
+  return String(choice && (choice.finish_reason || choice.finishReason) || '');
 }
 
 function aiCapabilityKey_(config, feature) {
@@ -221,6 +247,71 @@ function extractChatCompletionText_(data) {
 
 function stripJsonFence_(text) {
   return String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+}
+
+
+function aiParseStructuredOutput_(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  let text = String(value || '').replace(/^\uFEFF/, '').trim();
+  if (!text) throw new Error('AI generation returned empty structured data.');
+
+  const candidates = [];
+  function addCandidate(candidate) {
+    candidate = String(candidate || '').trim();
+    if (candidate && candidates.indexOf(candidate) === -1) candidates.push(candidate);
+  }
+  addCandidate(text);
+  addCandidate(stripJsonFence_(text));
+
+  // Some compatible APIs return the JSON object as a JSON-encoded string.
+  try {
+    const decoded = JSON.parse(text);
+    if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) return decoded;
+    if (typeof decoded === 'string') addCandidate(decoded);
+  } catch (_) {}
+
+  // Gemini and some proxies may wrap otherwise valid JSON in a short sentence.
+  // Extract only a balanced top-level object; do not alter the JSON itself.
+  for (let c = 0; c < candidates.length; c++) {
+    const candidate = candidates[c];
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch (_) {}
+    const objectText = aiExtractBalancedJsonObject_(candidate);
+    if (objectText) {
+      try {
+        const parsed = JSON.parse(objectText);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      } catch (_) {}
+    }
+  }
+  throw new Error('AI generation returned invalid structured data. Try again; if it repeats, set AI_MAX_OUTPUT_TOKENS to 1600.');
+}
+
+function aiExtractBalancedJsonObject_(text) {
+  const source = String(text || '');
+  let start = -1, depth = 0, inString = false, escaped = false;
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    if (start < 0) {
+      if (ch === '{') { start = i; depth = 1; }
+      continue;
+    }
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return source.slice(start, i + 1);
+    }
+  }
+  return '';
 }
 
 function sanitizeAiReferenceUrls_(value) {
