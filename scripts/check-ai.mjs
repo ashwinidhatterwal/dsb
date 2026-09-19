@@ -50,12 +50,21 @@ assert.equal(cleaned.extra, undefined);
 
 const refs = Array.from(context.sanitizeAiReferenceUrls_(['http://bad', 'https://a.example/1.jpg', 'https://a.example/1.jpg', 'https://b.example/2.jpg']));
 assert.deepEqual(refs, ['https://a.example/1.jpg', 'https://b.example/2.jpg']);
-assert(context.aiProductPrompt_('note', { price: 240 }, 2).includes('Supplemental reference photos: 2.'));
+assert(context.aiProductPrompt_('note', { price: 240 }, 2).includes('Reference photos: 2.'));
 
 
 assert.equal(context.aiEndpoint_('https://api.example.com/v1', 'responses'), 'https://api.example.com/v1/responses');
 assert.equal(context.aiEndpoint_('https://api.example.com/v1', 'chat_completions'), 'https://api.example.com/v1/chat/completions');
 assert.equal(context.aiEndpoint_('https://api.example.com/v1/chat/completions', 'chat_completions'), 'https://api.example.com/v1/chat/completions');
 assert.equal(context.stripJsonFence_('```json\n{"ok":true}\n```'), '{"ok":true}');
+
+
+assert(client.includes('aiOptimizedImageUrl') && client.includes('w_1280,c_limit'), 'AI image optimization is missing');
+assert(client.includes('startProgress') && client.includes('elapsed'), 'Live AI elapsed-time progress is missing');
+assert(client.includes('timeoutMs: 65000'), 'AI client timeout should be bounded');
+assert(backend.includes("secret_('AI_IMAGE_DETAIL'"), 'AI image detail is not configurable');
+assert(backend.includes("secret_('AI_MAX_OUTPUT_TOKENS'"), 'AI output token cap is not configurable');
+assert(backend.includes("response_format: { type: 'json_object' }"), 'Chat-completions should use compact JSON object mode');
+assert(!backend.includes('max_tokens: 2200'), 'Old oversized chat token budget remains');
 
 console.log('AI product autofill checks passed.');

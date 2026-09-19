@@ -1854,6 +1854,7 @@ function getTelegramHealth_() {
  * Backward compatibility: OPENAI_API_KEY and OPENAI_MODEL are still accepted.
  */
 function generateAiProductDraft_(body, actor) {
+  const startedAt = Date.now();
   const config = aiProviderConfig_();
   rateLimit_('ai-product:' + String(actor && actor.name || 'admin'), 30, 3600);
 
@@ -1892,7 +1893,8 @@ function generateAiProductDraft_(body, actor) {
     warnings: warnings,
     model: config.model,
     provider: config.providerLabel,
-    apiType: config.apiType
+    apiType: config.apiType,
+    elapsedMs: Math.max(0, Date.now() - startedAt)
   };
 }
 
@@ -1900,34 +1902,42 @@ function aiProviderConfig_() {
   const apiKey = String(secret_('AI_API_KEY', secret_('OPENAI_API_KEY', '')) || '').trim();
   if (!apiKey) throw new Error('AI autofill is not configured. Add AI_API_KEY (or OPENAI_API_KEY) in Apps Script > Project settings > Script properties.');
 
-  let baseUrl = String(secret_('AI_BASE_URL', 'https://api.openai.com/v1') || '').trim().replace(/\/+$/, '');
+  const baseUrl = String(secret_('AI_BASE_URL', 'https://api.openai.com/v1') || '').trim().replace(/\/+$/, '');
   if (!/^https:\/\//i.test(baseUrl)) throw new Error('AI_BASE_URL must be an HTTPS URL.');
 
   const model = String(secret_('AI_MODEL', secret_('OPENAI_MODEL', 'gpt-5.6-luna')) || '').trim();
   if (!model) throw new Error('AI_MODEL is empty. Set a model id in Apps Script Script Properties.');
 
   let apiType = String(secret_('AI_API_TYPE', 'responses') || '').trim().toLowerCase().replace(/[ -]+/g, '_');
-  if (apiType === 'chat' || apiType === 'chat_completion' || apiType === 'chatcompletion' || apiType === 'chat_completions') apiType = 'chat_completions';
-  if (apiType === 'response' || apiType === 'responses') apiType = 'responses';
-  if (apiType !== 'responses' && apiType !== 'chat_completions') throw new Error('AI_API_TYPE must be "responses" or "chat_completions".');
+  if (['chat', 'chat_completion', 'chatcompletion', 'chat_completions'].includes(apiType)) apiType = 'chat_completions';
+  if (['response', 'responses'].includes(apiType)) apiType = 'responses';
+  if (!['responses', 'chat_completions'].includes(apiType)) throw new Error('AI_API_TYPE must be "responses" or "chat_completions".');
 
+  const detailRaw = String(secret_('AI_IMAGE_DETAIL', 'low') || 'low').trim().toLowerCase();
+  const imageDetail = /^(low|high|auto)$/.test(detailRaw) ? detailRaw : 'low';
+  const tokenRaw = Number(secret_('AI_MAX_OUTPUT_TOKENS', '1200'));
+  const maxOutputTokens = Number.isFinite(tokenRaw) ? Math.max(700, Math.min(1800, Math.floor(tokenRaw))) : 1200;
   const endpoint = aiEndpoint_(baseUrl, apiType);
-  const providerLabel = aiProviderLabel_(baseUrl);
-  return { apiKey: apiKey, baseUrl: baseUrl, endpoint: endpoint, model: model, apiType: apiType, providerLabel: providerLabel };
+  return {
+    apiKey: apiKey,
+    baseUrl: baseUrl,
+    endpoint: endpoint,
+    model: model,
+    apiType: apiType,
+    providerLabel: aiProviderLabel_(baseUrl),
+    imageDetail: imageDetail,
+    maxOutputTokens: maxOutputTokens
+  };
 }
 
 function aiEndpoint_(baseUrl, apiType) {
-  const lower = baseUrl.toLowerCase();
-  if (/\/(responses|chat\/completions)$/.test(lower)) return baseUrl;
+  if (/\/(responses|chat\/completions)$/i.test(baseUrl)) return baseUrl;
   return baseUrl + (apiType === 'chat_completions' ? '/chat/completions' : '/responses');
 }
 
 function aiProviderLabel_(baseUrl) {
-  try {
-    return String(baseUrl).replace(/^https?:\/\//i, '').split('/')[0].slice(0, 100);
-  } catch (_) {
-    return 'configured provider';
-  }
+  try { return String(baseUrl).replace(/^https?:\/\//i, '').split('/')[0].slice(0, 100); }
+  catch (_) { return 'configured provider'; }
 }
 
 function aiRequestHeaders_(config) {
@@ -1937,21 +1947,14 @@ function aiRequestHeaders_(config) {
 function callAiResponses_(config, prompt, imageUrls) {
   const content = [{ type: 'input_text', text: prompt }];
   imageUrls.forEach(function(url) {
-    content.push({ type: 'input_image', detail: 'auto', image_url: url });
+    content.push({ type: 'input_image', detail: config.imageDetail, image_url: url });
   });
   const payload = {
     model: config.model,
     store: false,
-    max_output_tokens: 2200,
+    max_output_tokens: config.maxOutputTokens,
     input: [{ role: 'user', content: content }],
-    text: {
-      format: {
-        type: 'json_schema',
-        name: 'dsb_product_draft',
-        strict: true,
-        schema: aiProductSchema_()
-      }
-    }
+    text: { format: { type: 'json_schema', name: 'dsb_product_draft', strict: true, schema: aiProductSchema_() } }
   };
   const data = aiFetchJson_(config, payload);
   const outputText = extractOpenAiOutputText_(data);
@@ -1960,33 +1963,34 @@ function callAiResponses_(config, prompt, imageUrls) {
 }
 
 function callAiChatCompletions_(config, prompt, imageUrls) {
-  const content = [{ type: 'text', text: prompt + '\n\nReturn only valid JSON matching the requested product-draft schema; do not wrap it in markdown.' }];
+  // JSON Object mode is dramatically smaller and more widely supported than
+  // shipping the full JSON Schema to every OpenAI-compatible provider.
+  // cleanAiDraft_ remains the server-side validator/sanitizer.
+  const content = [{ type: 'text', text: prompt + '\n\nReturn exactly one JSON object with keys "draft" and "warnings". No markdown.' }];
   imageUrls.forEach(function(url) {
-    content.push({ type: 'image_url', image_url: { url: url, detail: 'auto' } });
+    content.push({ type: 'image_url', image_url: { url: url, detail: config.imageDetail } });
   });
   const payload = {
     model: config.model,
     messages: [{ role: 'user', content: content }],
-    max_tokens: 2200,
-    response_format: {
-      type: 'json_schema',
-      json_schema: {
-        name: 'dsb_product_draft',
-        strict: true,
-        schema: aiProductSchema_()
-      }
-    }
+    max_tokens: config.maxOutputTokens,
+    response_format: { type: 'json_object' }
   };
+
+  const cache = CacheService.getScriptCache();
+  const key = aiCapabilityKey_(config, 'json-object');
+  const jsonModeUnsupported = cache.get(key) === 'unsupported';
+  if (jsonModeUnsupported) delete payload.response_format;
 
   let data;
   try {
     data = aiFetchJson_(config, payload);
   } catch (err) {
-    // Some OpenAI-compatible providers/models support vision but not json_schema.
-    // Retry once with prompt-enforced JSON so changing models usually needs only
-    // Script Property edits rather than code changes.
+    // A few compatible providers do not implement response_format at all.
+    // Remember that fact so only the first request ever pays the fallback cost.
     const message = String(err && err.message || '');
-    if (!/response_format|json_schema|schema|unsupported|unknown parameter|invalid parameter/i.test(message)) throw err;
+    if (jsonModeUnsupported || !/response_format|json_object|unsupported|unknown parameter|invalid parameter/i.test(message)) throw err;
+    cache.put(key, 'unsupported', 21600);
     delete payload.response_format;
     data = aiFetchJson_(config, payload);
   }
@@ -1996,19 +2000,38 @@ function callAiChatCompletions_(config, prompt, imageUrls) {
   return { outputText: stripJsonFence_(outputText) };
 }
 
+function aiCapabilityKey_(config, feature) {
+  return 'ai-cap:' + Utilities.base64EncodeWebSafe(feature + '|' + config.endpoint + '|' + config.model).slice(0, 150);
+}
+
 function aiFetchJson_(config, payload) {
-  const response = UrlFetchApp.fetch(config.endpoint, {
+  const options = {
     method: 'post',
     contentType: 'application/json',
     headers: aiRequestHeaders_(config),
     payload: JSON.stringify(payload),
     muteHttpExceptions: true
-  });
-  const status = response.getResponseCode();
+  };
+  let response;
+  try {
+    response = UrlFetchApp.fetch(config.endpoint, options);
+  } catch (err) {
+    throw new Error('AI provider connection failed: ' + String(err && err.message || err).slice(0, 300));
+  }
+  let status = response.getResponseCode();
+
+  // One short retry only for temporary gateway/service failures. Do not retry
+  // quota, authentication, invalid model, or rate-limit errors.
+  if (status === 502 || status === 503 || status === 504) {
+    Utilities.sleep(300);
+    response = UrlFetchApp.fetch(config.endpoint, options);
+    status = response.getResponseCode();
+  }
+
   const raw = response.getContentText();
   let data;
   try { data = JSON.parse(raw); }
-  catch (_) { throw new Error('AI provider returned an unreadable response.'); }
+  catch (_) { throw new Error('AI provider returned an unreadable response (HTTP ' + status + ').'); }
   if (status < 200 || status >= 300) {
     const message = aiProviderErrorMessage_(data) || ('HTTP ' + status);
     throw new Error('AI generation failed: ' + message.slice(0, 400));
@@ -2070,20 +2093,18 @@ function sanitizeAiExisting_(source) {
 
 function aiProductPrompt_(notes, existing, referenceCount) {
   return [
-    'Create a professional product draft for Dhatterwal Suhag Bhandar (DSB), an Indian ecommerce shop.',
-    'Use all supplied images for visually observable details. When multiple images are provided, treat the first image as the main product photo and any remaining images as supplemental reference photos that help identify the same product from other angles, labels, packaging, or close-up details.',
-    'Use the supplied notes/existing fields as authoritative facts.',
-    'Do not invent commercial facts. Price, MRP, cost price, stock quantity, GTIN, exact sizes, material, pack quantity, or brand must be null unless provided in the notes/existing fields or clearly printed on the product/packaging.',
-    'You may infer a sensible product name, category, subcategory, visual colours/design, English description, Hindi name/description, specifications, tags, and whether size selection is needed only when supported by the supplied facts/image.',
-    'Descriptions must be concise, attractive, factual, and suitable for a real product page. Avoid exaggerated claims, health claims, guarantees, or invented features.',
-    'Hindi should be natural retail Hindi, not a word-for-word machine translation.',
-    'For bangles/chudi/kada sizes, preserve values exactly (for example 2.4, 2.6, 2.8).',
-    'For sizeprices, return a compact string like "2.4=240, 2.6=240" only when different or explicit size prices are supplied.',
-    'If a field is uncertain, return null rather than guessing. Put useful uncertainty notes in warnings.',
-    referenceCount ? 'Supplemental reference photos: ' + referenceCount + '.' : 'Supplemental reference photos: none.',
-    notes ? 'User notes:\n' + notes : 'User notes: none.',
-    Object.keys(existing).length ? 'Existing product fields (preserve these facts unless the notes explicitly correct them):\n' + JSON.stringify(existing) : 'Existing product fields: none.'
-  ].join('\n\n');
+    'Create a factual ecommerce product draft for Dhatterwal Suhag Bhandar (DSB).',
+    'Images: first is main product; remaining are optional references. Infer only visually supported descriptive details.',
+    'User notes and existing fields are authoritative. Never invent price/MRP/cost, stock quantity, GTIN, exact sizes, material, pack quantity, or brand unless supplied or clearly printed.',
+    'You may infer name, category, subcategory, visible design/colour, concise English/Hindi descriptions, specifications, tags, and size-selection need when supported.',
+    'Keep Hindi natural. Preserve bangle sizes exactly (2.4, 2.6, 2.8). sizeprices format: "2.4=240, 2.6=240" only when explicitly supplied.',
+    'Return null for uncertainty. warnings must be short.',
+    'Required draft keys: name,namehindi,category,subcategory,price,mrp,costprice,description,stock,stockqty,brand,material,packsize,specifications,gtin,descriptionhindi,sizes,hasSizes,sizeprices,tags.',
+    'Output JSON shape: {"draft":{...all required keys...},"warnings":[]}.',
+    referenceCount ? 'Reference photos: ' + referenceCount + '.' : 'Reference photos: none.',
+    notes ? 'Notes: ' + notes : 'Notes: none.',
+    Object.keys(existing).length ? 'Existing: ' + JSON.stringify(existing) : 'Existing: none.'
+  ].join('\n');
 }
 
 function aiNullableString_() {

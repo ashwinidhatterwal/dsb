@@ -136,3 +136,7 @@ AI_API_KEY=your-secret-key
 ```
 
 For another OpenAI-compatible provider, use that provider's base URL and exact model id instead.
+
+
+### AI speed tuning (optional)
+`AI_IMAGE_DETAIL=low` is the fast default and is recommended for normal product photos. Use `auto` or `high` only when the model must read tiny packaging text. `AI_MAX_OUTPUT_TOKENS=1200` is the default; increase it only if your provider frequently truncates drafts. The admin sends lightweight Cloudinary derivatives to AI without changing storefront image quality.

@@ -187,9 +187,42 @@
     }
   }
 
+
+  function aiOptimizedImageUrl(url) {
+    const value = String(url || '').trim();
+    if (!value || !/res\.cloudinary\.com/i.test(value) || !/\/upload\//.test(value)) return value;
+    if (/\/upload\/f_auto,q_auto:eco,w_1280,c_limit\//.test(value)) return value;
+    return value.replace('/upload/', '/upload/f_auto,q_auto:eco,w_1280,c_limit/');
+  }
+
+  function startProgress(statusEl, imageCount) {
+    const started = Date.now();
+    const phases = [
+      [0, 'Preparing request'],
+      [2, imageCount ? 'Analysing product photo' : 'Reading product details'],
+      [8, 'Identifying useful product details'],
+      [16, 'Preparing English and Hindi content'],
+      [28, 'Validating structured product fields'],
+      [42, 'Waiting for the AI provider to finish']
+    ];
+    let timer = null;
+
+    const render = () => {
+      const elapsed = Math.max(0, Math.floor((Date.now() - started) / 1000));
+      let phase = phases[0][1];
+      for (const [after, label] of phases) if (elapsed >= after) phase = label;
+      statusEl.className = 'statusline ai-live-progress';
+      statusEl.innerHTML = `<div class="ai-progress-head"><strong>${escapeHtml(phase)}</strong><span>${elapsed}s elapsed</span></div><div class="ai-progress-track" aria-hidden="true"><span></span></div><small>${imageCount ? `${imageCount} image${imageCount === 1 ? '' : 's'} · ` : ''}Generating a concise product draft. This timer is real; the bar is activity, not a fake percentage.</small>`;
+    };
+    render();
+    timer = setInterval(render, 1000);
+    return () => { if (timer) clearInterval(timer); timer = null; };
+  }
+
   async function generateDraft() {
     if (busy) return;
     const statusEl = $('#aiStatus');
+    let stopProgress = null;
     setBusy(true);
     statusEl.className = 'statusline';
     statusEl.textContent = 'Preparing product information…';
@@ -203,28 +236,35 @@
         throw new Error('Add a product photo, AI-only reference photo, a short note, or fill at least one product field first.');
       }
 
-      statusEl.textContent = 'AI is analysing the product and preparing a structured draft…';
+      // Send lightweight Cloudinary derivatives only to AI. Product/storefront URLs stay untouched.
+      const aiImageUrl = aiOptimizedImageUrl(imageUrl);
+      const aiReferenceUrls = referenceUrls.map(aiOptimizedImageUrl);
+      const imageCount = (aiImageUrl ? 1 : 0) + aiReferenceUrls.length;
+      stopProgress = startProgress(statusEl, imageCount);
+
       const response = await adminFetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           key: ADMIN_KEY,
           action: 'aiProductDraft',
-          imageUrl,
-          referenceUrls,
+          imageUrl: aiImageUrl,
+          referenceUrls: aiReferenceUrls,
           notes,
           existing
         }),
-        timeoutMs: 90000
+        timeoutMs: 65000
       });
       const data = await response.json();
       if (data?.error) throw new Error(data.error);
       if (!data?.success || !data.draft || typeof data.draft !== 'object') throw new Error('AI returned an unexpected response.');
       if (!window.DSBAutofill?.openDraft) throw new Error('Autofill review tool is unavailable. Refresh the admin page and retry.');
 
+      stopProgress?.();
+      stopProgress = null;
       const warnings = Array.isArray(data.warnings) ? data.warnings : [];
       statusEl.className = 'statusline good';
-      statusEl.textContent = 'Draft generated. Opening review…';
+      statusEl.textContent = `Draft ready${data.elapsedMs ? ` in ${(data.elapsedMs / 1000).toFixed(1)}s` : ''}. Opening review…`;
       const dialog = $('#aiProductDialog');
       if (typeof dialog?.close === 'function' && dialog.open) dialog.close();
       else dialog?.removeAttribute('open');
@@ -234,12 +274,19 @@
         model: data.model || ''
       });
     } catch (err) {
+      stopProgress?.();
+      stopProgress = null;
       statusEl.className = 'statusline bad';
       const message = err?.message || String(err);
-      statusEl.textContent = /unknown action/i.test(message)
-        ? 'AI backend is not deployed yet. Update Apps Script with the latest code.gs and redeploy the web app, then reconnect the admin panel.'
-        : message;
+      if (/timeout|timed out|aborted/i.test(message)) {
+        statusEl.textContent = 'The AI provider took too long (over about 65 seconds). Try again, use a faster model, or reduce reference photos.';
+      } else {
+        statusEl.textContent = /unknown action/i.test(message)
+          ? 'AI backend is not deployed yet. Update Apps Script with the latest code.gs and redeploy the web app, then reconnect the admin panel.'
+          : message;
+      }
     } finally {
+      stopProgress?.();
       setBusy(false);
     }
   }
