@@ -148,3 +148,7 @@ For Gemini through the OpenAI-compatible endpoint, use `AI_API_TYPE=chat_complet
 ### Gemini compatibility note
 
 For `AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai` with `AI_API_TYPE=chat_completions`, the backend sends Gemini's documented `image_url.url` shape and omits the OpenAI-specific image `detail` hint. If a Gemini model rejects structured-output parameters with HTTP 400, DSB retries once with a minimal JSON-instruction payload and keeps server-side draft validation enabled.
+
+### Gemini image compatibility
+
+When `AI_BASE_URL` points to `generativelanguage.googleapis.com`, the backend fetches the already-compressed AI image and sends it to Gemini as an inline base64 image. This follows Gemini's OpenAI-compatible vision request format and does not change the product image stored on the storefront.

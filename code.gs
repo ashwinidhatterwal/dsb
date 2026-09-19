@@ -1969,10 +1969,12 @@ function callAiResponses_(config, prompt, imageUrls) {
 function callAiChatCompletions_(config, prompt, imageUrls) {
   const content = [{ type: 'text', text: prompt + '\n\nReturn exactly one JSON object with keys "draft" and "warnings". No markdown or commentary.' }];
   imageUrls.forEach(function(url) {
-    // Gemini's documented OpenAI-compatible image format accepts image_url.url.
-    // Do not send OpenAI's optional detail hint to Gemini; some Gemini models
-    // reject it with HTTP 400. Other compatible providers may still use it.
-    const image = { url: url };
+    // Gemini's OpenAI-compatible vision examples use inline data URLs. Convert
+    // the already-compressed AI-only Cloudinary derivative server-side so the
+    // provider receives the documented image transport. Other providers keep
+    // normal HTTPS image URLs and may use the optional detail hint.
+    const imageUrl = config.isGemini ? aiGeminiInlineImageUrl_(url) : url;
+    const image = { url: imageUrl };
     if (!config.isGemini && config.imageDetail) image.detail = config.imageDetail;
     content.push({ type: 'image_url', image_url: image });
   });
@@ -2037,6 +2039,45 @@ function callAiChatCompletions_(config, prompt, imageUrls) {
 function aiChatFinishReason_(data) {
   const choice = data && Array.isArray(data.choices) ? data.choices[0] : null;
   return String(choice && (choice.finish_reason || choice.finishReason) || '');
+}
+
+
+function aiGeminiInlineImageUrl_(url) {
+  const value = String(url || '').trim();
+  if (!value) return value;
+  if (/^data:image\//i.test(value)) return value;
+  if (!/^https:\/\//i.test(value)) throw new Error('Gemini image input must be an HTTPS image URL.');
+
+  let response;
+  try {
+    response = UrlFetchApp.fetch(value, {
+      method: 'get',
+      followRedirects: true,
+      muteHttpExceptions: true,
+      headers: { Accept: 'image/avif,image/webp,image/jpeg,image/png,image/*' }
+    });
+  } catch (err) {
+    throw new Error('Could not prepare the product photo for Gemini: ' + String(err && err.message || err).slice(0, 220));
+  }
+  const status = response.getResponseCode();
+  if (status < 200 || status >= 300) throw new Error('Could not fetch the product photo for Gemini (HTTP ' + status + ').');
+
+  const blob = response.getBlob();
+  const bytes = blob.getBytes();
+  // Keep the Apps Script request comfortably below provider/body limits. The
+  // browser already requests a compressed Cloudinary derivative, so exceeding
+  // this usually indicates an unexpected host response rather than a real image.
+  if (!bytes || !bytes.length) throw new Error('The product photo fetched for Gemini was empty.');
+  if (bytes.length > 5 * 1024 * 1024) throw new Error('The AI product photo is still too large. Re-upload it or use a smaller image.');
+
+  let mime = String(blob.getContentType() || '').toLowerCase();
+  if (!/^image\/(?:jpeg|jpg|png|webp|gif|avif)$/.test(mime)) {
+    // Cloudinary can occasionally omit the content type through a proxy. JPEG
+    // is a safe fallback for transformed storefront photos used by this shop.
+    mime = 'image/jpeg';
+  }
+  if (mime === 'image/jpg') mime = 'image/jpeg';
+  return 'data:' + mime + ';base64,' + Utilities.base64Encode(bytes);
 }
 
 function aiCapabilityKey_(config, feature) {

@@ -67,6 +67,14 @@ assert(backend.includes("secret_('AI_MAX_OUTPUT_TOKENS'"), 'AI output token cap 
 assert(backend.includes("payload.response_format = { type: 'json_object' }"), 'Non-Gemini chat-completions should retain compact JSON object mode');
 assert(!backend.includes('max_tokens: 2200'), 'Old oversized chat token budget remains');
 
+assert(backend.includes('aiGeminiInlineImageUrl_'), 'Gemini image URLs are not converted to inline data URLs');
+const imageContext = { console, Utilities: { base64Encode: bytes => Buffer.from(bytes).toString('base64') }, UrlFetchApp: { fetch: () => ({ getResponseCode: () => 200, getBlob: () => ({ getBytes: () => [1,2,3], getContentType: () => 'image/jpeg' }) }) } };
+vm.createContext(imageContext);
+vm.runInContext(backend, imageContext, { filename: 'ai-product-image-test.gs' });
+assert.equal(imageContext.aiGeminiInlineImageUrl_('data:image/png;base64,AA=='), 'data:image/png;base64,AA==');
+assert.equal(imageContext.aiGeminiInlineImageUrl_('https://example.com/x.jpg'), 'data:image/jpeg;base64,AQID');
+
+
 
 assert.equal(context.aiIsGeminiBaseUrl_('https://generativelanguage.googleapis.com/v1beta/openai'), true);
 assert.equal(context.aiIsGeminiBaseUrl_('https://api.openai.com/v1'), false);
