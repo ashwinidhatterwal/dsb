@@ -11,7 +11,7 @@ for (const pinCode of ['', '12345', '1234567', '012345', '11a001']) {
 assert.equal(backend.normalizeAndValidateOrder_(order).address,'House 12, Main Road\nPIN: 110001');
 assert.equal(backend.normalizeAndValidateOrder_({...order,address:order.address+'\nPIN: 110001'}).address,'House 12, Main Road\nPIN: 110001');
 assert.equal(backend.normalizeAndValidateOrder_({...order,address:'x'.repeat(489)}).code,'validation_failed');
-const frontend = await read('cart-ui.js');
+const frontend = await read('cart-ui-checkout.js');
 const front = vm.createContext({checkoutState:{name:order.customerName,phone:order.phone,address:order.address,pinCode:order.pinCode,paymentMethod:'COD'},CartStore:{getAll:()=>({p:{product:{id:'P'},qty:1}})},$:()=>null});
 vm.runInContext(frontend.slice(frontend.indexOf('function checkoutOrderFromForm()'),frontend.indexOf('async function submitOrder()')),front);
 const payload = front.checkoutOrderFromForm();
