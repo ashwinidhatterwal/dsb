@@ -953,3 +953,105 @@ body.admin-ai-open{overflow:hidden}.admin-ai-drawer{z-index:1001!important;top:4
 .admin-ai-drawer [data-ai-edit]{box-sizing:border-box;width:100%;min-width:0;padding:10px;border:1px solid #50647a;border-radius:8px;background:#101d2e;color:#eef6ff;font:inherit;font-size:14px;line-height:1.5;resize:vertical}.admin-ai-drawer [data-ai-edit]:focus{outline:2px solid #a69bea;outline-offset:1px}
 .admin-ai-draft-photo{display:block;width:100px;height:100px;object-fit:contain;border-radius:12px;background:#fff;margin:10px 0 16px}.admin-ai-proposal-actions{padding:12px 0 4px;background:transparent}
 @media(max-width:700px){.admin-ai-drawer{top:2dvh;right:50%;width:96vw;height:96dvh;max-height:none;border-radius:18px;transform:translate(50%,12px)}.admin-ai-drawer.open{transform:translateX(50%)}.admin-ai-editor-grid{grid-template-columns:1fr}.admin-ai-drawer [data-ai-edit]{font-size:16px}.admin-ai-change{grid-template-columns:1fr}.admin-ai-change label{grid-column:auto}}
+
+/* ===== 2026-09-20 admin recovery + light professional palette =====
+   Keep the AI as a non-blocking workspace drawer. The previous full-screen
+   modal/backdrop override made the dashboard inaccessible. */
+:root{
+  color-scheme:light;
+  --bg:#f4f7fb;
+  --panel:#ffffff;
+  --panel2:#f8fafc;
+  --line:#dce4ec;
+  --text:#1f2937;
+  --muted:#667085;
+  --violet:#2f6f68;
+  --pink:#2f6f68;
+  --cyan:#4d8f87;
+  --green:#2f855a;
+  --orange:#b7791f;
+  --red:#c24156;
+  --shadow:0 14px 34px rgba(31,41,55,.08)
+}
+html,body{background:var(--bg);color:var(--text)}
+body{background:linear-gradient(180deg,#f7f9fc 0,#f3f6fa 100%)}
+label,.hint,.section-sub,.connect-card .sub{color:var(--muted)!important}
+input:not([type=checkbox]),select,textarea{background:#fff;border-color:#cfd8e3;color:#273444}
+input::placeholder,textarea::placeholder{color:#98a2b3}
+input:not([type=checkbox]):focus,select:focus,textarea:focus{border-color:#639b94;box-shadow:0 0 0 3px rgba(77,143,135,.13)}
+input:not([type=checkbox])[readonly]{background:#f6f8fa;color:#667085;border-color:#d8e0e8}
+select option{background:#fff;color:#273444}
+.primary-btn,.install-btn{background:#2f6f68;border-color:#2f6f68;color:#fff;box-shadow:0 5px 14px rgba(47,111,104,.14)}
+.primary-btn:hover:not(:disabled){background:#285f59}
+.ghost-btn,.view-store,.dash-refresh-icon{background:#fff;color:#344054;border-color:#d0d9e3}
+.ghost-btn:hover:not(:disabled),.view-store:hover,.dash-refresh-icon:hover:not(:disabled){background:#f7faf9;border-color:#89aaa6}
+.admin-sidebar{background:#fff;border-right-color:#e0e7ee;box-shadow:4px 0 18px rgba(31,41,55,.035)}
+.admin-brand b{color:#285f59}.admin-brand small,.admin-side-mini{color:#7b8794}
+.admin-brand-mark,.connect-logo{background:#e8f2f0;border:1px solid #cfe3df}
+.admin-nav button{color:#596579}.admin-nav button:hover{color:#263746;background:#f3f7f6}
+.admin-nav button.active{color:#245952;background:#e5f1ef;border-color:#bdd8d3}
+.admin-side-mini{background:#f7f9fb;border-color:#dfe6ed}.admin-side-mini a{color:#315f5a}
+.admin-topbar{background:rgba(255,255,255,.94);border-bottom-color:#e0e7ee;backdrop-filter:blur(12px)}
+.topbar-search{background:#f8fafc;border-color:#d8e0e8}.topbar-search input{color:#344054}.topbar-search kbd{color:#8a94a3!important}
+.live-pill{color:#2f6b4f;background:#eaf6ef;border-color:#b9dec9}.view-store{color:#344054}
+.admin-tabbar{background:rgba(255,255,255,.97);border-top-color:#dde5ec}.admin-tabbar button{color:#687386}.admin-tabbar button.active{color:#245952;background:#e8f2f0}
+.connect-screen{background:#f4f7fb}.connect-card{background:#fff;border-color:#dce4ec;box-shadow:var(--shadow)}.connect-card a{color:#526172!important}
+.admin-section-title,.connect-card h1,.dash-stat-value,.dash-product-value{color:#1f2937}
+.dash-kicker,.dash-panel h3,.dash-panel-value,.dash-link-btn{color:#2f6f68}
+.dash-stat-sub,.dash-product-meta,.dash-bar-value,.dash-bar-label,.dash-recent-copy span,.dash-greeting-sub,.dash-hero p{color:#667085}
+.dash-panel,.dash-stat,.arow,.orow{background:#fff;border-color:#dce4ec;box-shadow:0 4px 14px rgba(31,41,55,.045)}
+.dash-chart{background:#f6f8fa}.dash-product-bar-track,.dash-status-bar{background:#e7edf2}.dash-product-bar-fill,.dash-bar{background:#6d9f99}
+.dash-rank{background:#e7f1ef;color:#315f5a}.dash-alert,.dash-quick{background:#f8fafc;border-color:#dbe3ea;color:#344054}.dash-alert:hover,.dash-quick:hover{background:#f1f6f5;border-color:#a8c7c2}
+.alert-icon,.dash-recent-icon{background:#e8f2f0}.alert-copy small,.dash-legend{color:#667085}.alert-arrow{color:#4d7d77}.dash-legend{background:#f4f6f8}
+
+/* Tables, cards and form surfaces that previously kept hard-coded dark fills. */
+.product-card,.order-card,.archive-card,.form-card,.admin-card,.products-toolbar,.search-row,.pager,.archive-pagination,.autofill-dialog,.ai-product-dialog{background:#fff!important;color:#273444!important;border-color:#dce4ec!important;box-shadow:0 8px 22px rgba(31,41,55,.05)!important}
+
+/* AI launcher + non-blocking side workspace. */
+.admin-ai-backdrop{display:none!important;pointer-events:none!important;background:transparent!important;backdrop-filter:none!important}
+body.admin-ai-open{overflow:auto!important}
+.admin-ai-open-btn{z-index:85;background:#2f6f68;border:1px solid #2f6f68;color:#fff;box-shadow:0 10px 24px rgba(47,111,104,.22)}
+.admin-ai-open-btn:hover{background:#285f59;box-shadow:0 12px 28px rgba(47,111,104,.25)}
+.admin-ai-drawer{
+  z-index:90!important;top:88px!important;right:18px!important;bottom:18px!important;
+  width:min(460px,calc(100vw - 36px))!important;height:auto!important;max-height:none!important;
+  border:1px solid #d8e1e8!important;border-radius:18px!important;background:#fff!important;
+  color:#273444!important;box-shadow:0 18px 50px rgba(31,41,55,.16)!important;
+  opacity:0!important;transform:translateX(24px)!important;pointer-events:none!important
+}
+.admin-ai-drawer.open{opacity:1!important;transform:none!important;pointer-events:auto!important}
+.admin-ai-head{background:#f8fafc!important;border-bottom-color:#dce4ec!important}
+.admin-ai-head-mark{background:#e5f1ef!important;color:#2f6f68!important;border-color:#c8ddd9!important}
+.admin-ai-head-copy strong{color:#263746!important}.admin-ai-head-copy small{color:#7c8797!important}
+.admin-ai-head button{color:#5f6b7a!important}.admin-ai-head button:hover{background:#edf3f2!important;color:#263746!important}
+.admin-ai-head #adminAiNew{background:#edf5f3!important;border-color:#c8ddd9!important;color:#285f59!important}
+.admin-ai-mini-controls,.admin-ai-tools,.admin-ai-context,.admin-ai-compose{background:#fff!important;border-color:#e1e7ed!important}
+.admin-ai-mini-controls select,.admin-ai-tools select{background:#f8fafc!important;border-color:#d5dee7!important;color:#344054!important}
+.admin-ai-tools button{background:#f8fafc!important;border-color:#d5dee7!important;color:#344054!important}
+.admin-ai-context{color:#7a8696!important}.admin-ai-context button{color:#526172!important}.admin-ai-context button:hover{background:#f0f4f4!important}
+.admin-ai-conversation,.admin-ai-messages{background:#fbfcfd!important;scrollbar-color:#c7d2dc transparent!important}
+.admin-ai-welcome{color:#667085!important}.admin-ai-welcome .admin-ai-orb{background:#e8f2f0!important;color:#2f6f68!important;border-color:#cfe0dc!important}.admin-ai-welcome>strong{color:#25313f!important}.admin-ai-welcome>p{color:#667085!important}
+.admin-ai-prompts button{background:#fff!important;border-color:#dce4ec!important;color:#475467!important}.admin-ai-prompts button:hover{background:#f5f9f8!important;border-color:#aac8c4!important}
+.admin-ai-msg.assistant>div{background:#fff!important;color:#344054!important;border:1px solid #dfe6ed!important}.admin-ai-msg.user>div{background:#356f69!important;color:#fff!important;border:1px solid #356f69!important}
+.admin-ai-proposal{background:#f8fafc!important;border-color:#d8e3e1!important;box-shadow:none!important}.admin-ai-proposal-head{color:#2f6f68!important}.admin-ai-proposal-head button{color:#667085!important}.admin-ai-proposal-title{color:#25313f!important}.admin-ai-proposal>p,.admin-ai-proposal>small{color:#667085!important}
+.admin-ai-change,.admin-ai-status-change{background:#fff!important;border:1px solid #dfe6ed!important}.admin-ai-change label,.admin-ai-editor-field{color:#475467!important}.admin-ai-change del{color:#8b96a5!important}.admin-ai-change strong{color:#2d4744!important}.admin-ai-status-change strong{color:#2f6f68!important}
+.admin-ai-proposal-actions{background:transparent!important}.admin-ai-proposal-actions .primary-btn{background:#2f6f68!important;border-color:#2f6f68!important}.admin-ai-proposal-actions .primary-btn.armed{background:#9a6700!important;border-color:#9a6700!important}
+.admin-ai-compose textarea,.admin-ai-drawer [data-ai-edit]{background:#fff!important;border-color:#cfd8e3!important;color:#273444!important}.admin-ai-compose textarea::placeholder{color:#98a2b3!important}.admin-ai-compose textarea:focus,.admin-ai-drawer [data-ai-edit]:focus{outline:2px solid rgba(77,143,135,.16)!important;border-color:#639b94!important}
+.admin-ai-send{background:#2f6f68!important;border-color:#2f6f68!important;color:#fff!important}.admin-ai-compose-meta span,.admin-ai-compose-meta button{color:#7c8797!important}
+.admin-ai-attach{background:#f7faf9!important;border-color:#cedbd8!important;color:#2f6f68!important}.admin-ai-attach:hover{background:#edf5f3!important;border-color:#a8c7c2!important}
+.admin-ai-pending-image{background:#fff!important;border-color:#d5dee7!important}.admin-ai-draft-photo{border:1px solid #dce4ec!important}
+
+/* Give the open drawer its own lane on roomy displays, so forms remain usable. */
+@media(min-width:1180px){
+  body.admin-ai-open .admin-main{padding-right:478px;transition:padding-right .2s ease}
+  body:not(.admin-ai-open) .admin-main{padding-right:0;transition:padding-right .2s ease}
+}
+@media(max-width:1179px) and (min-width:701px){
+  .admin-ai-drawer{top:86px!important;right:14px!important;bottom:14px!important;width:min(430px,calc(100vw - 28px))!important}
+}
+@media(max-width:700px){
+  body.admin-ai-open{overflow:auto!important}
+  .admin-ai-drawer{top:auto!important;right:8px!important;bottom:72px!important;width:calc(100vw - 16px)!important;height:min(72dvh,680px)!important;max-height:min(72dvh,680px)!important;border-radius:18px!important;transform:translateY(24px)!important}
+  .admin-ai-drawer.open{transform:none!important}
+  .admin-ai-compose textarea{font-size:16px!important}
+}

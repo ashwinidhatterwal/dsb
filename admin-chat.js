@@ -61,7 +61,7 @@
     if (!drawer) return;
     drawer.inert = false;
     const backdrop = qs('#adminAiBackdrop');
-    if (backdrop) backdrop.hidden = false;
+    if (backdrop) backdrop.hidden = true;
     drawer.classList.add('open');
     drawer.setAttribute('aria-hidden', 'false');
     document.body.classList.add('admin-ai-open');
