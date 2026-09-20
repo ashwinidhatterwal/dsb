@@ -1,8 +1,9 @@
-/* DSB Admin AI chat — session memory + confirmation-first admin actions. */
+/* Generated from src/admin-ai/*.js. Edit source fragments, not this file. */
 (() => {
   'use strict';
   const STORAGE_KEY = 'dsb_admin_ai_chat_v1';
-  const MAX_MESSAGES = 18;
+  const MAX_MESSAGES = 16;
+  const CONTEXT_MESSAGES = 6;
   let messages = [];
   let busy = false;
   let currentProposal = null;
@@ -14,6 +15,18 @@
 
   const qs = (s, c = document) => c.querySelector(s);
   const qsa = (s, c = document) => Array.from(c.querySelectorAll(s));
+
+
+  function collectAiSessionState() {
+    const activeTab = document.querySelector('.admin-tab.active')?.id?.replace(/^tab-/, '') || '';
+    const productId = typeof editingProductId !== 'undefined' && editingProductId ? String(editingProductId) : '';
+    return {
+      activeTab,
+      editingProductId: productId,
+      mode: productId ? 'edit' : (activeTab === 'add' ? 'create' : ''),
+      proposalType: currentProposal?.type || ''
+    };
+  }
 
   function loadSession() {
     try {
@@ -84,7 +97,7 @@
     const root = qs('#adminAiMessages');
     if (!root) return;
     const context = qs('#adminAiContext');
-    if (context) context.textContent = messages.length ? `${Math.min(14, messages.length)} recent messages in context` : 'Fresh context';
+    if (context) context.textContent = messages.length ? `${Math.min(CONTEXT_MESSAGES, messages.length)} recent messages in context` : 'Fresh context';
     if (!messages.length) {
       root.innerHTML = `<div class="admin-ai-welcome">
         <div class="admin-ai-orb">✦</div>
@@ -428,7 +441,7 @@
       return;
     }
     const epoch = sessionEpoch;
-    const history = messages.slice(-14).map(({ role, text, images }) => ({ role, text, images: images || [] }));
+    const history = messages.slice(-CONTEXT_MESSAGES).map(({ role, text, images }) => ({ role, text, images: images || [] }));
     const productDraft = currentProposal?.type === 'add_product' ? readProposalEdits(currentProposal).patch : null;
     const imageUrls = pendingImageUrls.slice();
     addMessage('user', message, imageUrls);
@@ -452,6 +465,7 @@
           action: 'aiAdminChat',
           message,
           history,
+          sessionState: collectAiSessionState(),
           productDraft,
           requestedModel: qs('#adminAiModel')?.value || '',
           reasoningEffort: qs('#adminAiQuality')?.value || 'low',
@@ -489,6 +503,7 @@
     input.style.height = 'auto';
     input.style.height = Math.min(120, input.scrollHeight) + 'px';
   }
+
 
   document.addEventListener('DOMContentLoaded', () => {
     loadSession();
@@ -553,4 +568,5 @@
       if (e.key === 'Escape' && qs('#adminAiDrawer')?.classList.contains('open')) closeChat();
     });
   });
+
 })();

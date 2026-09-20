@@ -12,6 +12,10 @@
     "src/backend/transactions.gs",
     "src/backend/telegram.gs",
     "src/backend/ai-product.gs",
+    "src/backend/ai-admin-media.gs",
+    "src/backend/ai-admin-context.gs",
+    "src/backend/ai-admin-actions.gs",
+    "src/backend/ai-admin-enrichment.gs",
     "src/backend/ai-admin-chat.gs",
     "src/backend/admin-auth.gs"
   ],
@@ -29,5 +33,12 @@
     "src/styles/storefront-layout.css",
     "src/styles/catalog-and-photo-effects.css",
     "src/styles/home-brand-and-actions.css"
+  ],
+  "adminChat": [
+    "src/admin-ai/core.js",
+    "src/admin-ai/proposal.js",
+    "src/admin-ai/attachments.js",
+    "src/admin-ai/transport.js",
+    "src/admin-ai/events.js"
   ]
 }

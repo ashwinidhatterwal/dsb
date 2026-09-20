@@ -8,10 +8,10 @@ Upload the whole project, including `.github`, `scripts`, and `src`, to the exis
 
 - Edit backend features in `src/backend/`. Each file groups one responsibility.
 - Edit storefront styles in `src/styles/`. `src/build-order.json` explicitly preserves their cascade order.
-- Run `node scripts/build.mjs` to regenerate root `code.gs` and `style.css`.
+- Run `node scripts/build.mjs` to regenerate root `code.gs`, `style.css`, and `admin-chat.js`.
 - Run `node scripts/build.mjs --check` to detect a stale generated file before deployment.
 - Commit both the source and generated output. No npm install is needed for either command.
-- Root frontend JavaScript, `admin-base.css`, and `admin-theme.css` are maintained directly.
+- Most root frontend JavaScript, `admin-base.css`, and `admin-theme.css` are maintained directly. `admin-chat.js` is an exception: edit `src/admin-ai/` and rebuild it.
 
 ## Frontend map
 
@@ -113,10 +113,12 @@ AI generation uses an elapsed-time/indeterminate progress indicator because thir
 
 ### Admin AI copilot
 
-- UI: `admin-chat.js` + the compact drawer markup in `admin.html`; styling is in `admin-theme.css`.
-- Backend: maintain `src/backend/ai-admin-chat.gs`; never edit generated `code.gs` directly.
+- UI: `admin-chat.js` is generated from `src/admin-ai/`: `core.js` (session/drawer), `proposal.js` (review/apply), `attachments.js` (photos), `transport.js` (API requests), and `events.js` (wiring). Edit those source fragments, not generated `admin-chat.js`. Drawer markup remains in `admin.html`; styling is in `admin-theme.css`.
+- Backend: the copilot is split by responsibility: `ai-admin-context.gs` (intent routing, compact DTOs, task-scoped context, session/history limits), `ai-admin-actions.gs` (allowlist validation and target resolution), `ai-admin-media.gs` (reference images), `ai-admin-enrichment.gs` (single/batch/new-product generation), and `ai-admin-chat.gs` (orchestration/provider call). Never edit generated `code.gs` directly.
 - Session memory is browser-only and capped; no chat transcript is persisted to Sheets.
 - AI write suggestions are proposals only. Product add/update, archive/restore and order-status changes are executed through the existing validated admin actions after explicit confirmation.
+- Token/context rule: send only the data profile required by the detected task. Product/content requests receive matched products; inventory receives compact stock rows; order requests receive matched/recent orders; analytics receives dashboard summaries. Do not restore the old all-in-one shop snapshot.
+- Browser chat stores up to 16 messages for UX but sends only the 6 most recent; the backend caps accepted history at 8 turns and 1,200 characters per turn. Durable UI facts (open product/editor mode) travel as compact `sessionState` rather than depending on old prose.
 - Do not add payment verification/refunds, permanent deletes, credentials, or security-setting mutations to the AI action allowlist without a separate higher-assurance approval design.
 
 ### Admin AI catalog batch enrichment

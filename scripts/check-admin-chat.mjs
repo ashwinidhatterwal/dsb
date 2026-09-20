@@ -2,17 +2,20 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const backend = fs.readFileSync('src/backend/ai-admin-chat.gs', 'utf8');
+const order = JSON.parse(fs.readFileSync('src/build-order.json', 'utf8'));
+const aiSources = order.backend.filter(file => file.includes('/ai-admin-'));
+const backend = aiSources.map(file => fs.readFileSync(file, 'utf8')).join('\n');
 const auth = fs.readFileSync('src/backend/admin-auth.gs', 'utf8');
 const html = fs.readFileSync('admin.html', 'utf8');
 const client = fs.readFileSync('admin-chat.js', 'utf8');
-const order = JSON.parse(fs.readFileSync('src/build-order.json', 'utf8'));
 
-assert(order.backend.includes('src/backend/ai-admin-chat.gs'), 'Admin AI backend missing from build order');
+assert(order.backend.includes('src/backend/ai-admin-chat.gs') && order.backend.includes('src/backend/ai-admin-context.gs') && order.backend.includes('src/backend/ai-admin-actions.gs'), 'Modular Admin AI backend missing from build order');
+assert(Array.isArray(order.adminChat) && order.adminChat.length >= 5, 'Admin AI client must be built from maintainable source fragments');
 assert(auth.includes("action === 'aiAdminChat'"), 'Admin AI chat action is not dispatched');
 assert(auth.includes("'aiAdminChat'"), 'Admin AI chat permission missing');
 assert(html.includes('id="adminAiOpen"') && html.includes('id="adminAiDrawer"') && html.includes('admin-chat.js'), 'Admin AI chat UI is not wired');
 assert(client.includes('sessionStorage') && client.includes('dsb_admin_ai_chat_v1'), 'Session chat memory is missing');
+assert(client.includes('CONTEXT_MESSAGES = 6') && client.includes('sessionState: collectAiSessionState()'), 'Compact chat context/session state is missing');
 assert(client.includes("action: 'aiAdminChat'"), 'Admin AI client does not call chat backend');
 assert(client.includes('Confirm apply') && client.includes('applyProposal'), 'Confirmation-first action apply flow is missing');
 assert(client.includes("action: 'update'") && client.includes("action: 'add'") && client.includes("action: 'updateOrderStatus'") && client.includes("action: 'archiveProduct'"), 'Expected admin action adapters are missing');
@@ -27,6 +30,16 @@ const history = Array.from(context.sanitizeAiAdminHistory_([{role:'user',text:' 
 assert.equal(history.length, 3);
 assert.equal(history[0].text, 'hello');
 assert.equal(history[2].role, 'user');
+
+assert.equal(context.classifyAiAdminIntent_('Improve SEO tags for DSB-0042', {}, {}), 'content');
+assert.equal(context.classifyAiAdminIntent_('Show low stock products', {}, {}), 'inventory');
+assert.equal(context.classifyAiAdminIntent_('Summarize revenue today', {}, {}), 'analytics');
+assert.equal(context.classifyAiAdminIntent_('What is happening with order 123?', {}, {}), 'orders');
+assert.equal(context.classifyAiAdminIntent_('Improve this description', {}, {editingProductId:'DSB-0042'}), 'product_edit');
+const longHistory = Array.from({length: 20}, (_, i) => ({role:i % 2 ? 'assistant':'user', text:'x'.repeat(1500)}));
+assert.equal(context.sanitizeAiAdminHistory_(longHistory).length, 8);
+assert.equal(context.sanitizeAiAdminHistory_(longHistory)[0].text.length, 1200);
+
 const patch = context.sanitizeAiAdminProductPatch_({name:' Test ',price:'220',stockqty:3.9,stock:'IN STOCK',evil:'x'});
 assert.equal(patch.name, 'Test');
 assert.equal(patch.price, 220);
