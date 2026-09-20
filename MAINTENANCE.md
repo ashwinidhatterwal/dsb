@@ -118,3 +118,6 @@ AI generation uses an elapsed-time/indeterminate progress indicator because thir
 - Session memory is browser-only and capped; no chat transcript is persisted to Sheets.
 - AI write suggestions are proposals only. Product add/update, archive/restore and order-status changes are executed through the existing validated admin actions after explicit confirmation.
 - Do not add payment verification/refunds, permanent deletes, credentials, or security-setting mutations to the AI action allowlist without a separate higher-assurance approval design.
+
+### Admin AI catalog batch enrichment
+The admin AI recognizes catalog-wide requests such as “batch fix every product that is missing details”. It scans active listings, prepares up to 8 image-aware descriptive enrichment proposals per review batch, and requires explicit review/apply. Batch mode never proposes price, MRP, cost, stock, quantity, product ID, GTIN, sizes or size prices. Use “continue catalog batch” after applying a batch to move to remaining listings recorded in the current chat context.

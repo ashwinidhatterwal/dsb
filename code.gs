@@ -2390,6 +2390,12 @@ function generateAiAdminChat_(body, actor) {
   const report = aiAdminLocalReport_(message);
   if (report) return { success: true, reply: report, proposal: null, model: 'Live catalog', elapsedMs: Date.now() - startedAt };
 
+  // Catalog-wide enrichment is intentionally handled before single-product
+  // enrichment. Commands such as "batch fix every product missing details"
+  // must never fall through to the one-product resolver.
+  const batchEnrichment = maybeGenerateAiAdminBatchEnrichment_(body, message, history, actor);
+  if (batchEnrichment) return Object.assign({ success: true, elapsedMs: Date.now() - startedAt }, batchEnrichment);
+
   const config = aiProviderConfig_();
   const requestedModel = sanitizeAiRequestedModel_(body && body.requestedModel);
   const requestedReasoningEffort = sanitizeAiReasoningEffort_(body && body.reasoningEffort);
@@ -2431,6 +2437,119 @@ function generateAiAdminChat_(body, actor) {
     model: config.model,
     provider: config.providerLabel,
     elapsedMs: Math.max(0, Date.now() - startedAt)
+  };
+}
+
+
+function maybeGenerateAiAdminBatchEnrichment_(body, message, history, actor) {
+  if (!actor || actor.role === 'viewer') return null;
+  const text = String(message || '').trim();
+  const scopeIntent = /\b(batch|bulk|catalog|all products?|every products?|each product|all listings?|every listing)\b/i.test(text);
+  const workIntent = /\b(fix|fill|complete|populate|enrich|improve|repair|finish|missing|incomplete)\b/i.test(text);
+  const detailIntent = /\b(details?|fields?|information|descriptions?|hindi|seo|listing|listings|products?|catalog)\b/i.test(text);
+  const continueIntent = /\b(continue|next batch|keep going|remaining)\b/i.test(text) && /\b(batch|catalog|products?|listings?)\b/i.test(text);
+  if (!(continueIntent || (scopeIntent && workIntent && detailIntent))) return null;
+  if (/\b(set|change|update)\b[\s\S]{0,30}\b(price|mrp|cost|stock|quantity|qty|sku|id|gtin)\b/i.test(text)) return null;
+
+  const products = getAllProducts(true).filter(function(p) { return !isArchived_(p); });
+  const safeFields = ['namehindi','category','subcategory','description','descriptionhindi','brand','material','packsize','specifications','tags'];
+  const meaningful = function(v) {
+    if (Array.isArray(v)) return v.some(function(x) { return String(x || '').trim(); });
+    return String(v === null || v === undefined ? '' : v).trim() !== '';
+  };
+  const completedIds = {};
+  if (continueIntent) {
+    (history || []).forEach(function(turn) {
+      if (turn.role !== 'assistant' || !/^Batch complete:/i.test(String(turn.text || ''))) return;
+      const ids = String(turn.text || '').match(/\bDSB-[A-Z0-9_-]+\b/gi) || [];
+      ids.forEach(function(id) { completedIds[String(id).toUpperCase()] = true; });
+    });
+  }
+  const candidates = products.map(function(p) {
+    const missing = safeFields.filter(function(key) { return !meaningful(p[key]); });
+    return { product:p, missing:missing };
+  }).filter(function(row) {
+    // A name (or a clearly existing category/description) is enough context to
+    // attempt descriptive enrichment. Commercial fields are never inferred.
+    return !completedIds[String(row.product.id || '').toUpperCase()] && row.missing.length && (meaningful(row.product.name) || meaningful(row.product.description) || meaningful(row.product.category));
+  }).sort(function(a,b) { return b.missing.length - a.missing.length || String(a.product.id).localeCompare(String(b.product.id)); });
+
+  if (!candidates.length) {
+    return { reply:'I checked all ' + products.length + ' active products. I could not find missing descriptive fields that can be filled safely from the existing listing data. Commercial facts were not guessed.', proposal:null, model:'Live catalog' };
+  }
+
+  // Image-aware generation is intentionally bounded per review batch. This
+  // keeps Apps Script within execution limits and prevents a broad command from
+  // silently creating hundreds of unreviewed edits. Re-run/continue after apply.
+  const batchSize = 8;
+  const selected = candidates.slice(0, batchSize);
+  const items = [];
+  const warnings = [];
+  selected.forEach(function(row) {
+    const p = row.product;
+    const existing = {
+      name:p.name, namehindi:p.namehindi, category:p.category, subcategory:p.subcategory,
+      price:p.price, mrp:p.mrp, costprice:p.costprice, description:p.description,
+      stock:p.stock, stockqty:p.stockqty, brand:p.brand, material:p.material,
+      packsize:p.packsize, specifications:p.specifications, gtin:p.gtin,
+      descriptionhindi:p.descriptionhindi, sizes:p.sizes, sizeprices:p.sizeprices,
+      tags:p.tags, hasSizes:!!String(p.sizes || '').trim()
+    };
+    const listingRefs = String(p.images || '').split(',').map(function(x){ return x.trim(); }).filter(Boolean).slice(0,2);
+    try {
+      const generated = generateAiProductDraft_({
+        imageUrl: aiAdminOptimizedImageUrl_(String(p.image || '').trim()),
+        referenceUrls: listingRefs.map(aiAdminOptimizedImageUrl_),
+        notes: 'Catalog batch enrichment for ' + p.id + ' — ' + p.name + '. Fill only currently missing descriptive fields when supported by the existing listing or product photos. Missing fields: ' + row.missing.join(', ') + '. Preserve every existing value. Never infer or change price, MRP, cost, stock, stock quantity, product ID, GTIN, exact sizes, size prices, certifications or medical/health claims. If a descriptive fact is uncertain, return null.',
+        existing: existing,
+        requestedModel: body && body.requestedModel,
+        reasoningEffort: body && body.reasoningEffort
+      }, actor);
+      const raw = generated && generated.draft || {};
+      const patch = {};
+      row.missing.forEach(function(key) {
+        let next = raw[key];
+        if (Array.isArray(next)) next = next.join(', ');
+        if (!meaningful(next)) return;
+        patch[key] = next;
+      });
+      const cleaned = sanitizeAiAdminProductPatch_(patch);
+      // Defense in depth: batch mode can only touch descriptive fields.
+      Object.keys(cleaned).forEach(function(key) { if (safeFields.indexOf(key) === -1) delete cleaned[key]; });
+      if (!Object.keys(cleaned).length) return;
+      items.push({
+        targetId:String(p.id || ''),
+        title:String(p.name || p.id || 'Product'),
+        patch:cleaned,
+        current:aiAdminProductView_(p),
+        expectedRevision:productRevision_(p)
+      });
+      if (generated && Array.isArray(generated.warnings) && generated.warnings.length) warnings.push(String(p.id) + ': ' + generated.warnings.join(' '));
+    } catch (err) {
+      warnings.push(String(p.id || 'product') + ': skipped (' + String(err && err.message || err).slice(0,140) + ')');
+    }
+  });
+
+  if (!items.length) {
+    return {
+      reply:'I scanned ' + products.length + ' active products and found ' + candidates.length + ' listings with descriptive gaps, but this review batch did not contain any fields I could fill confidently. Nothing was changed.' + (warnings.length ? '\n' + warnings.slice(0,4).join('\n') : ''),
+      proposal:null,
+      model:'AI catalog batch'
+    };
+  }
+  const remaining = Math.max(0, candidates.length - selected.length);
+  return {
+    reply:'I scanned ' + products.length + ' active products and found ' + candidates.length + ' with potentially fillable descriptive gaps. I prepared ' + items.length + ' product' + (items.length === 1 ? '' : 's') + ' for review in this safe batch. Nothing has been changed yet.' + (remaining ? ' After applying or dismissing this batch, ask “continue catalog batch” for the remaining ' + remaining + '.' : '') + (warnings.length ? ' ' + warnings.length + ' item(s) were skipped or produced warnings.' : ''),
+    proposal:{
+      type:'batch_update_products',
+      title:'Review catalog enrichment batch',
+      description:'Review each product and field. Only missing descriptive information is proposed; commercial values are protected.',
+      items:items,
+      totalCandidates:candidates.length,
+      remainingCount:remaining,
+      warnings:warnings.slice(0,8)
+    },
+    model:'AI catalog batch'
   };
 }
 
