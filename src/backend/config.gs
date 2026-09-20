@@ -11,7 +11,7 @@
  * Sheet tabs expected in this spreadsheet:
  *
  * "Products" — id | name | nameHindi | category | subcategory | price | mrp | costPrice | image | images | description | stock | stockQty | tags
- * "Reviews"  — id | productId | name | rating | comment | date
+ * "Reviews"  — id | productId | name | rating | comment | date | verified | verificationRef
  * "Orders"   — orderId | date | customerName | phone | address | paymentMethod | promoCode | discount | deliveryCharge | codCharge | items | total | status
  * "Promos"   — code | type | value | active | maxUses | onePerCustomer | uses
  * "PromoCustomers" — created automatically when a one-per-customer promo is used;
@@ -69,6 +69,14 @@ const ALLOWED_PAYMENT_METHODS = ['Cash on Delivery', 'UPI'];
 const DELIVERY_FREE_ABOVE = 499; // ₹ — orders at/above this merchandise value get free delivery
 const DELIVERY_CHARGE = 40; // ₹ — delivery fee below the threshold
 const COD_CHARGE = 20; // ₹ — extra fee when Cash on Delivery is selected
+// Customer-facing delivery guidance. Keep more-specific prefixes before broader ones.
+// These are estimates after shop confirmation, not courier guarantees.
+const DELIVERY_ESTIMATE_RULES = [
+  { prefixes: ['335'], minDays: 1, maxDays: 3, label: 'Local / nearby delivery' },
+  { prefixes: ['33'], minDays: 2, maxDays: 4, label: 'Regional delivery' },
+  { prefixes: ['3'], minDays: 3, maxDays: 5, label: 'Extended regional delivery' },
+  { prefixes: ['*'], minDays: 4, maxDays: 7, label: 'Standard delivery' }
+];
 const ALLOWED_ORDER_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Delivered', 'Cancelled', 'Fulfilled'];
 
 // Set the ADMIN_KEY Script Property before deploying — the admin page uses it to

@@ -1,0 +1,13 @@
+/* ---------- Level 1 commerce maturity ---------- */
+.sort-filter-row{align-items:center;flex-wrap:wrap;gap:8px}
+.sort-filter-row select{min-width:150px;flex:1 1 150px}
+.sort-filter-row .instock-toggle{flex:0 0 auto}
+.pd-detail-heading{margin:0 0 10px;font-weight:800;font-size:.86rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted,#6f6672)}
+.commerce-assurance{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
+.assurance-item{display:flex;flex-direction:column;gap:4px;min-width:0;padding:13px 14px;border:1px solid rgba(75,53,71,.12);border-radius:14px;background:rgba(255,255,255,.72);color:inherit;text-decoration:none}
+.assurance-item strong{font-size:.92rem;line-height:1.2}
+.assurance-item span{color:var(--muted,#756d78);font-size:.8rem;line-height:1.42}
+a.assurance-item:hover,a.assurance-item:focus-visible{border-color:rgba(200,17,99,.34);box-shadow:0 8px 24px rgba(63,30,49,.08)}
+.recent-products-section[hidden]{display:none!important}
+.recent-products-section{margin-top:22px}
+@media(max-width:640px){.sort-filter-row select{min-width:calc(50% - 4px);flex-basis:calc(50% - 4px)}.sort-filter-row .instock-toggle{width:100%}.commerce-assurance{grid-template-columns:1fr}}

@@ -128,3 +128,25 @@ The admin AI recognizes catalog-wide requests such as “batch fix every product
 - Successful `Fill or edit this product` generation force-closes its dialog after the form is populated, then leaves the form unsaved for human review.
 - Product IDs in DSB AI assistant replies are rendered as editor links. Link handling lives in `src/admin-ai/core.js`; it resolves the exact active product through the existing admin read service and reuses `fillForm()` rather than creating a second editor path.
 - Keep product navigation deterministic in the client; prompts only need to include the exact product name and ID.
+
+## Level 1 storefront commerce modules
+
+The first commerce-maturity upgrade deliberately keeps customer-facing logic isolated:
+
+- `storefront-commerce.js` owns recently viewed products, similarity ranking, richer product detail rows and shopping-assurance copy.
+- `storefront-analytics.js` is the only analytics API storefront code should call. It does **not** load a third-party tracker; it forwards to `window.plausible` or `window.gtag` only if one is configured later.
+- `src/styles/level1-commerce.css` owns Level 1 storefront styles and is compiled into `style.css` by `scripts/build.mjs`.
+- `app.js` owns catalogue filter state (category, subcategory, price, stock and sorting) and URL persistence.
+
+Do not duplicate recently-viewed storage, recommendation scoring, policy/assurance copy, or analytics-provider calls inside page scripts. Extend these modules instead.
+
+Regression command for this layer: `node scripts/check-level1.mjs`.
+
+
+## Level 2 commerce modules
+
+- `storefront-commerce.js` owns recently viewed, similar-product ranking, product detail rows and the customer delivery-estimate widget.
+- `src/backend/delivery.gs` owns PIN-code delivery estimate rules. Edit `DELIVERY_ESTIMATE_RULES` in `src/backend/config.gs`; estimates are guidance after shop confirmation, not courier guarantees.
+- `src/backend/reviews.gs` owns verified-purchase review validation. A review is marked verified only when order ID + phone match a Delivered/Fulfilled order containing that exact product.
+- `src/styles/level2-commerce.css` owns Level 2 customer-facing styles.
+- Keep review verification identifiers private: the public reviews endpoint exposes only `verified: true/false`, never order ID, phone or the internal verification hash.

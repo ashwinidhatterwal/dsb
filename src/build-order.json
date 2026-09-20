@@ -6,6 +6,7 @@
     "src/backend/cache.gs",
     "src/backend/products.gs",
     "src/backend/reviews.gs",
+    "src/backend/delivery.gs",
     "src/backend/promos.gs",
     "src/backend/orders.gs",
     "src/backend/checkout.gs",
@@ -32,7 +33,9 @@
     "src/styles/checkout-and-controls.css",
     "src/styles/storefront-layout.css",
     "src/styles/catalog-and-photo-effects.css",
-    "src/styles/home-brand-and-actions.css"
+    "src/styles/home-brand-and-actions.css",
+    "src/styles/level1-commerce.css",
+    "src/styles/level2-commerce.css"
   ],
   "adminChat": [
     "src/admin-ai/core.js",

@@ -16,6 +16,9 @@ function doGet(e) {
   if (action === 'checkoutConfig') {
     return jsonResponse(getCheckoutConfig_());
   }
+  if (action === 'deliveryEstimate') {
+    return jsonResponse(getDeliveryEstimate_(e.parameter.pinCode));
+  }
   if (action === 'orders') {
     return jsonResponse({
       error: 'admin reads require POST'

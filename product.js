@@ -56,7 +56,10 @@ async function init() {
     }
     CURRENT_PRODUCT = product;
     renderProduct(product);
+    window.DSBCommerce?.rememberViewed(product);
+    window.DSBAnalytics?.productView(product);
     renderRelated(product);
+    renderRecentlyViewedOnProduct(product);
     loadReviews(product.id);
     reviewsPromise.then(() => {
       if (CURRENT_PRODUCT && CURRENT_PRODUCT.id === product.id) updateVisibleRatings();
@@ -134,15 +137,22 @@ function renderProduct(p) {
         <div class="pd-actions" id="pdActions"></div>
       </div>
       <div class="pd-details">
+        <div class="pd-detail-heading">Product details</div>
         <p class="pd-desc">${escapeHtml(customerProductDescription(p))}</p>
-        <dl class="product-specs">${DSB_SEO.details(p).map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}</dl>
-        <div class="pd-id">Product ID: ${escapeHtml(p.id)}</div>
+        <dl class="product-specs">${(window.DSBCommerce ? window.DSBCommerce.detailRows(p) : DSB_SEO.details(p)).map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}</dl>
       </div>
+      ${window.DSBCommerce ? window.DSBCommerce.assuranceHtml(p) : ''}
+      ${window.DSBCommerce ? window.DSBCommerce.deliveryEstimatorHtml() : ''}
       </div>
     </div>
     <div class="related-section" id="relatedSection" style="display:none;">
-      <div class="section-title"><h2>You may also like</h2></div>
+      <div class="section-title"><h2>Similar products</h2></div>
+      <p class="carousel-hint">More options from the same category, subcategory or price range.</p>
       <div class="related-rail" id="relatedRail"></div>
+    </div>
+    <div class="related-section recent-products-section" id="productRecentSection" hidden>
+      <div class="section-title"><h2>Recently viewed</h2></div>
+      <div class="related-rail" id="productRecentRail"></div>
     </div>
     <div class="reviews-section">
       <div class="section-title"><h2>Ratings & feedback</h2></div>
@@ -161,6 +171,14 @@ function renderProduct(p) {
           <label for="revComment">Your feedback</label>
           <textarea id="revComment" placeholder="How was the product?"></textarea>
         </div>
+        <details class="review-verification">
+          <summary>Verify your purchase <span>optional</span></summary>
+          <p class="hint">If this product was delivered from an online order, enter the order number and the same phone number used at checkout. We never show either publicly.</p>
+          <div class="review-verify-grid">
+            <div class="field"><label for="revOrderId">Order number</label><input type="text" id="revOrderId" autocomplete="off" placeholder="Order number"></div>
+            <div class="field"><label for="revPhone">Order phone</label><input type="tel" id="revPhone" inputmode="tel" autocomplete="tel" placeholder="Phone used at checkout"></div>
+          </div>
+        </details>
         <button class="primary-btn" id="submitReviewBtn" style="width:100%;">Submit feedback</button>
         <div class="checkout-honeypot" aria-hidden="true"><label>Website<input id="reviewWebsite" tabindex="-1" autocomplete="off"></label></div><div class="statusline" id="reviewStatus"></div>
       </div>
@@ -177,6 +195,7 @@ function renderProduct(p) {
   if (sizeBtn) sizeBtn.addEventListener('click', openSizeGuide);
   updateSeoTags(p);
   updateStructuredData(p, []);
+  window.DSBCommerce?.bindDeliveryEstimator();
 }
 
 /* ---------------- Size guide ---------------- */
@@ -426,6 +445,7 @@ function renderPdActions(p) {
       return;
     }
     renderPdActions(p);
+    window.DSBAnalytics?.track('add_to_cart', { productId: p.id, size: selectedSize || '', source: 'product' });
     showToast(`${p.name} added to cart`);
     playAddFlourish($('.pd-slide img'));
   });
@@ -437,6 +457,7 @@ function renderPdActions(p) {
       return;
     }
     renderPdActions(p);
+    window.DSBAnalytics?.track('add_to_cart', { productId: p.id, size: selectedSize || '', source: 'buy-now' });
     playAddFlourish($('.pd-slide img'), {
       openCartAfter: true
     });
@@ -453,17 +474,23 @@ function refreshCurrentProductCard() {
 
 /* ---------------- Related products ---------------- */
 function renderRelated(p) {
-  let related = ALL_PRODUCTS.filter(x => x.id !== p.id && !isOutOfStock(x) && x.category === p.category);
-  if (related.length < 4) {
-    const extra = ALL_PRODUCTS.filter(x => x.id !== p.id && !isOutOfStock(x) && !related.includes(x)).slice(0, 8 - related.length);
-    related = related.concat(extra);
-  }
-  related = related.slice(0, 8);
+  const related = window.DSBCommerce
+    ? window.DSBCommerce.similarProducts(p, ALL_PRODUCTS, 8)
+    : ALL_PRODUCTS.filter(x => x.id !== p.id && !isOutOfStock(x) && x.category === p.category).slice(0, 8);
   if (!related.length) return;
   $('#relatedSection').style.display = 'block';
   const rail = $('#relatedRail');
   rail.innerHTML = related.map(cardHtml).join('');
   bindCardEvents($$('.card', rail), related);
+}
+function renderRecentlyViewedOnProduct(p) {
+  const section = $('#productRecentSection');
+  const rail = $('#productRecentRail');
+  if (!section || !rail || !window.DSBCommerce) return;
+  const recent = window.DSBCommerce.recentProducts(ALL_PRODUCTS, p.id, 8).filter(x => !isOutOfStock(x));
+  section.hidden = !recent.length;
+  rail.innerHTML = recent.map(cardHtml).join('');
+  if (recent.length) bindCardEvents($$('.card', rail), recent);
 }
 
 /* ---------------- Reviews ---------------- */
@@ -518,6 +545,7 @@ function renderReviews(reviews) {
     <div class="review-item">
       <div class="review-item-head">
         <span class="review-name">${escapeHtml(r.name || 'Anonymous')}</span>
+        ${r.verified ? '<span class="verified-review-badge" title="Matched to a delivered order for this product">✓ Verified purchase</span>' : ''}
         ${renderStars(r.rating)}
       </div>
       <div class="review-date">${formatDateTime(r.date)}</div>
@@ -531,6 +559,12 @@ async function submitReview() {
   const comment = $('#revComment').value.trim();
   if (!name || comment.length < 2 || comment.length > 600) {
     status_(statusEl, 'Please enter your name and feedback of 2–600 characters.', false);
+    return;
+  }
+  const verificationOrder = $('#revOrderId')?.value.trim() || '';
+  const verificationPhone = $('#revPhone')?.value.trim() || '';
+  if (!!verificationOrder !== !!verificationPhone) {
+    status_(statusEl, 'Enter both order number and order phone to verify the purchase, or leave both blank.', false);
     return;
   }
   if (!CONFIG.SHEET_API_URL) {
@@ -553,15 +587,20 @@ async function submitReview() {
           name,
           rating: selectedRating,
           comment,
+          orderId: verificationOrder,
+          phone: verificationPhone,
           clientId: reviewClientId(),
           website: $('#reviewWebsite')?.value || ''
         }
       })
     });
     if (data.error) throw new Error(data.error);
-    status_(statusEl, 'Thanks for your feedback!', true);
+    status_(statusEl, data.verified ? 'Thanks! Your review is marked as a verified purchase.' : 'Thanks for your feedback!', true);
+    window.DSBAnalytics?.track('review_submitted', { productId: CURRENT_PRODUCT.id, verified: !!data.verified });
     $('#revName').value = '';
     $('#revComment').value = '';
+    if ($('#revOrderId')) $('#revOrderId').value = '';
+    if ($('#revPhone')) $('#revPhone').value = '';
     selectedRating = 5;
     renderStarInput();
     invalidateReviewCache(CURRENT_PRODUCT.id);

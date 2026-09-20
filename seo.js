@@ -59,7 +59,12 @@ const DSB_SEO = (() => {
       ...(val(p, 'material') ? {
         material: p.material
       } : {}),
-      additionalProperty: details(p).filter(([k]) => ['Pack / quantity', 'Product details'].includes(k)).map(([name, value]) => ({
+      ...(val(p, 'category') ? { category: [val(p, 'category'), val(p, 'subcategory')].filter(Boolean).join(' > ') } : {}),
+      additionalProperty: [
+        ...(val(p, 'subcategory') ? [['Type', val(p, 'subcategory')]] : []),
+        ...(pricing(p).sizes.length ? [['Available sizes', pricing(p).sizes.join(', ')]] : []),
+        ...details(p).filter(([k]) => ['Pack / quantity', 'Product details'].includes(k))
+      ].map(([name, value]) => ({
         '@type': 'PropertyValue',
         name,
         value

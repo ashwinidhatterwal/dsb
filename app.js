@@ -8,6 +8,7 @@ let activeCategory = 'All';
 let activeSubcategory = 'All';
 let searchQuery = '';
 let sortMode = 'recommended';
+let priceFilter = 'all';
 const RECOMMENDED_ORDER = new Map();
 let inStockOnly = false;
 
@@ -100,14 +101,18 @@ function applyCategoryFromUrl() {
   activeCategory = 'All';
   activeSubcategory = 'All';
   sortMode = ['recommended', 'newest', 'price-asc', 'price-desc'].includes(params.get('sort')) ? params.get('sort') : 'recommended';
+  priceFilter = ['all', 'under-100', '100-249', '250-499', '500-plus'].includes(params.get('price')) ? params.get('price') : 'all';
   inStockOnly = params.get('stock') === '1';
   $('#sortSelect').value = sortMode;
+  $('#priceFilter').value = priceFilter;
   $('#inStockOnly').checked = inStockOnly;
   const cat = params.get('category');
+  const sub = params.get('subcategory');
   if (cat && CATEGORIES[cat]) {
     activeCategory = cat;
-    const sub = params.get('subcategory');
     if (sub && CATEGORIES[cat].has(sub)) activeSubcategory = sub;
+  } else if (sub && ALL_PRODUCTS.some(p => p.subcategory === sub)) {
+    activeSubcategory = sub;
   }
 }
 function buildCategoryMap() {
@@ -129,6 +134,7 @@ function renderCategoryRail() {
     renderCategoryRail();
     renderGrid();
     renderHomeCarousels();
+    window.DSBAnalytics?.track('category_view', { category: activeCategory });
     // Keep the shopper's scroll position stable when switching categories.
     // The previous auto-scroll made category browsing feel broken on mobile.
   }));
@@ -136,19 +142,29 @@ function renderCategoryRail() {
 }
 function renderSubchipRow() {
   const row = $('#subchipRow');
+  const select = $('#subcategorySelect');
+  const availableSubs = activeCategory === 'All'
+    ? Array.from(new Set(ALL_PRODUCTS.map(p => p.subcategory).filter(Boolean))).sort()
+    : Array.from(CATEGORIES[activeCategory] || []).sort();
+  if (select) {
+    select.innerHTML = ['All', ...availableSubs].map(s => `<option value="${escapeHtml(s)}">${s === 'All' ? 'All subcategories' : escapeHtml(s)}</option>`).join('');
+    if (!availableSubs.includes(activeSubcategory)) activeSubcategory = 'All';
+    select.value = activeSubcategory;
+  }
   if (activeCategory === 'All' || !CATEGORIES[activeCategory]) {
     row.innerHTML = '';
     row.style.display = 'none';
     return;
   }
   row.style.display = 'flex';
-  const subs = ['All', ...Array.from(CATEGORIES[activeCategory]).sort()];
+  const subs = ['All', ...availableSubs];
   row.innerHTML = subs.map(s => `<button class="subchip ${s === activeSubcategory ? 'active' : ''}" data-sub="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('');
   $$('.subchip', row).forEach(btn => btn.addEventListener('click', () => {
     activeSubcategory = btn.dataset.sub;
     renderSubchipRow();
     renderGrid();
     renderHomeCarousels();
+    window.DSBAnalytics?.track('filter_change', { filter: 'subcategory', value: activeSubcategory });
   }));
 }
 
@@ -213,6 +229,11 @@ function filteredProducts() {
     if (activeCategory !== 'All' && p.category !== activeCategory) return false;
     if (activeSubcategory !== 'All' && p.subcategory !== activeSubcategory) return false;
     if (inStockOnly && isOutOfStock(p)) return false;
+    const price = Number(DSB_SEO.pricing(p).min || 0);
+    if (priceFilter === 'under-100' && price >= 100) return false;
+    if (priceFilter === '100-249' && (price < 100 || price >= 250)) return false;
+    if (priceFilter === '250-499' && (price < 250 || price >= 500)) return false;
+    if (priceFilter === '500-plus' && price < 500) return false;
     return true;
   });
 }
@@ -263,6 +284,7 @@ function renderSearchResults() {
   }
   const list = ALL_PRODUCTS.filter(p => p.searchText.includes(q) && (!inStockOnly || !isOutOfStock(p)));
   searchPager.reset(list, `No results for "${escapeHtml(searchQuery)}"`);
+  window.DSBAnalytics?.track('search', { query: searchQuery.slice(0, 80), results: list.length });
 }
 
 /* ---------------- Wire up static UI ---------------- */
@@ -305,13 +327,27 @@ function initUI() {
   $('#cartOverlay').addEventListener('click', e => {
     if (e.target.id === 'cartOverlay') closeCart();
   });
+  $('#subcategorySelect').addEventListener('change', e => {
+    activeSubcategory = e.target.value;
+    renderSubchipRow();
+    renderGrid();
+    renderHomeCarousels();
+    window.DSBAnalytics?.track('filter_change', { filter: 'subcategory', value: activeSubcategory });
+  });
+  $('#priceFilter').addEventListener('change', e => {
+    priceFilter = e.target.value;
+    renderGrid();
+    window.DSBAnalytics?.track('filter_change', { filter: 'price', value: priceFilter });
+  });
   $('#sortSelect').addEventListener('change', e => {
     sortMode = e.target.value;
     renderGrid();
+    window.DSBAnalytics?.track('filter_change', { filter: 'sort', value: sortMode });
   });
   $('#inStockOnly').addEventListener('change', e => {
     inStockOnly = e.target.checked;
     renderGrid();
+    window.DSBAnalytics?.track('filter_change', { filter: 'stock', value: inStockOnly ? 'in-stock' : 'all' });
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
@@ -345,16 +381,30 @@ document.addEventListener('dsb:languagechange', () => {
   if ($('#searchOverlay')?.classList.contains('open')) renderSearchResults();
   renderHomeCarousels();
 });
+function renderRecentlyViewed() {
+  const section = $('#recentlyViewedSection');
+  const rail = $('#recentlyViewedRail');
+  if (!section || !rail || !window.DSBCommerce) return;
+  const recent = window.DSBCommerce.recentProducts(ALL_PRODUCTS, '', 8).filter(p => !isOutOfStock(p));
+  section.hidden = !recent.length;
+  if (!recent.length) {
+    rail.innerHTML = '';
+    return;
+  }
+  rail.innerHTML = recent.map(p => cardHtml(p, { homeCard: true })).join('');
+  bindCardEvents($$('.card', rail), recent);
+}
 document.addEventListener('DOMContentLoaded', () => {
   initUI();
   initWhatsAppFloat();
-  loadProductsForShop();
+  loadProductsForShop().then(renderRecentlyViewed);
 });
 function saveBrowseUrl() {
   const url = new URL(location.href);
   for (const [key, value] of Object.entries({
     category: activeCategory === 'All' ? '' : activeCategory,
     subcategory: activeSubcategory === 'All' ? '' : activeSubcategory,
+    price: priceFilter === 'all' ? '' : priceFilter,
     sort: sortMode === 'recommended' ? '' : sortMode,
     stock: inStockOnly ? '1' : ''
   })) {
@@ -389,6 +439,7 @@ document.addEventListener('dsb:catalogchange', () => {
   renderCategoryRail();
   renderGrid(true);
   renderHomeCarousels();
+  renderRecentlyViewed();
   initScrollReveal();
   if ($('#searchOverlay')?.classList.contains('open')) renderSearchResults();
   if (id && !document.body.classList.contains('modal-open')) requestAnimationFrame(() => {

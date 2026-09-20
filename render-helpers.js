@@ -127,6 +127,7 @@ function bindCardActionEvents(card, product, list) {
       return;
     }
     updateCardActionsUI(card, product, list);
+    window.DSBAnalytics?.track('add_to_cart', { productId: product.id, source: 'card-buy-now' });
     playAddFlourish($('img', card), {
       openCartAfter: true
     });
@@ -197,6 +198,7 @@ function openQuickSizePicker(product, card, list) {
       }
       closeQuickSizePicker();
       updateCardActionsUI(card, product, list);
+      window.DSBAnalytics?.track('add_to_cart', { productId: product.id, size, source: 'quick-size' });
       showToast(`${product.name} • ${size} added to cart`);
       playAddFlourish($('img', card));
     });
@@ -219,6 +221,7 @@ async function handleCardAdd(product, delta, card, list) {
   } else await CartStore.addSafe(product, delta);
   updateCardActionsUI(card, product, list);
   if (delta > 0) {
+    window.DSBAnalytics?.track('add_to_cart', { productId: product.id, source: 'card' });
     showToast(`${product.name} added to cart`);
     playAddFlourish($('img', card));
   } else {

@@ -165,6 +165,7 @@ async function confirmCheckout() {
 }
 async function confirmCheckoutUnlocked() {
   if (checkoutBusy || !checkoutQuote) return;
+  window.DSBAnalytics?.track('begin_checkout', { items: checkoutQuote.order.itemsDetail.length, payment: checkoutQuote.order.paymentMethod });
   // An uncertain previous attempt must be checked before any new request ID is created.
   try {
     pendingCheckout = JSON.parse(localStorage.getItem(PENDING_CHECKOUT_KEY) || 'null');
@@ -316,6 +317,7 @@ async function completeCheckout(data, order) {
     sessionStorage.removeItem(CATALOG_SESSION_KEY);
   } catch (_) {}
   updateCartBadge();
+  window.DSBAnalytics?.track('order_completed', { total: Number(data.correctedTotal || 0), items: order.itemsDetail.length, payment: order.paymentMethod });
   renderOrderConfirmation(lastReceipt);
   if (typeof updateVisibleCartActions === 'function') updateVisibleCartActions();
   if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard();

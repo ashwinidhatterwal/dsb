@@ -11,7 +11,7 @@
  * Sheet tabs expected in this spreadsheet:
  *
  * "Products" — id | name | nameHindi | category | subcategory | price | mrp | costPrice | image | images | description | stock | stockQty | tags
- * "Reviews"  — id | productId | name | rating | comment | date
+ * "Reviews"  — id | productId | name | rating | comment | date | verified | verificationRef
  * "Orders"   — orderId | date | customerName | phone | address | paymentMethod | promoCode | discount | deliveryCharge | codCharge | items | total | status
  * "Promos"   — code | type | value | active | maxUses | onePerCustomer | uses
  * "PromoCustomers" — created automatically when a one-per-customer promo is used;
@@ -69,6 +69,14 @@ const ALLOWED_PAYMENT_METHODS = ['Cash on Delivery', 'UPI'];
 const DELIVERY_FREE_ABOVE = 499; // ₹ — orders at/above this merchandise value get free delivery
 const DELIVERY_CHARGE = 40; // ₹ — delivery fee below the threshold
 const COD_CHARGE = 20; // ₹ — extra fee when Cash on Delivery is selected
+// Customer-facing delivery guidance. Keep more-specific prefixes before broader ones.
+// These are estimates after shop confirmation, not courier guarantees.
+const DELIVERY_ESTIMATE_RULES = [
+  { prefixes: ['335'], minDays: 1, maxDays: 3, label: 'Local / nearby delivery' },
+  { prefixes: ['33'], minDays: 2, maxDays: 4, label: 'Regional delivery' },
+  { prefixes: ['3'], minDays: 3, maxDays: 5, label: 'Extended regional delivery' },
+  { prefixes: ['*'], minDays: 4, maxDays: 7, label: 'Standard delivery' }
+];
 const ALLOWED_ORDER_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Delivered', 'Cancelled', 'Fulfilled'];
 
 // Set the ADMIN_KEY Script Property before deploying — the admin page uses it to
@@ -101,6 +109,9 @@ function doGet(e) {
   }
   if (action === 'checkoutConfig') {
     return jsonResponse(getCheckoutConfig_());
+  }
+  if (action === 'deliveryEstimate') {
+    return jsonResponse(getDeliveryEstimate_(e.parameter.pinCode));
   }
   if (action === 'orders') {
     return jsonResponse({
@@ -599,10 +610,21 @@ function getCachedReviews_() {
   cachePutJson_(REVIEWS_CACHE_KEY, rows, REVIEWS_CACHE_TTL);
   return rows;
 }
+function publicReview_(r) {
+  return {
+    id: r.id,
+    productid: r.productid,
+    name: r.name,
+    rating: r.rating,
+    comment: r.comment,
+    date: r.date,
+    verified: String(r.verified || '').toLowerCase() === 'yes' || r.verified === true
+  };
+}
 function getReviews(productId) {
   const rows = getCachedReviews_();
-  if (!productId) return rows;
-  return rows.filter(r => String(r.productid) === String(productId));
+  const selected = productId ? rows.filter(r => String(r.productid) === String(productId)) : rows;
+  return selected.map(publicReview_);
 }
 function getReviewSummaries() {
   const cached = cacheGetJson_(REVIEW_SUMMARY_CACHE_KEY);
@@ -631,6 +653,18 @@ function getReviewSummaries() {
   cachePutJson_(REVIEW_SUMMARY_CACHE_KEY, summary, REVIEW_SUMMARY_CACHE_TTL);
   return summary;
 }
+function reviewPurchaseVerification_(productId, orderId, phone) {
+  const oid = String(orderId || '').trim();
+  const rawPhone = String(phone || '').trim();
+  if (!oid && !rawPhone) return { verified: false, ref: '' };
+  if (!oid || !rawPhone) throw new Error('Enter both order number and phone number to verify the purchase, or leave both blank.');
+  const tracked = trackOrder(oid, rawPhone);
+  if (!tracked || !tracked.success) throw new Error('Could not verify that order. Check the order number and phone, or submit without verification.');
+  if (COMPLETED_STATUSES.indexOf(String(tracked.status || '')) < 0) throw new Error('A review can be marked Verified purchase after the order is delivered.');
+  const bought = getOrderItemQuantities_(oid).some(item => String(item.id) === String(productId) && safeNumber_(item.qty, 0) > 0);
+  if (!bought) throw new Error('That order does not contain this product.');
+  return { verified: true, ref: hashText_(oid + '|' + productId) };
+}
 function addReview(r) {
   return withWriteLock_(function () {
     const productId = String(r.productId || r.productid || '').trim();
@@ -639,28 +673,65 @@ function addReview(r) {
       rating = Number(r.rating);
     if (r.website || !name || name.length > 60 || comment.length < 2 || comment.length > 600 || !Number.isInteger(rating) || rating < 1 || rating > 5) throw new Error('Please enter a name, a rating from 1 to 5 and feedback of 2–600 characters.');
     if (!findRow_(getSheet_(PRODUCTS_SHEET), 'id', productId)) throw new Error('Product not found.');
+    const purchase = reviewPurchaseVerification_(productId, r.orderId, r.phone);
     const identity = hashText_(productId + '|' + name.toLowerCase() + '|' + comment.toLowerCase());
     rateLimit_('review-duplicate:' + identity, 1, 86400);
     rateLimit_('review-client:' + String(r.clientId || identity).slice(0, 80), 3, 3600);
     rateLimit_('reviews-global', 60, 3600);
-    const sheet = getSheet_(REVIEWS_SHEET),
-      heads = headers_(sheet);
+    const existing = getCachedReviews_();
+    if (purchase.verified && existing.some(row => String(row.verificationref || '') === purchase.ref)) throw new Error('This purchase has already been reviewed.');
+    const sheet = getSheet_(REVIEWS_SHEET);
+    ensureColumn_(sheet, 'verified');
+    ensureColumn_(sheet, 'verificationRef');
+    const heads = headers_(sheet);
     const record = {
       id: 'REV-' + Utilities.getUuid().slice(0, 8),
       productid: productId,
       name: name,
       rating: rating,
       comment: comment,
-      date: new Date()
+      date: new Date(),
+      verified: purchase.verified ? 'Yes' : '',
+      verificationref: purchase.ref
     };
     sheet.appendRow(heads.map(h => sheetText_(record[h] !== undefined ? record[h] : '')));
     cacheRemove_(REVIEW_SUMMARY_CACHE_KEY);
     cacheRemove_(REVIEWS_CACHE_KEY);
     return {
       success: true,
-      id: record.id
+      id: record.id,
+      verified: purchase.verified
     };
   });
+}
+
+
+/* delivery-estimate responsibilities. Bundled into code.gs by scripts/build.mjs.
+   Estimates are intentionally configurable shop guidance, not courier guarantees. */
+function getDeliveryEstimate_(pinCode) {
+  const pin = String(pinCode || '').trim();
+  if (!/^[1-9][0-9]{5}$/.test(pin)) return {
+    success: false,
+    code: 'invalid_pincode',
+    error: 'Enter a valid 6-digit PIN code.'
+  };
+  let rule = null;
+  for (let i = 0; i < DELIVERY_ESTIMATE_RULES.length; i++) {
+    const candidate = DELIVERY_ESTIMATE_RULES[i];
+    if ((candidate.prefixes || []).some(prefix => prefix === '*' || pin.indexOf(String(prefix)) === 0)) {
+      rule = candidate;
+      break;
+    }
+  }
+  rule = rule || { minDays: 4, maxDays: 7, label: 'Standard delivery' };
+  return {
+    success: true,
+    pinCode: pin,
+    minDays: Math.max(1, Math.floor(safeNumber_(rule.minDays, 4))),
+    maxDays: Math.max(1, Math.floor(safeNumber_(rule.maxDays, 7))),
+    label: String(rule.label || 'Estimated delivery'),
+    note: 'Estimate starts after shop confirmation and is not a courier guarantee.'
+  };
 }
 
 /* promos responsibilities. Bundled into code.gs by scripts/build.mjs. */

@@ -1,0 +1,10 @@
+
+/* Level 2 commerce maturity: verified reviews + delivery estimate. */
+.delivery-estimator{margin-top:14px;padding:14px;border:1px solid var(--line,#e7ddd4);border-radius:16px;background:var(--surface,#fff);display:grid;gap:10px}
+.delivery-estimator>div:first-child{display:grid;gap:3px}.delivery-estimator>div:first-child span{font-size:.84rem;color:var(--muted,#6e625a)}
+.delivery-estimator-form{display:flex;gap:8px}.delivery-estimator-form input{min-width:0;flex:1;border:1px solid var(--line,#ddd);border-radius:11px;padding:10px 12px;background:transparent;color:inherit}
+.delivery-estimator-result{min-height:0;font-size:.84rem;color:var(--muted,#6e625a);display:grid;gap:2px}.delivery-estimator-result strong{color:inherit}.delivery-estimator-result.ok{color:#25663c}.delivery-estimator-result.err{color:#a23a35}
+.review-verification{margin:12px 0;border:1px solid var(--line,#e7ddd4);border-radius:13px;padding:0 12px}.review-verification summary{cursor:pointer;padding:11px 0;font-weight:700}.review-verification summary span{font-weight:500;color:var(--muted,#6e625a);font-size:.8rem}.review-verification[open] summary{border-bottom:1px solid var(--line,#e7ddd4);margin-bottom:10px}
+.review-verify-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.verified-review-badge{display:inline-flex;align-items:center;white-space:nowrap;border-radius:999px;padding:3px 7px;font-size:.72rem;font-weight:700;background:#edf8ef;color:#23643a;border:1px solid #cde8d3}
+.review-item-head{gap:7px;flex-wrap:wrap}
+@media(max-width:560px){.review-verify-grid{grid-template-columns:1fr}.delivery-estimator-form{align-items:stretch}.delivery-estimator-form .ghost-btn{padding-inline:14px}}

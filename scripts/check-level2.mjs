@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const read = f => fs.readFileSync(f, 'utf8');
+const home = read('index.html');
+const product = read('product.js');
+const commerce = read('storefront-commerce.js');
+const reviews = read('src/backend/reviews.gs');
+const http = read('src/backend/http.gs');
+const config = read('src/backend/config.gs');
+const seo = read('seo.js');
+const style = read('src/styles/level2-commerce.css');
+
+assert(home.indexOf('recentlyViewedSection') < home.indexOf('popularPicksSection'), 'Recently viewed should appear before home recommendation rails');
+assert(commerce.includes('deliveryEstimatorHtml') && commerce.includes('bindDeliveryEstimator'), 'Delivery estimator module missing');
+assert(http.includes("action === 'deliveryEstimate'"), 'Public delivery-estimate route missing');
+assert(config.includes('DELIVERY_ESTIMATE_RULES'), 'Delivery estimate rules missing');
+assert(product.includes('revOrderId') && product.includes('revPhone'), 'Optional review verification inputs missing');
+assert(product.includes('Verified purchase'), 'Verified review badge missing');
+assert(reviews.includes('reviewPurchaseVerification_') && reviews.includes('COMPLETED_STATUSES'), 'Delivered-order verification logic missing');
+assert(reviews.includes("ensureColumn_(sheet, 'verified')") && reviews.includes("ensureColumn_(sheet, 'verificationRef')"), 'Review schema migration missing');
+assert(reviews.includes('publicReview_') && !/return selected;/.test(reviews), 'Reviews must use public sanitizer');
+assert(commerce.includes('candidate.material') && commerce.includes('sourceWords') && commerce.includes('sourceSizes'), 'Level 2 recommendation signals missing');
+assert(seo.includes("category: [val(p, 'category'), val(p, 'subcategory')]") && seo.includes("['Available sizes'"), 'Richer product structured metadata missing');
+assert(style.includes('.verified-review-badge') && style.includes('.delivery-estimator'), 'Level 2 styles missing');
+console.log('PASS: Level 2 placement, verified reviews, delivery estimates, richer metadata and recommendation signals.');
