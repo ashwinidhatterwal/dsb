@@ -7,7 +7,8 @@ let CATEGORIES = {}; // { category: Set(subcategories) }
 let activeCategory = 'All';
 let activeSubcategory = 'All';
 let searchQuery = '';
-let sortMode = 'featured';
+let sortMode = 'recommended';
+const RECOMMENDED_ORDER = new Map();
 let inStockOnly = false;
 
 /* ---------------- Data loading ---------------- */
@@ -98,7 +99,7 @@ function applyCategoryFromUrl() {
   const params = new URLSearchParams(location.search);
   activeCategory = 'All';
   activeSubcategory = 'All';
-  sortMode = ['newest', 'price-asc', 'price-desc'].includes(params.get('sort')) ? params.get('sort') : 'featured';
+  sortMode = ['recommended', 'newest', 'price-asc', 'price-desc'].includes(params.get('sort')) ? params.get('sort') : 'recommended';
   inStockOnly = params.get('stock') === '1';
   $('#sortSelect').value = sortMode;
   $('#inStockOnly').checked = inStockOnly;
@@ -216,10 +217,17 @@ function filteredProducts() {
   });
 }
 
-// "Featured" keeps the sheet's natural order untouched. "Newest" reverses
-// it, since new rows are added at the bottom of the sheet. Price sorts are
-// a plain numeric sort — none of this mutates ALL_PRODUCTS itself.
+// "Recommended" randomises the catalogue so the oldest/first uploaded
+// products do not always dominate the top of the shop. The random order is
+// stable for this page visit, so language changes and filtering do not make
+// products jump around. Other explicit sorts remain deterministic.
+function recommendedScore(product) {
+  const key = String(product?.id || '');
+  if (!RECOMMENDED_ORDER.has(key)) RECOMMENDED_ORDER.set(key, Math.random());
+  return RECOMMENDED_ORDER.get(key);
+}
 function sortProducts(list) {
+  if (sortMode === 'recommended') return list.slice().sort((a, b) => recommendedScore(a) - recommendedScore(b));
   if (sortMode === 'newest') return list.slice().reverse();
   if (sortMode === 'price-asc' || sortMode === 'price-desc') return list.map(p => ({
     p,
@@ -347,7 +355,7 @@ function saveBrowseUrl() {
   for (const [key, value] of Object.entries({
     category: activeCategory === 'All' ? '' : activeCategory,
     subcategory: activeSubcategory === 'All' ? '' : activeSubcategory,
-    sort: sortMode === 'featured' ? '' : sortMode,
+    sort: sortMode === 'recommended' ? '' : sortMode,
     stock: inStockOnly ? '1' : ''
   })) {
     if (value) url.searchParams.set(key, value);else url.searchParams.delete(key);

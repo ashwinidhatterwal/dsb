@@ -9,6 +9,10 @@ let galleryResizeObserver = null;
 function getProductIdFromUrl() {
   return document.documentElement.dataset.productId || new URLSearchParams(location.search).get('id') || '';
 }
+function customerProductDescription(p) {
+  const hindi = window.DSB_I18N && DSB_I18N.isHindi();
+  return (hindi ? p.descriptionhindi : p.description) || p.description || p.descriptionhindi || 'Contact the shop for product details before ordering.';
+}
 
 // renderStars() lives in utils.js now — shared with product cards.
 
@@ -130,7 +134,7 @@ function renderProduct(p) {
         <div class="pd-actions" id="pdActions"></div>
       </div>
       <div class="pd-details">
-        <p class="pd-desc">${escapeHtml((window.DSB_PAGE_LANGUAGE === 'hi' ? p.descriptionhindi : p.description) || 'Contact the shop for product details before ordering.')}</p>
+        <p class="pd-desc">${escapeHtml(customerProductDescription(p))}</p>
         <dl class="product-specs">${DSB_SEO.details(p).map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}</dl>
         <div class="pd-id">Product ID: ${escapeHtml(p.id)}</div>
       </div>
@@ -303,8 +307,9 @@ function updateSeoTags(p) {
       return p.image;
     }
   })();
-  const title = `${window.DSB_PAGE_LANGUAGE === 'hi' ? p.nameHindi || p.name : DSB_SEO.name(p)} — ${CONFIG.SHOP_NAME}`;
-  const productDescription = window.DSB_PAGE_LANGUAGE === 'hi' ? p.descriptionhindi || p.description : DSB_SEO.description(p);
+  const hindi = window.DSB_I18N && DSB_I18N.isHindi();
+  const title = `${hindi ? p.nameHindi || p.name : DSB_SEO.name(p)} — ${CONFIG.SHOP_NAME}`;
+  const productDescription = hindi ? p.descriptionhindi || p.description : DSB_SEO.description(p);
   const desc = productDescription && productDescription.trim() ? productDescription.trim().slice(0, 170) : `Buy ${p.name} from ${CONFIG.SHOP_NAME} in Goluwala, Rajasthan — order online.`;
   document.title = title;
   const setMeta = (id, attr, value) => {
@@ -579,6 +584,9 @@ document.addEventListener('dsb:languagechange', () => {
   document.querySelectorAll('.pd-slide img').forEach(img => img.alt = customerProductName(p));
   const secondary = $('#pdRoot .pd-title-hindi');
   if (secondary) secondary.textContent = customerProductSecondaryName(p);
+  const description = $('#pdRoot .pd-desc');
+  if (description) description.textContent = customerProductDescription(p);
+  updateSeoTags(p);
   document.querySelectorAll('.card[data-id]').forEach(card => {
     const product = PRODUCT_BY_ID.get(card.dataset.id);
     if (!product) return;
@@ -603,6 +611,8 @@ document.addEventListener('dsb:catalogchange', () => {
   renderPdActions(updated);
   const title = $('#pdRoot .pd-title');
   if (title) title.textContent = customerProductName(updated);
+  const description = $('#pdRoot .pd-desc');
+  if (description) description.textContent = customerProductDescription(updated);
   const stock = $('#pdRoot .pd-stock');
   if (stock) {
     stock.textContent = isOutOfStock(updated) ? 'Out of stock' : lowStockLabel(updated) || 'In stock';

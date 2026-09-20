@@ -77,6 +77,7 @@
     'New arrivals': 'नए उत्पाद',
     '✨ New arrivals': '✨ नए उत्पाद',
     'Shop the bazaar': 'दुकान से खरीदें',
+    'Recommended': 'अनुशंसित',
     'Featured': 'विशेष',
     'Newest first': 'नए पहले',
     'Price: Low to High': 'कीमत: कम से अधिक',
