@@ -150,3 +150,11 @@ Regression command for this layer: `node scripts/check-level1.mjs`.
 - `src/backend/reviews.gs` owns verified-purchase review validation. A review is marked verified only when order ID + phone match a Delivered/Fulfilled order containing that exact product.
 - `src/styles/level2-commerce.css` owns Level 2 customer-facing styles.
 - Keep review verification identifiers private: the public reviews endpoint exposes only `verified: true/false`, never order ID, phone or the internal verification hash.
+
+## Level 3 order lifecycle
+- Customer tracking uses POST for order ID + phone so phone numbers are not placed in the URL.
+- `src/backend/order-requests.gs` owns cancellation/support requests and auto-creates the private `OrderRequests` sheet.
+- Customer cancellation is a request, never a direct status or stock mutation. Admin remains the authority.
+- `ORDER_STATUS_TRANSITIONS` in `src/backend/config.gs` is the single backend lifecycle definition. Keep client options in `admin.js` aligned and covered by `scripts/check-level3.mjs`.
+- Order request rows contain a phone hash only; raw customer phone is not duplicated into the requests sheet.
+- Do not bypass `updateOrderStatus()` when changing status because cancellation/reactivation also adjusts tracked inventory transactionally.

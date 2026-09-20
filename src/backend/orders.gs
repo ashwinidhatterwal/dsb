@@ -8,8 +8,11 @@ function getAllOrders(options) {
   list.sort((a, b) => options.sort === 'name-asc' ? String(a.customername || '').localeCompare(String(b.customername || '')) : (options.sort === 'date-asc' ? 1 : -1) * (new Date(a.date) - new Date(b.date)));
   const pageSize = 40,
     page = Math.max(0, Math.min(Math.floor(Number(options.page) || 0), Math.max(0, Math.ceil(list.length / pageSize) - 1)));
+  const pageOrders = list.slice(page * pageSize, (page + 1) * pageSize);
+  const requests = orderRequestsByOrderIds_(pageOrders.map(o => o.orderid));
+  pageOrders.forEach(o => { o.requests = requests[String(o.orderid || '')] || []; });
   return {
-    orders: list.slice(page * pageSize, (page + 1) * pageSize),
+    orders: pageOrders,
     page,
     pageSize,
     total: list.length,
@@ -144,6 +147,8 @@ function updateOrderStatus(orderId, statusValue) {
       col = heads.indexOf('status') + 1;
     if (!row || col < 1) throw new Error('Order not found or status column missing.');
     const oldStatus = String(sheet.getRange(row, col).getValue() || 'Pending');
+    const allowedNext = ORDER_STATUS_TRANSITIONS[oldStatus] || [];
+    if (oldStatus !== status && allowedNext.indexOf(status) < 0) throw new Error('Invalid status transition from ' + oldStatus + ' to ' + status + '.');
     if (oldStatus === status) return {
       success: true,
       orderId: id,
@@ -274,55 +279,24 @@ function recordOrderItemsFromValidated_(orderId, date, items) {
   if (rows.length) sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, heads.length).setValues(rows);
 }
 function trackOrder(orderId, phone) {
-  if (!orderId || !phone) return {
-    success: false,
-    error: 'missing orderId or phone'
-  };
+  if (!orderId || !phone) return { success: false, error: 'missing orderId or phone' };
   rateLimit_('tracking:' + hashText_(String(orderId)), 30, 600);
-  const sheet = getSheet_(ORDERS_SHEET);
-  const heads = headers_(sheet);
-  const idCol = heads.indexOf('orderid');
-  if (idCol === -1) return {
-    success: false,
-    error: 'not_found'
-  };
-  if (sheet.getLastRow() < 2) return {
-    success: false,
-    error: 'not_found'
-  };
-
-  // Look up one exact order row instead of loading the entire Orders sheet.
-  const hit = sheet.getRange(2, idCol + 1, sheet.getLastRow() - 1, 1).createTextFinder(String(orderId).trim()).matchEntireCell(true).findNext();
-  if (!hit) return {
-    success: false,
-    error: 'not_found'
-  };
-  const row = sheet.getRange(hit.getRow(), 1, 1, sheet.getLastColumn()).getValues()[0];
-  const order = {};
-  heads.forEach((h, i) => order[h] = row[i]);
-  const trackingPhone = value => {
-    const digits = cleanPhone_(value);
-    return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits.length === 11 && digits.startsWith('0') ? digits.slice(1) : digits;
-  };
-  const storedPhone = trackingPhone(order.phone);
-  const givenPhone = trackingPhone(phone);
-  if (!storedPhone || !givenPhone || storedPhone !== givenPhone) {
-    return {
-      success: false,
-      error: 'not_found'
-    };
-  }
+  const order = findCustomerOrder_(orderId, phone);
+  if (!order) return { success: false, error: 'not_found' };
+  const status = String(order.status || 'Pending');
   return {
     success: true,
     orderId: order.orderid,
     date: order.date,
-    status: order.status || 'Pending',
+    status: status,
     items: order.items,
     total: order.total,
     discount: order.discount,
     deliveryCharge: order.deliverycharge || 0,
     codCharge: order.codcharge || 0,
-    paymentMethod: order.paymentmethod
+    paymentMethod: order.paymentmethod,
+    canRequestCancellation: canCustomerRequestCancellation_(status),
+    requests: publicOrderRequests_(order.orderid)
   };
 }
 function verifyPayment_(body, actor) {

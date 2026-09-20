@@ -97,7 +97,7 @@ function aiAdminChatPrompt_(message, history, context, actor, imageCount) {
       'Use confirmed product facts only for SEO, Hindi copy, tags or social captions. Content-only requests normally use action.type="none" unless the user explicitly asks to update the listing.'
     ],
     orders: [
-      'For an order status change use action.type="update_order_status" with an exact order id and one of Pending, Confirmed, Packed, Shipped, Delivered, Fulfilled, Cancelled.',
+      'For an order status change use action.type="update_order_status" with an exact order id. Follow the lifecycle only: Pending→Confirmed→Packed→Shipped→Delivered→Fulfilled; cancellation is allowed only from Pending, Confirmed or Packed; Cancelled may reopen to Pending.',
       'Do not infer payment status or claim delivery/payment facts not present in context.'
     ],
     inventory: ['For inventory/restocking analysis, state missing data and never invent reorder quantities.'],

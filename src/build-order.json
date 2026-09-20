@@ -9,6 +9,7 @@
     "src/backend/delivery.gs",
     "src/backend/promos.gs",
     "src/backend/orders.gs",
+    "src/backend/order-requests.gs",
     "src/backend/checkout.gs",
     "src/backend/transactions.gs",
     "src/backend/telegram.gs",
@@ -35,7 +36,8 @@
     "src/styles/catalog-and-photo-effects.css",
     "src/styles/home-brand-and-actions.css",
     "src/styles/level1-commerce.css",
-    "src/styles/level2-commerce.css"
+    "src/styles/level2-commerce.css",
+    "src/styles/level3-commerce.css"
   ],
   "adminChat": [
     "src/admin-ai/core.js",

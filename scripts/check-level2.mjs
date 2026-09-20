@@ -12,6 +12,8 @@ const style = read('src/styles/level2-commerce.css');
 
 assert(home.indexOf('recentlyViewedSection') < home.indexOf('popularPicksSection'), 'Recently viewed should appear before home recommendation rails');
 assert(commerce.includes('deliveryEstimatorHtml') && commerce.includes('bindDeliveryEstimator'), 'Delivery estimator module missing');
+assert(commerce.includes("typeof CONFIG === 'undefined'") && !commerce.includes('window.CONFIG?.SHEET_API_URL'), 'Delivery estimator must bind against lexical CONFIG, not window.CONFIG');
+assert(commerce.includes("event.preventDefault()"), 'Delivery estimator submit must prevent navigation');
 assert(http.includes("action === 'deliveryEstimate'"), 'Public delivery-estimate route missing');
 assert(config.includes('DELIVERY_ESTIMATE_RULES'), 'Delivery estimate rules missing');
 assert(product.includes('revOrderId') && product.includes('revPhone'), 'Optional review verification inputs missing');

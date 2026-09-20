@@ -86,7 +86,7 @@
     const form = document.getElementById('deliveryEstimatorForm');
     const input = document.getElementById('deliveryEstimatorPin');
     const result = document.getElementById('deliveryEstimatorResult');
-    if (!form || !input || !result || !window.CONFIG?.SHEET_API_URL) return;
+    if (!form || !input || !result || typeof CONFIG === 'undefined' || !CONFIG.SHEET_API_URL) return;
     form.addEventListener('submit', async event => {
       event.preventDefault();
       const pin = String(input.value || '').replace(/\D/g, '').slice(0,6);

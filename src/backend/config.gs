@@ -48,6 +48,7 @@ const REVIEWS_SHEET = 'Reviews';
 const ORDERS_SHEET = 'Orders';
 const PROMOS_SHEET = 'Promos';
 const ORDER_ITEMS_SHEET = 'OrderItems';
+const ORDER_REQUESTS_SHEET = 'OrderRequests';
 const PROMO_CUSTOMERS_SHEET = 'PromoCustomers';
 const CATALOG_CACHE_KEY = 'dsb.catalog.v4';
 const JOURNAL_SHEET = 'OrderTransactions';
@@ -78,6 +79,16 @@ const DELIVERY_ESTIMATE_RULES = [
   { prefixes: ['*'], minDays: 4, maxDays: 7, label: 'Standard delivery' }
 ];
 const ALLOWED_ORDER_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Delivered', 'Cancelled', 'Fulfilled'];
+const ORDER_REQUEST_TYPES = ['cancel', 'support'];
+const ORDER_STATUS_TRANSITIONS = {
+  Pending: ['Confirmed', 'Cancelled'],
+  Confirmed: ['Packed', 'Cancelled'],
+  Packed: ['Shipped', 'Cancelled'],
+  Shipped: ['Delivered'],
+  Delivered: ['Fulfilled'],
+  Fulfilled: [],
+  Cancelled: ['Pending']
+};
 
 // Set the ADMIN_KEY Script Property before deploying — the admin page uses it to
 // add/delete products and manage orders. Anyone who has this key can edit

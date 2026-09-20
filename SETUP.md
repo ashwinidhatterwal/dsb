@@ -206,3 +206,7 @@ Review cards now contain editable fields. New-product cards expose all supported
 The chat opens as a centered dialog with a dimmed, blurred backdrop, distinct purple/navy colours, keyboard focus cycling and a mobile layout. Clicking outside or pressing Escape closes it without clearing the conversation.
 
 Automated tests cover original photo URL assignment, full generated fields, photo follow-ups, reset isolation, unknown price, and manual edits reaching the save request. Live provider quality and browser visual appearance still require deployment verification.
+
+
+## Level 3 order requests
+No manual sheet creation is required. The first customer support/cancellation request creates an `OrderRequests` tab automatically. Keep it private with the rest of the backend spreadsheet. Customer tracking verifies Order ID + checkout phone and public requests never directly change order status or stock.

@@ -20,7 +20,7 @@ function authenticateAdmin_(key) {
 }
 function assertAdminPermission_(actor, action) {
   const reads = ['adminSession', 'adminProducts', 'adminProductsPage', 'adminOrders', 'adminDashboard', 'aiAdminChat'];
-  const edits = ['add', 'update', 'archiveProduct', 'updateOrderStatus', 'aiProductDraft'];
+  const edits = ['add', 'update', 'archiveProduct', 'updateOrderStatus', 'resolveOrderRequest', 'aiProductDraft'];
   if (actor.role === 'admin' || reads.includes(action) || actor.role === 'editor' && edits.includes(action)) return;
   throw new Error('Your staff role does not allow this action.');
 }
@@ -28,7 +28,7 @@ function dispatchAdmin_(body, actor) {
   const action = String(body.action || '');
   assertAdminPermission_(actor, action);
   if (action === 'adminSession') return {
-    version: 14,
+    version: 15,
     name: actor.name,
     role: actor.role
   };
@@ -46,6 +46,7 @@ function dispatchAdmin_(body, actor) {
   if (action === 'delete') return deleteProduct(body.id, body.expected_revision);
   if (action === 'archiveProduct') return archiveProduct_(body);
   if (action === 'updateOrderStatus') return updateOrderStatus(body.orderId, body.status);
+  if (action === 'resolveOrderRequest') return resolveOrderRequest_(body, actor);
   if (action === 'verifyPayment') return verifyPayment_(body, actor);
   throw new Error('unknown action');
 }

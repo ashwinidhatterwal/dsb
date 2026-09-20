@@ -71,6 +71,36 @@ let orderPage = 0,
   orderResponse = null,
   orderRequestSequence = 0;
 const ORDER_PAGE_SIZE = 40;
+const ORDER_STATUS_TRANSITIONS_CLIENT = {
+  Pending: ['Confirmed', 'Cancelled'],
+  Confirmed: ['Packed', 'Cancelled'],
+  Packed: ['Shipped', 'Cancelled'],
+  Shipped: ['Delivered'],
+  Delivered: ['Fulfilled'],
+  Fulfilled: [],
+  Cancelled: ['Pending']
+};
+function orderStatusOptions(current) {
+  const statuses = [current, ...(ORDER_STATUS_TRANSITIONS_CLIENT[current] || [])];
+  return [...new Set(statuses)].map(st => `<option value="${escapeHtml(st)}" ${st === current ? 'selected' : ''}>${escapeHtml(st)}</option>`).join('');
+}
+function orderRequestsHtml(order) {
+  const requests = Array.isArray(order.requests) ? order.requests : [];
+  if (!requests.length) return '';
+  return requests.map(r => {
+    const pending = String(r.status || 'Pending') === 'Pending';
+    const typeLabel = r.type === 'cancel' ? 'Cancellation request' : 'Support request';
+    return `<div class="order-request-box" data-request-id="${escapeHtml(r.requestId)}"><strong>${escapeHtml(typeLabel)} · ${escapeHtml(r.status || 'Pending')}</strong>${r.message ? `<div>${escapeHtml(r.message)}</div>` : ''}<div class="hint">${escapeHtml(formatDateTime(r.date))}${r.resolutionNote ? ' · ' + escapeHtml(r.resolutionNote) : ''}</div>${pending ? `<div class="order-request-actions"><input type="text" maxlength="500" placeholder="Resolution note (optional)" aria-label="Resolution note"><button type="button" class="ghost-btn" data-request-action="Resolved">Mark handled</button><button type="button" class="ghost-btn" data-request-action="Rejected">Reject</button></div>` : ''}</div>`;
+  }).join('');
+}
+async function resolveOrderRequest(requestId, requestStatus, resolutionNote) {
+  const res = await adminFetch(API_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({key:ADMIN_KEY, action:'resolveOrderRequest', requestId, requestStatus, resolutionNote})});
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  showToast('Customer request updated');
+  await loadOrders();
+}
+
 async function adminFetch(url, options = {}) {
   const {
     timeoutMs = 30000,
@@ -129,7 +159,7 @@ async function loadProducts(refreshRelated = true) {
   try {
     if (!ADMIN_PROFILE) {
       const profile = await adminRead('adminSession');
-      if (profile.version !== 14) throw new Error('Deploy the new code.gs version before opening this admin update.');
+      if (profile.version !== 15) throw new Error('Deploy the new code.gs version before opening this admin update.');
       ADMIN_PROFILE = profile;
       applyStaffRole();
       offerSavedDraft();
@@ -279,18 +309,12 @@ function renderOrderList() {
 
         <span class="status-pill ${escapeHtml(pillClass)}">${escapeHtml(st)}</span>
       </div>
+      ${orderRequestsHtml(o)}
       <div class="order-controls" style="margin-top:8px;">
-        <select data-role="statusSelect">
-          <option value="Pending" ${st === 'Pending' ? 'selected' : ''}>Pending</option>
-          <option value="Confirmed" ${st === 'Confirmed' ? 'selected' : ''}>Confirmed</option>
-          <option value="Packed" ${st === 'Packed' ? 'selected' : ''}>Packed</option>
-          <option value="Shipped" ${st === 'Shipped' ? 'selected' : ''}>Shipped</option>
-          <option value="Delivered" ${st === 'Delivered' ? 'selected' : ''}>Delivered</option>
-          <option value="Fulfilled" ${st === 'Fulfilled' ? 'selected' : ''}>Fulfilled</option>
-          <option value="Cancelled" ${st === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
-        </select>
+        <select data-role="statusSelect">${orderStatusOptions(st)}</select>
         <button class="ghost-btn" data-role="saveStatus">Update</button>
       </div>
+      <div class="order-lifecycle-note">Next valid step only. Cancellation is available before shipping.</div>
     </div>`;
   }).join('');
   if (pageCount > 1) {
@@ -310,6 +334,13 @@ function renderOrderList() {
       const newStatus = $('[data-role="statusSelect"]', row).value;
       updateOrderStatus(orderId, newStatus);
     });
+    $$('[data-request-action]', row).forEach(button => button.addEventListener('click', async () => {
+      const box = button.closest('[data-request-id]');
+      const note = $('input', box)?.value || '';
+      $$('button,input', box).forEach(el => el.disabled = true);
+      try { await resolveOrderRequest(box.dataset.requestId, button.dataset.requestAction, note); }
+      catch (err) { alert('Could not update request: ' + err.message); $$('button,input', box).forEach(el => el.disabled = false); }
+    }));
   });
 }
 async function updateOrderStatus(orderId, newStatus) {

@@ -54,6 +54,12 @@ function doPost(e) {
     if (body.action === 'addOrder') {
       return jsonResponse(addOrder(body.order || {}));
     }
+    if (body.action === 'trackOrder') {
+      return jsonResponse(trackOrder(body.orderId, body.phone));
+    }
+    if (body.action === 'submitOrderRequest') {
+      return jsonResponse(submitOrderRequest_(body.request || {}));
+    }
 
     // Everything below is an admin-only action.
     const actor = authenticateAdmin_(body.key);

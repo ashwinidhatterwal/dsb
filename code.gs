@@ -48,6 +48,7 @@ const REVIEWS_SHEET = 'Reviews';
 const ORDERS_SHEET = 'Orders';
 const PROMOS_SHEET = 'Promos';
 const ORDER_ITEMS_SHEET = 'OrderItems';
+const ORDER_REQUESTS_SHEET = 'OrderRequests';
 const PROMO_CUSTOMERS_SHEET = 'PromoCustomers';
 const CATALOG_CACHE_KEY = 'dsb.catalog.v4';
 const JOURNAL_SHEET = 'OrderTransactions';
@@ -78,6 +79,16 @@ const DELIVERY_ESTIMATE_RULES = [
   { prefixes: ['*'], minDays: 4, maxDays: 7, label: 'Standard delivery' }
 ];
 const ALLOWED_ORDER_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Delivered', 'Cancelled', 'Fulfilled'];
+const ORDER_REQUEST_TYPES = ['cancel', 'support'];
+const ORDER_STATUS_TRANSITIONS = {
+  Pending: ['Confirmed', 'Cancelled'],
+  Confirmed: ['Packed', 'Cancelled'],
+  Packed: ['Shipped', 'Cancelled'],
+  Shipped: ['Delivered'],
+  Delivered: ['Fulfilled'],
+  Fulfilled: [],
+  Cancelled: ['Pending']
+};
 
 // Set the ADMIN_KEY Script Property before deploying — the admin page uses it to
 // add/delete products and manage orders. Anyone who has this key can edit
@@ -147,6 +158,12 @@ function doPost(e) {
     }
     if (body.action === 'addOrder') {
       return jsonResponse(addOrder(body.order || {}));
+    }
+    if (body.action === 'trackOrder') {
+      return jsonResponse(trackOrder(body.orderId, body.phone));
+    }
+    if (body.action === 'submitOrderRequest') {
+      return jsonResponse(submitOrderRequest_(body.request || {}));
     }
 
     // Everything below is an admin-only action.
@@ -852,8 +869,11 @@ function getAllOrders(options) {
   list.sort((a, b) => options.sort === 'name-asc' ? String(a.customername || '').localeCompare(String(b.customername || '')) : (options.sort === 'date-asc' ? 1 : -1) * (new Date(a.date) - new Date(b.date)));
   const pageSize = 40,
     page = Math.max(0, Math.min(Math.floor(Number(options.page) || 0), Math.max(0, Math.ceil(list.length / pageSize) - 1)));
+  const pageOrders = list.slice(page * pageSize, (page + 1) * pageSize);
+  const requests = orderRequestsByOrderIds_(pageOrders.map(o => o.orderid));
+  pageOrders.forEach(o => { o.requests = requests[String(o.orderid || '')] || []; });
   return {
-    orders: list.slice(page * pageSize, (page + 1) * pageSize),
+    orders: pageOrders,
     page,
     pageSize,
     total: list.length,
@@ -988,6 +1008,8 @@ function updateOrderStatus(orderId, statusValue) {
       col = heads.indexOf('status') + 1;
     if (!row || col < 1) throw new Error('Order not found or status column missing.');
     const oldStatus = String(sheet.getRange(row, col).getValue() || 'Pending');
+    const allowedNext = ORDER_STATUS_TRANSITIONS[oldStatus] || [];
+    if (oldStatus !== status && allowedNext.indexOf(status) < 0) throw new Error('Invalid status transition from ' + oldStatus + ' to ' + status + '.');
     if (oldStatus === status) return {
       success: true,
       orderId: id,
@@ -1118,55 +1140,24 @@ function recordOrderItemsFromValidated_(orderId, date, items) {
   if (rows.length) sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, heads.length).setValues(rows);
 }
 function trackOrder(orderId, phone) {
-  if (!orderId || !phone) return {
-    success: false,
-    error: 'missing orderId or phone'
-  };
+  if (!orderId || !phone) return { success: false, error: 'missing orderId or phone' };
   rateLimit_('tracking:' + hashText_(String(orderId)), 30, 600);
-  const sheet = getSheet_(ORDERS_SHEET);
-  const heads = headers_(sheet);
-  const idCol = heads.indexOf('orderid');
-  if (idCol === -1) return {
-    success: false,
-    error: 'not_found'
-  };
-  if (sheet.getLastRow() < 2) return {
-    success: false,
-    error: 'not_found'
-  };
-
-  // Look up one exact order row instead of loading the entire Orders sheet.
-  const hit = sheet.getRange(2, idCol + 1, sheet.getLastRow() - 1, 1).createTextFinder(String(orderId).trim()).matchEntireCell(true).findNext();
-  if (!hit) return {
-    success: false,
-    error: 'not_found'
-  };
-  const row = sheet.getRange(hit.getRow(), 1, 1, sheet.getLastColumn()).getValues()[0];
-  const order = {};
-  heads.forEach((h, i) => order[h] = row[i]);
-  const trackingPhone = value => {
-    const digits = cleanPhone_(value);
-    return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits.length === 11 && digits.startsWith('0') ? digits.slice(1) : digits;
-  };
-  const storedPhone = trackingPhone(order.phone);
-  const givenPhone = trackingPhone(phone);
-  if (!storedPhone || !givenPhone || storedPhone !== givenPhone) {
-    return {
-      success: false,
-      error: 'not_found'
-    };
-  }
+  const order = findCustomerOrder_(orderId, phone);
+  if (!order) return { success: false, error: 'not_found' };
+  const status = String(order.status || 'Pending');
   return {
     success: true,
     orderId: order.orderid,
     date: order.date,
-    status: order.status || 'Pending',
+    status: status,
     items: order.items,
     total: order.total,
     discount: order.discount,
     deliveryCharge: order.deliverycharge || 0,
     codCharge: order.codcharge || 0,
-    paymentMethod: order.paymentmethod
+    paymentMethod: order.paymentmethod,
+    canRequestCancellation: canCustomerRequestCancellation_(status),
+    requests: publicOrderRequests_(order.orderid)
   };
 }
 function verifyPayment_(body, actor) {
@@ -1192,6 +1183,102 @@ function verifyPayment_(body, actor) {
     return {
       success: true
     };
+  });
+}
+
+/* customer order request responsibilities. Bundled into code.gs by scripts/build.mjs. */
+function orderRequestSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(ORDER_REQUESTS_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(ORDER_REQUESTS_SHEET);
+    sheet.appendRow(['requestId', 'date', 'orderId', 'type', 'message', 'status', 'resolutionNote', 'updatedAt', 'phoneHash']);
+  }
+  return sheet;
+}
+function normalizedTrackingPhone_(value) {
+  const digits = cleanPhone_(value);
+  return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits.length === 11 && digits.startsWith('0') ? digits.slice(1) : digits;
+}
+function findCustomerOrder_(orderId, phone) {
+  const id = String(orderId || '').trim();
+  const givenPhone = normalizedTrackingPhone_(phone);
+  if (!id || !givenPhone) return null;
+  const sheet = getSheet_(ORDERS_SHEET), heads = headers_(sheet), idCol = heads.indexOf('orderid');
+  if (idCol < 0 || sheet.getLastRow() < 2) return null;
+  const hit = sheet.getRange(2, idCol + 1, sheet.getLastRow() - 1, 1).createTextFinder(id).matchEntireCell(true).findNext();
+  if (!hit) return null;
+  const values = sheet.getRange(hit.getRow(), 1, 1, sheet.getLastColumn()).getValues()[0], order = {};
+  heads.forEach((h, i) => order[h] = values[i]);
+  const storedPhone = normalizedTrackingPhone_(order.phone);
+  if (!storedPhone || storedPhone !== givenPhone) return null;
+  return order;
+}
+function canCustomerRequestCancellation_(status) {
+  return ['Pending', 'Confirmed', 'Packed'].indexOf(String(status || 'Pending')) >= 0;
+}
+function publicOrderRequests_(orderId) {
+  let rows = [];
+  try { rows = rowsAsObjects_(orderRequestSheet_()); } catch (_) { return []; }
+  return rows.filter(r => String(r.orderid || '') === String(orderId || '')).slice(-10).map(r => ({
+    requestId: String(r.requestid || ''),
+    type: String(r.type || 'support'),
+    status: String(r.status || 'Pending'),
+    date: r.date,
+    updatedAt: r.updatedat || r.date
+  }));
+}
+function submitOrderRequest_(payload) {
+  payload = payload || {};
+  const orderId = String(payload.orderId || '').trim(), phone = String(payload.phone || '').trim();
+  const type = String(payload.type || '').trim().toLowerCase();
+  const message = String(payload.message || '').trim().slice(0, 600);
+  if (!orderId || !phone || ORDER_REQUEST_TYPES.indexOf(type) < 0) throw new Error('Invalid order request.');
+  rateLimit_('order-request:' + hashText_(orderId + ':' + normalizedTrackingPhone_(phone)), 6, 3600);
+  const order = findCustomerOrder_(orderId, phone);
+  if (!order) return { success: false, error: 'not_found' };
+  const currentStatus = String(order.status || 'Pending');
+  if (type === 'cancel' && !canCustomerRequestCancellation_(currentStatus)) {
+    return { success: false, error: 'cancellation_unavailable', status: currentStatus };
+  }
+  if (type === 'support' && message.length < 3) return { success: false, error: 'message_required' };
+  const sheet = orderRequestSheet_(), existing = rowsAsObjects_(sheet).filter(r => String(r.orderid || '') === orderId && String(r.type || '') === type && String(r.status || 'Pending') === 'Pending');
+  if (existing.length) return { success: true, duplicate: true, requestId: String(existing[existing.length - 1].requestid || ''), status: 'Pending' };
+  const requestId = 'REQ-' + Utilities.getUuid().slice(0, 8).toUpperCase(), now = new Date();
+  sheet.appendRow([sheetText_(requestId), now, sheetText_(orderId), sheetText_(type), sheetText_(message), 'Pending', '', now, hashText_(normalizedTrackingPhone_(phone))]);
+  return { success: true, requestId: requestId, status: 'Pending', type: type };
+}
+function orderRequestsByOrderIds_(ids) {
+  const wanted = {};
+  (ids || []).forEach(id => wanted[String(id)] = true);
+  if (!Object.keys(wanted).length) return {};
+  let rows = [];
+  try { rows = rowsAsObjects_(orderRequestSheet_()); } catch (_) { return {}; }
+  const out = {};
+  rows.forEach(r => {
+    const id = String(r.orderid || '');
+    if (!wanted[id]) return;
+    if (!out[id]) out[id] = [];
+    out[id].push({
+      requestId: String(r.requestid || ''), date: r.date, type: String(r.type || 'support'), message: String(r.message || ''), status: String(r.status || 'Pending'), resolutionNote: String(r.resolutionnote || ''), updatedAt: r.updatedat || r.date
+    });
+  });
+  Object.keys(out).forEach(id => out[id].sort((a, b) => new Date(b.date) - new Date(a.date)));
+  return out;
+}
+function resolveOrderRequest_(body, actor) {
+  return withWriteLock_(function () {
+    const id = String(body.requestId || '').trim(), status = String(body.requestStatus || '').trim();
+    const note = String(body.resolutionNote || '').trim().slice(0, 500);
+    if (!id || ['Resolved', 'Rejected'].indexOf(status) < 0) throw new Error('Invalid request resolution.');
+    const sheet = orderRequestSheet_(), heads = headers_(sheet), row = findRow_(sheet, 'requestid', id);
+    if (!row) throw new Error('Order request not found.');
+    const statusCol = heads.indexOf('status') + 1, noteCol = heads.indexOf('resolutionnote') + 1, updatedCol = heads.indexOf('updatedat') + 1;
+    if (statusCol < 1 || noteCol < 1 || updatedCol < 1) throw new Error('Order request sheet is incomplete.');
+    sheet.getRange(row, statusCol).setValue(status);
+    sheet.getRange(row, noteCol).setValue(sheetText_((note || status) + ' — ' + actor.name));
+    sheet.getRange(row, updatedCol).setValue(new Date());
+    return { success: true, requestId: id, status: status };
   });
 }
 
@@ -3159,7 +3246,7 @@ function aiAdminChatPrompt_(message, history, context, actor, imageCount) {
       'Use confirmed product facts only for SEO, Hindi copy, tags or social captions. Content-only requests normally use action.type="none" unless the user explicitly asks to update the listing.'
     ],
     orders: [
-      'For an order status change use action.type="update_order_status" with an exact order id and one of Pending, Confirmed, Packed, Shipped, Delivered, Fulfilled, Cancelled.',
+      'For an order status change use action.type="update_order_status" with an exact order id. Follow the lifecycle only: Pending→Confirmed→Packed→Shipped→Delivered→Fulfilled; cancellation is allowed only from Pending, Confirmed or Packed; Cancelled may reopen to Pending.',
       'Do not infer payment status or claim delivery/payment facts not present in context.'
     ],
     inventory: ['For inventory/restocking analysis, state missing data and never invent reorder quantities.'],
@@ -3259,7 +3346,7 @@ function authenticateAdmin_(key) {
 }
 function assertAdminPermission_(actor, action) {
   const reads = ['adminSession', 'adminProducts', 'adminProductsPage', 'adminOrders', 'adminDashboard', 'aiAdminChat'];
-  const edits = ['add', 'update', 'archiveProduct', 'updateOrderStatus', 'aiProductDraft'];
+  const edits = ['add', 'update', 'archiveProduct', 'updateOrderStatus', 'resolveOrderRequest', 'aiProductDraft'];
   if (actor.role === 'admin' || reads.includes(action) || actor.role === 'editor' && edits.includes(action)) return;
   throw new Error('Your staff role does not allow this action.');
 }
@@ -3267,7 +3354,7 @@ function dispatchAdmin_(body, actor) {
   const action = String(body.action || '');
   assertAdminPermission_(actor, action);
   if (action === 'adminSession') return {
-    version: 14,
+    version: 15,
     name: actor.name,
     role: actor.role
   };
@@ -3285,6 +3372,7 @@ function dispatchAdmin_(body, actor) {
   if (action === 'delete') return deleteProduct(body.id, body.expected_revision);
   if (action === 'archiveProduct') return archiveProduct_(body);
   if (action === 'updateOrderStatus') return updateOrderStatus(body.orderId, body.status);
+  if (action === 'resolveOrderRequest') return resolveOrderRequest_(body, actor);
   if (action === 'verifyPayment') return verifyPayment_(body, actor);
   throw new Error('unknown action');
 }

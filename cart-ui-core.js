@@ -172,13 +172,12 @@ async function submitTrackOrder() {
   btn.disabled = true;
   btn.textContent = 'Checking…';
   try {
-    const url = `${CONFIG.SHEET_API_URL}?action=trackOrder&orderId=${encodeURIComponent(orderId)}&phone=${encodeURIComponent(phone)}`;
-    const data = await requestJson(url);
+    const data = await fetchTrackedOrder(orderId, phone);
     if (!data || !data.success) {
       showTrackError("We couldn't find a matching order. Double-check the Order ID and phone number, or message us on WhatsApp.");
       return;
     }
-    renderTrackResult(data);
+    renderTrackResult(data, { orderId, phone });
   } catch (err) {
     showTrackError('Something went wrong — please try again or message us on WhatsApp.');
   } finally {
@@ -186,7 +185,36 @@ async function submitTrackOrder() {
     btn.textContent = originalLabel;
   }
 }
-function renderTrackResult(o) {
+
+async function fetchTrackedOrder(orderId, phone) {
+  const response = await fetch(CONFIG.SHEET_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'trackOrder', orderId, phone })
+  });
+  if (!response.ok) throw new Error('Tracking request failed');
+  return response.json();
+}
+async function submitCustomerOrderRequest(orderId, phone, type, message, statusEl) {
+  statusEl.textContent = 'Sending request…';
+  const response = await fetch(CONFIG.SHEET_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'submitOrderRequest', request: { orderId, phone, type, message } })
+  });
+  const data = await response.json();
+  if (!response.ok || data.error || data.success === false) {
+    if (data.error === 'cancellation_unavailable') throw new Error('Cancellation can no longer be requested online for this order. Please contact the shop.');
+    if (data.error === 'message_required') throw new Error('Please enter a short message.');
+    if (data.error === 'not_found') throw new Error('Order verification failed. Track the order again and retry.');
+    throw new Error(data.error || 'Could not send the request.');
+  }
+  statusEl.textContent = data.duplicate ? 'You already have a pending request for this order.' : 'Request sent. The shop will review it.';
+  const refreshed = await fetchTrackedOrder(orderId, phone);
+  if (refreshed?.success) renderTrackResult(refreshed, { orderId, phone });
+}
+
+function renderTrackResult(o, credentials) {
   $('#trackForm').style.display = 'none';
   const wrap = $('#trackResult');
   wrap.style.display = 'block';
@@ -217,10 +245,44 @@ function renderTrackResult(o) {
         <div class="row total"><span>Total</span><span>${money(o.total)}</span></div>
         ${o.paymentMethod ? `<div class="row"><span>Payment</span><span>${escapeHtml(o.paymentMethod)}</span></div>` : ''}
       </div>
+      <div class="track-request-panel">
+        <strong>Need a change or help?</strong>
+        <p class="hint">Requests are reviewed by the shop. Sending a cancellation request does not cancel the order instantly.</p>
+        <div class="track-request-actions">
+          ${o.canRequestCancellation ? '<button type="button" class="ghost-btn" id="trackCancelRequestBtn">Request cancellation</button>' : ''}
+          <button type="button" class="ghost-btn" id="trackSupportRequestBtn">Contact support</button>
+        </div>
+        <div class="track-request-form" id="trackSupportForm" hidden>
+          <textarea id="trackSupportMessage" maxlength="600" placeholder="Tell us what you need help with…"></textarea>
+          <button type="button" class="primary-btn" id="trackSupportSend">Send support request</button>
+        </div>
+        <p class="track-request-status" id="trackRequestStatus" role="status"></p>
+        ${Array.isArray(o.requests) && o.requests.length ? `<div class="track-request-list">${o.requests.map(r => `<div class="track-request-item"><span>${escapeHtml(r.type === 'cancel' ? 'Cancellation' : 'Support')} · ${escapeHtml(formatDateTime(r.date))}</span><strong>${escapeHtml(r.status || 'Pending')}</strong></div>`).join('')}</div>` : ''}
+      </div>
       <a class="primary-btn whatsapp-btn" style="width:100%; margin-top:14px; text-decoration:none;" href="https://wa.me/${CONFIG.WHATSAPP_NUMBER}?text=${waText}" target="_blank" rel="noopener">📲 Ask about this order</a>
     </div>
   `;
   $('#trackAnotherBtn').addEventListener('click', () => openTrackOrder());
+  const requestStatus = $('#trackRequestStatus');
+  $('#trackCancelRequestBtn')?.addEventListener('click', async () => {
+    if (!credentials) return;
+    const button = $('#trackCancelRequestBtn');
+    button.disabled = true;
+    try { await submitCustomerOrderRequest(credentials.orderId, credentials.phone, 'cancel', 'Customer requested cancellation from order tracking.', requestStatus); }
+    catch (err) { requestStatus.textContent = err.message; button.disabled = false; }
+  });
+  $('#trackSupportRequestBtn')?.addEventListener('click', () => {
+    const form = $('#trackSupportForm');
+    form.hidden = !form.hidden;
+    if (!form.hidden) $('#trackSupportMessage')?.focus();
+  });
+  $('#trackSupportSend')?.addEventListener('click', async () => {
+    if (!credentials) return;
+    const message = ($('#trackSupportMessage')?.value || '').trim(), button = $('#trackSupportSend');
+    button.disabled = true;
+    try { await submitCustomerOrderRequest(credentials.orderId, credentials.phone, 'support', message, requestStatus); }
+    catch (err) { requestStatus.textContent = err.message; button.disabled = false; }
+  });
 }
 document.addEventListener('DOMContentLoaded', () => {
   const trigger = $('#trackOrderTrigger');
