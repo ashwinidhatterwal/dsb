@@ -71,6 +71,7 @@ let orderPage = 0,
   orderResponse = null,
   orderRequestSequence = 0;
 const ORDER_PAGE_SIZE = 40;
+const expandedOrderIds = new Set();
 const ORDER_STATUS_TRANSITIONS_CLIENT = {
   Pending: ['Confirmed', 'Cancelled'],
   Confirmed: ['Packed', 'Cancelled'],
@@ -92,18 +93,18 @@ function orderLifecycleHtml(current) {
   }).join('<span class="order-flow-arrow" aria-hidden="true">→</span>')}</div>`;
 }
 function orderStatusActionsHtml(current, hasPendingCancellation) {
-  if (hasPendingCancellation) return '<p class="order-workflow-blocked">Handle the pending cancellation request before progressing this order.</p>';
+  if (hasPendingCancellation) return '<p class="order-workflow-blocked">Resolve cancellation first.</p>';
   const next = ORDER_STATUS_TRANSITIONS_CLIENT[current] || [];
   const progress = next.find(status => status !== 'Cancelled');
   const canCancel = next.includes('Cancelled');
   if (!progress && !canCancel) {
     return current === 'Fulfilled'
-      ? '<p class="order-workflow-done">Order completed. No further status action is required.</p>'
-      : '<p class="order-workflow-done">No status actions are available.</p>';
+      ? '<p class="order-workflow-done">Complete</p>'
+      : '<p class="order-workflow-done">No actions</p>';
   }
   return `<div class="order-status-actions">
-    ${progress ? `<button type="button" class="primary-btn order-next-action" data-order-status="${escapeHtml(progress)}">${current === 'Cancelled' ? 'Reopen as Pending' : 'Move to ' + escapeHtml(progress)}</button>` : ''}
-    ${canCancel ? '<button type="button" class="ghost-btn order-cancel-action" data-order-status="Cancelled">Cancel order</button>' : ''}
+    ${progress ? `<button type="button" class="primary-btn order-next-action" data-order-status="${escapeHtml(progress)}">${current === 'Cancelled' ? 'Reopen' : 'Next: ' + escapeHtml(progress)}</button>` : ''}
+    ${canCancel ? '<button type="button" class="ghost-btn order-cancel-action" data-order-status="Cancelled">Cancel</button>' : ''}
   </div>`;
 }
 function orderRequestsHtml(order) {
@@ -113,12 +114,12 @@ function orderRequestsHtml(order) {
     const pending = String(r.status || 'Pending') === 'Pending';
     const isCancel = r.type === 'cancel';
     const typeLabel = isCancel ? 'Cancellation request' : 'Support request';
-    const approveLabel = isCancel ? 'Approve & cancel order' : 'Mark handled';
+    const approveLabel = isCancel ? 'Approve & cancel' : 'Resolve';
     return `<div class="order-request-box ${isCancel ? 'is-cancellation' : ''}" data-request-id="${escapeHtml(r.requestId)}">
       <div class="order-request-heading"><strong>${escapeHtml(typeLabel)}</strong><span class="request-state ${escapeHtml(String(r.status || 'Pending').toLowerCase())}">${escapeHtml(r.status || 'Pending')}</span></div>
       ${r.message ? `<div class="order-request-message">${escapeHtml(r.message)}</div>` : ''}
       <div class="hint">${escapeHtml(formatDateTime(r.date))}${r.resolutionNote ? ' · ' + escapeHtml(r.resolutionNote) : ''}</div>
-      ${pending ? `<div class="order-request-actions"><input type="text" maxlength="500" placeholder="Resolution note (optional)" aria-label="Resolution note"><button type="button" class="${isCancel ? 'primary-btn' : 'ghost-btn'}" data-request-action="Resolved">${approveLabel}</button><button type="button" class="ghost-btn order-request-reject" data-request-action="Rejected">Reject request</button></div>` : ''}
+      ${pending ? `<div class="order-request-actions"><input type="text" maxlength="500" placeholder="Resolution note (optional)" aria-label="Resolution note"><button type="button" class="${isCancel ? 'primary-btn' : 'ghost-btn'}" data-request-action="Resolved">${approveLabel}</button><button type="button" class="ghost-btn order-request-reject" data-request-action="Rejected">Reject</button></div>` : ''}
     </div>`;
   }).join('');
 }
@@ -323,38 +324,47 @@ function renderOrderList() {
   wrap.innerHTML = list.map(o => {
     const st = o.status || 'Pending';
     const pillClass = st.toLowerCase();
-    const requestCount = Array.isArray(o.requests) ? o.requests.filter(r => String(r.status || 'Pending') === 'Pending').length : 0;
-    const hasPendingCancellation = Array.isArray(o.requests) && o.requests.some(r => r.type === 'cancel' && String(r.status || 'Pending') === 'Pending');
+    const requests = Array.isArray(o.requests) ? o.requests : [];
+    const requestCount = requests.filter(r => String(r.status || 'Pending') === 'Pending').length;
+    const hasPendingCancellation = requests.some(r => r.type === 'cancel' && String(r.status || 'Pending') === 'Pending');
+    const expanded = expandedOrderIds.has(String(o.orderid));
+    const payment = escapeHtml(o.paymentmethod || '');
+    const total = `₹${(Number(o.total) || 0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
     return `
-    <article class="orow order-card" data-id="${escapeHtml(o.orderid)}">
-      <header class="order-card-head">
-        <div><span class="oid">${escapeHtml(o.orderid)}</span><div class="odate">${escapeHtml(formatDateTime(o.date))}</div></div>
-        <div class="order-head-badges"><span class="status-pill ${escapeHtml(pillClass)}">${escapeHtml(st)}</span>${requestCount ? `<span class="order-request-count">${requestCount} request${requestCount === 1 ? '' : 's'}</span>` : ''}</div>
-      </header>
+    <article class="orow order-card ${expanded ? 'is-expanded' : ''}" data-id="${escapeHtml(o.orderid)}">
+      <div class="order-compact-row">
+        <div class="order-compact-main">
+          <div class="order-compact-topline"><span class="oid">${escapeHtml(o.orderid)}</span><span class="status-pill ${escapeHtml(pillClass)}">${escapeHtml(st)}</span>${requestCount ? `<span class="order-request-count">${requestCount}</span>` : ''}</div>
+          <strong class="ocust">${escapeHtml(o.customername) || '(no name)'}</strong>
+          <div class="order-compact-meta"><span>${escapeHtml(formatDateTime(o.date))}</span>${payment ? `<span>${payment}</span>` : ''}<strong>${total}</strong></div>
+        </div>
+        <button type="button" class="order-expand-btn" data-order-toggle aria-expanded="${expanded ? 'true' : 'false'}">${expanded ? 'Close' : 'View'}</button>
+      </div>
 
-      <section class="order-summary-panel">
-        <div class="order-customer-block"><span class="order-section-label">Customer</span><strong class="ocust">${escapeHtml(o.customername) || '(no name)'}</strong><div class="ophone">${escapeHtml(o.phone)}${o.paymentmethod ? ` • ${escapeHtml(o.paymentmethod)}` : ''}</div>${o.address ? `<div class="oaddress">${escapeHtml(o.address)}</div>` : ''}</div>
-        <div class="order-total-block"><span class="order-section-label">Order total</span><strong>₹${(Number(o.total) || 0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</strong><span>${escapeHtml(o.paymentmethod || 'Payment method not recorded')}</span></div>
-      </section>
+      <div class="order-expanded-panel" ${expanded ? '' : 'hidden'}>
+        <section class="order-info-grid">
+          <div><span class="order-section-label">Contact</span><div class="ophone">${escapeHtml(o.phone) || '—'}</div>${o.address ? `<div class="oaddress">${escapeHtml(o.address)}</div>` : ''}</div>
+          <div><span class="order-section-label">Total</span><strong class="order-expanded-total">${total}</strong>${payment ? `<div>${payment}</div>` : ''}</div>
+        </section>
 
-      <details class="order-detail-section" open>
-        <summary>Items & price breakdown</summary>
-        <div class="order-detail-body"><div class="oitems">${escapeHtml(o.items)}</div>${orderPriceBreakdownHtml(o)}</div>
-      </details>
+        <details class="order-detail-section">
+          <summary>Items</summary>
+          <div class="order-detail-body"><div class="oitems">${escapeHtml(o.items)}</div>${orderPriceBreakdownHtml(o)}</div>
+        </details>
 
-      <section class="order-request-section ${hasPendingCancellation ? 'has-pending-cancellation' : ''}">
-        <div class="order-section-title"><div><span class="order-section-label">Customer requests</span><strong>Cancellation & support</strong></div></div>
-        ${orderRequestsHtml(o)}
-      </section>
+        ${requests.length ? `<section class="order-request-section ${hasPendingCancellation ? 'has-pending-cancellation' : ''}">
+          <div class="order-section-title"><strong>Requests</strong></div>
+          ${orderRequestsHtml(o)}
+        </section>` : ''}
 
-      <section class="order-workflow-panel">
-        <div class="order-section-title"><div><span class="order-section-label">Order progress</span><strong>What happens next</strong></div></div>
-        ${orderLifecycleHtml(st)}
-        ${orderStatusActionsHtml(st, hasPendingCancellation)}
-        <p class="order-lifecycle-note">Only valid next steps are actionable. This protects stock and order history from accidental status jumps.</p>
-      </section>
+        <section class="order-workflow-panel">
+          <div class="order-section-title"><strong>Status</strong></div>
+          ${orderLifecycleHtml(st)}
+          ${orderStatusActionsHtml(st, hasPendingCancellation)}
+        </section>
 
-      <section class="order-payment-slot" aria-label="Payment verification"></section>
+        <section class="order-payment-slot" aria-label="Payment"></section>
+      </div>
     </article>`;
   }).join('');
   if (pageCount > 1) {
@@ -364,6 +374,17 @@ function renderOrderList() {
   }
   $$('.orow', wrap).forEach(row => {
     const orderId = row.dataset.id;
+    $('[data-order-toggle]', row)?.addEventListener('click', () => {
+      const panel = $('.order-expanded-panel', row);
+      const button = $('[data-order-toggle]', row);
+      const willExpand = panel.hasAttribute('hidden');
+      panel.toggleAttribute('hidden', !willExpand);
+      row.classList.toggle('is-expanded', willExpand);
+      button.setAttribute('aria-expanded', String(willExpand));
+      button.textContent = willExpand ? 'Close' : 'View';
+      if (willExpand) expandedOrderIds.add(String(orderId));
+      else expandedOrderIds.delete(String(orderId));
+    });
     $$('[data-order-status]', row).forEach(button => button.addEventListener('click', () => {
       const newStatus = button.dataset.orderStatus;
       const prompt = newStatus === 'Cancelled' ? 'Cancel this order? Stock will be restored according to the existing order transaction logic.' : `Move this order to ${newStatus}?`;

@@ -168,3 +168,6 @@ Regression command for this layer: `node scripts/check-level1.mjs`.
 
 ## Orders workflow
 Order status lifecycle rules live in `src/backend/config.gs` and stock-safe status writes live in `src/backend/orders.gs`. Customer cancellation/support requests live in `src/backend/order-requests.gs`. Keep cancellation approval routed through `resolveOrderRequest_()` so approving a cancellation also cancels the order through the same stock-safe status path. The admin order UI is rendered in `admin.js`; payment controls remain isolated in `admin-workspace.js`.
+
+## Compact Orders UI checkpoint
+The admin Orders list now renders compact summary cards by default. Keep the collapsed card limited to operational scan data (order ID, status, customer, date, payment, total, pending-request count). Detailed contact, items, requests, payment verification, and lifecycle controls belong inside the expandable panel. Avoid reintroducing long explanatory copy into order cards; workflow rules are enforced by code/backend rather than prose.
