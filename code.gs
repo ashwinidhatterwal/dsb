@@ -2387,10 +2387,28 @@ function generateAiAdminChat_(body, actor) {
   rateLimit_('ai-admin-chat:' + String(actor && actor.name || 'admin'), 90, 3600);
 
   const history = sanitizeAiAdminHistory_(body && body.history);
+  const chatImageUrls = sanitizeAiAdminImageUrls_(body && body.imageUrls);
   const retrievalText = [message].concat(history.map(function(item) { return item.text; })).join('\n');
   const context = buildAiAdminContext_(retrievalText);
-  const prompt = aiAdminChatPrompt_(message, history, context, actor);
-  const outputText = callAiAdminChatProvider_(config, prompt);
+
+  // Requests such as "fill every detail possible for DSB-0008" need the
+  // product-image pipeline, not a text-only chat guess. Reuse the same vision
+  // generator as the Add Product assistant and convert its result into a
+  // confirmation-first product proposal.
+  const enrichment = maybeGenerateAiAdminProductEnrichment_(body, message, history, context, actor, chatImageUrls);
+  if (enrichment) {
+    return {
+      success: true,
+      reply: enrichment.reply,
+      proposal: enrichment.proposal,
+      model: enrichment.model || config.model,
+      provider: enrichment.provider || config.providerLabel,
+      elapsedMs: Math.max(0, Date.now() - startedAt)
+    };
+  }
+
+  const prompt = aiAdminChatPrompt_(message, history, context, actor, chatImageUrls.length);
+  const outputText = callAiAdminChatProvider_(config, prompt, chatImageUrls.map(aiAdminOptimizedImageUrl_));
   const parsed = aiParseStructuredOutput_(outputText);
   const result = sanitizeAiAdminChatResult_(parsed, context, actor);
 
@@ -2402,6 +2420,111 @@ function generateAiAdminChat_(body, actor) {
     provider: config.providerLabel,
     elapsedMs: Math.max(0, Date.now() - startedAt)
   };
+}
+
+function maybeGenerateAiAdminProductEnrichment_(body, message, history, context, actor, chatImageUrls) {
+  if (!actor || actor.role === 'viewer') return null;
+  const text = String(message || '').trim();
+  const enrichIntent = /\b(fill|complete|populate|enrich|generate|add)\b[\s\S]{0,80}\b(all|every|missing|possible|details?|fields?|information)\b/i.test(text)
+    || /\b(all|every)\b[\s\S]{0,50}\b(details?|fields?|information)\b/i.test(text);
+  if (!enrichIntent) return null;
+
+  const all = getAllProducts(true).filter(function(p) { return !isArchived_(p); });
+  const transcript = [text].concat((history || []).slice().reverse().map(function(h) { return String(h.text || ''); })).join('\n');
+  const ids = transcript.match(/\bDSB-[A-Z0-9._-]+\b/ig) || [];
+  let product = null;
+  for (let i = 0; i < ids.length && !product; i++) {
+    const wanted = String(ids[i]).toLowerCase();
+    product = all.find(function(p) { return String(p.id || '').toLowerCase() === wanted; }) || null;
+  }
+  if (!product && context && Array.isArray(context.matchedProducts) && context.matchedProducts.length === 1) {
+    const wanted = String(context.matchedProducts[0].id || '');
+    product = all.find(function(p) { return String(p.id || '') === wanted; }) || null;
+  }
+  if (!product) return null;
+
+  const existing = {
+    name: product.name, namehindi: product.namehindi, category: product.category, subcategory: product.subcategory,
+    price: product.price, mrp: product.mrp, costprice: product.costprice, description: product.description,
+    stock: product.stock, stockqty: product.stockqty, brand: product.brand, material: product.material,
+    packsize: product.packsize, specifications: product.specifications, gtin: product.gtin,
+    descriptionhindi: product.descriptionhindi, sizes: product.sizes, sizeprices: product.sizeprices,
+    tags: product.tags, hasSizes: !!String(product.sizes || '').trim()
+  };
+  const listingRefs = String(product.images || '').split(',').map(function(x) { return x.trim(); }).filter(Boolean);
+  // Chat attachments are intentionally given priority: they are often back-label,
+  // packaging or close-up photos supplied specifically to clarify this request.
+  const refs = (chatImageUrls || []).concat(listingRefs).filter(function(url, index, list) { return url && list.indexOf(url) === index; }).slice(0, 5);
+  const generation = generateAiProductDraft_({
+    imageUrl: aiAdminOptimizedImageUrl_(String(product.image || '').trim()),
+    referenceUrls: refs.map(aiAdminOptimizedImageUrl_),
+    notes: 'Admin chat request: ' + text + '\nFill every factual and useful ecommerce field that can be safely inferred. Existing non-empty values are authoritative. Use visible packaging text and imagery when available. Do not invent uncertain commercial facts.',
+    existing: existing,
+    requestedModel: body && body.requestedModel,
+    reasoningEffort: body && body.reasoningEffort
+  }, actor);
+
+  const rawDraft = generation && generation.draft || {};
+  const patch = {};
+  const descriptiveRefresh = /\b(improve|rewrite|enhance|professional|richer|better)\b/i.test(text);
+  const refreshable = { description:1, descriptionhindi:1, specifications:1, tags:1, namehindi:1 };
+  Object.keys(rawDraft).forEach(function(key) {
+    if (key === 'hasSizes') return;
+    let next = rawDraft[key];
+    if (Array.isArray(next)) next = next.join(', ');
+    const current = existing[key];
+    const currentBlank = current === '' || current === null || current === undefined || (Array.isArray(current) && !current.length);
+    if (!currentBlank && !(descriptiveRefresh && refreshable[key])) return;
+    if (String(next === undefined || next === null ? '' : next).trim() === '') return;
+    if (String(current === undefined || current === null ? '' : current).trim() === String(next).trim()) return;
+    patch[key] = next;
+  });
+  if (rawDraft.hasSizes === true && !String(existing.sizes || '').trim() && rawDraft.sizes && rawDraft.sizes.length) {
+    patch.sizes = Array.isArray(rawDraft.sizes) ? rawDraft.sizes.join(', ') : rawDraft.sizes;
+  }
+  const cleaned = sanitizeAiAdminProductPatch_(patch);
+  if (!Object.keys(cleaned).length) {
+    return {
+      reply: 'I checked ' + String(product.id || '') + ' using its product image and existing data. I could not find any additional details I could fill confidently without inventing information.',
+      proposal: null,
+      model: generation.model,
+      provider: generation.provider
+    };
+  }
+  const warnings = Array.isArray(generation.warnings) && generation.warnings.length ? ' Notes: ' + generation.warnings.join(' ') : '';
+  return {
+    reply: 'I analysed ' + String(product.id || '') + ' with its product photo and existing details and prepared ' + Object.keys(cleaned).length + ' field' + (Object.keys(cleaned).length === 1 ? '' : 's') + ' to fill. I kept existing confirmed values unchanged.' + warnings,
+    proposal: {
+      type: 'update_product',
+      title: 'Complete ' + String(product.name || product.id || 'product') + ' (' + String(product.id || '') + ')',
+      description: 'AI-enriched missing product details from the listing image and existing product data. Review before applying.',
+      targetId: String(product.id || ''),
+      patch: cleaned,
+      current: aiAdminProductView_(product),
+      expectedRevision: productRevision_(product),
+      expectedStock: product.stock === undefined ? '' : product.stock,
+      expectedStockqty: product.stockqty === undefined ? '' : product.stockqty
+    },
+    model: generation.model,
+    provider: generation.provider
+  };
+}
+
+function aiAdminOptimizedImageUrl_(url) {
+  const value = String(url || '').trim();
+  if (!value || !/res\.cloudinary\.com/i.test(value) || !/\/upload\//.test(value)) return value;
+  if (/\/upload\/f_auto,q_auto:eco,w_1280,c_limit\//.test(value)) return value;
+  return value.replace('/upload/', '/upload/f_auto,q_auto:eco,w_1280,c_limit/');
+}
+
+function sanitizeAiAdminImageUrls_(urls) {
+  if (!Array.isArray(urls)) return [];
+  const seen = {};
+  return urls.map(function(url) { return String(url || '').trim(); }).filter(function(url) {
+    if (!/^https:\/\//i.test(url) || seen[url]) return false;
+    seen[url] = true;
+    return true;
+  }).slice(0, 5);
 }
 
 function sanitizeAiAdminHistory_(history) {
@@ -2494,7 +2617,10 @@ function aiAdminProductView_(p) {
     sizes: String(p.sizes || ''),
     tags: String(p.tags || ''),
     description: String(p.description || '').slice(0, 600),
-    descriptionhindi: String(p.descriptionhindi || '').slice(0, 600)
+    descriptionhindi: String(p.descriptionhindi || '').slice(0, 600),
+    specifications: String(p.specifications || '').slice(0, 800),
+    gtin: String(p.gtin || ''),
+    hasImage: !!String(p.image || '').trim()
   };
 }
 
@@ -2511,7 +2637,7 @@ function aiAdminOrderView_(o) {
   };
 }
 
-function aiAdminChatPrompt_(message, history, context, actor) {
+function aiAdminChatPrompt_(message, history, context, actor, imageCount) {
   const transcript = history.map(function(item) { return item.role.toUpperCase() + ': ' + item.text; }).join('\n');
   return [
     'You are DSB Admin AI, a concise operations copilot for Dhatterwal Suhag Bhandar.',
@@ -2525,7 +2651,10 @@ function aiAdminChatPrompt_(message, history, context, actor) {
     'For a new product, action.type="add_product" and patch should contain only known product fields. Never invent price, stock, GTIN, cost, exact material, sizes or brand unless supplied by the user/context.',
     'For an order status change, action.type="update_order_status", targetId must be an exact order id and status must be one of Pending, Confirmed, Packed, Shipped, Delivered, Fulfilled, Cancelled.',
     'For archive/restore, action.type="archive_product", targetId must be an exact product id and archived must be true or false.',
-    'Keep reply practical and short. If the request is ambiguous, ask a clarifying question and use action.type="none".',
+    'Use session context naturally. If the user clearly refers to one previously identified product or order, do not ask them to repeat its id.',
+    'If the user asks to fill, complete, enrich, or add every possible product detail, do not ask which fields they want; prepare as many safe missing descriptive fields as possible.',
+    imageCount ? ('The admin attached ' + imageCount + ' AI-only reference photo' + (imageCount === 1 ? '' : 's') + ' to the current message. Inspect them as visual evidence. They are not automatically listing photos and must not be saved into the product image fields unless the admin explicitly asks.') : 'No extra chat photos are attached to the current message.',
+    'Keep reply practical and short. Ask a clarifying question only when the target or requested change is genuinely ambiguous, and then use action.type="none".',
     'The current admin role is: ' + String(actor && actor.role || 'viewer') + '.',
     '',
     'SESSION CHAT HISTORY:', transcript || '(none)',
@@ -2539,11 +2668,19 @@ function aiAdminChatPrompt_(message, history, context, actor) {
   ].join('\n');
 }
 
-function callAiAdminChatProvider_(config, prompt) {
+function callAiAdminChatProvider_(config, prompt, imageUrls) {
+  imageUrls = sanitizeAiAdminImageUrls_(imageUrls);
   if (config.apiType === 'chat_completions') {
+    const content = [{ type: 'text', text: prompt }];
+    imageUrls.forEach(function(url) {
+      const prepared = config.isGemini ? aiGeminiInlineImageUrl_(url) : url;
+      const image = { url: prepared };
+      if (!config.isGemini && config.imageDetail) image.detail = config.imageDetail;
+      content.push({ type: 'image_url', image_url: image });
+    });
     const payload = {
       model: config.model,
-      messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+      messages: [{ role: 'user', content: content }],
       max_tokens: config.maxOutputTokens,
       response_format: { type: 'json_object' }
     };
@@ -2567,11 +2704,15 @@ function callAiAdminChatProvider_(config, prompt) {
     return text;
   }
 
+  const responseContent = [{ type: 'input_text', text: prompt }];
+  imageUrls.forEach(function(url) {
+    responseContent.push({ type: 'input_image', detail: config.imageDetail || 'low', image_url: url });
+  });
   const payload = {
     model: config.model,
     store: false,
     max_output_tokens: config.maxOutputTokens,
-    input: [{ role: 'user', content: [{ type: 'input_text', text: prompt }] }],
+    input: [{ role: 'user', content: responseContent }],
     text: { format: { type: 'json_object' } }
   };
   const data = aiFetchJson_(config, payload);
