@@ -19,3 +19,11 @@ if(!ws.includes("showToast('Product deleted')")) fail('delete success feedback m
 if(!ws.includes("showToast(err.message || 'Delete failed')")) fail('delete error feedback missing');
 if(!admin.includes("'Close order details' : 'View order details'")) fail('order detail icon lacks accessible label');
 console.log('Admin surface/action regression passed.');
+
+// Regression: frontend admin API version must match backend session version.
+{
+  const front = admin.match(/profile\.version !== (\d+)/);
+  const back = auth.match(/version:\s*(\d+)/);
+  if (!front || !back || front[1] !== back[1]) fail('admin API version mismatch');
+}
+console.log('Admin API version sync regression passed.');
