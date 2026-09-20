@@ -165,6 +165,9 @@ a.name{
   border-color: var(--rani);
   color: var(--rani);
 }
+.pd-link-btn:active{
+  transform: scale(.95);
+}
 .size-table{
   width:100%;
   border-collapse:collapse;
@@ -447,6 +450,10 @@ a.name{
 .primary-btn, .ghost-btn, .card .addbtn, .card .buynowbtn, .chip, .subchip, .iconbtn, .star-btn, .whatsapp-btn{
   transition: transform .12s ease;
 }
+.primary-btn:active, .ghost-btn:active, .card .addbtn:active, .card .buynowbtn:active,
+.chip:active, .subchip:active, .iconbtn:active, .star-btn:active{
+  transform: scale(.94);
+}
 .badge{
   transition: transform .1s ease;
 }
@@ -456,6 +463,38 @@ a.name{
   100%{transform:scale(1)}
 }
 .badge.bump{animation:badgeBump .26s cubic-bezier(.2,.8,.2,1)}
+.cart-flight-token{
+  position:fixed;
+  z-index:300;
+  pointer-events:none;
+  border-radius:50%;
+  background-size:cover;
+  background-position:center;
+  border:2px solid rgba(255,255,255,.94);
+  box-shadow:0 5px 16px rgba(32,27,61,.2),0 0 0 1px rgba(200,17,99,.1);
+  will-change:transform,opacity;
+}
+@keyframes cartSettle{
+  0%{transform:translateY(0) scale(1)}
+  45%{transform:translateY(1px) scale(.93)}
+  100%{transform:translateY(0) scale(1)}
+}
+.iconbtn.cart-settle{animation:cartSettle .28s cubic-bezier(.22,.72,.22,1)}
+/* A quick, gentle pop whenever a card's Add button swaps to a stepper (or
+   back), without re-animating the whole card. */
+.card-actions > *, .pd-actions > *{
+  animation: actionsIn .2s ease both;
+}
+@keyframes actionsIn{
+  from{
+    opacity:0;
+    transform: scale(.92);
+  }
+  to{
+    opacity:1;
+    transform: scale(1);
+  }
+}
 /* Sections (Popular Picks / New Arrivals) fade + rise into place as they
    scroll into view, via initScrollReveal() in utils.js. */
 .reveal{
@@ -762,6 +801,9 @@ a.name{
   z-index:70;
   text-decoration:none;
   transition: transform .15s ease;
+}
+.wa-float:active{
+  transform: scale(.92);
 }
 /* =========================================================
    V4 FUTURISTIC EXPERIENCE LAYER — frontend only

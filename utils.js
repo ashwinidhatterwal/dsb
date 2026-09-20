@@ -40,7 +40,15 @@ function formatDateTime(value) {
     minute: '2-digit'
   });
 }
-
+let toastTimer;
+function showToast(msg) {
+  const t = $('#toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+}
 
 // Points the floating WhatsApp button at the shop's number from config.js,
 // so it only ever needs to be set in one place.
@@ -189,7 +197,7 @@ function openDialogFocus(root, onClose) {
     });
   }
   dialogStack.push(entry);
-  (root.querySelector('button:not([disabled]),input,select,textarea,a[href]') || root).focus({ preventScroll: true });
+  (root.querySelector('button:not([disabled]),input,select,textarea,a[href]') || root).focus();
 }
 function closeDialogFocus(root) {
   const index = dialogStack.findIndex(x => x.root === root);
@@ -199,7 +207,7 @@ function closeDialogFocus(root) {
     const entry = dialogStack.pop();
     entry.siblings.forEach(([el, state]) => el.inert = state);
     entry.root.removeAttribute('aria-modal');
-    if (entry.previous && entry.previous.isConnected) entry.previous.focus({ preventScroll: true });
+    if (entry.previous && entry.previous.isConnected) entry.previous.focus();
   }
 }
 document.addEventListener('keydown', e => {
@@ -226,7 +234,3 @@ document.addEventListener('keydown', e => {
     first.focus();
   }
 }, true);
-
-function prefersReducedMotion() {
-  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false;
-}

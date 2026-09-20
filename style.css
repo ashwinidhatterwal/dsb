@@ -298,7 +298,7 @@ a{
 }
 .card:active{
   box-shadow: 0 10px 22px rgba(32,27,61,0.14);
-
+  transform: translateY(-1px);
 }
 .card .imgwrap{
   position:relative;
@@ -324,6 +324,9 @@ a{
 .card-share:hover{
   background:#fff;
   color: var(--rani);
+}
+.card-share:active{
+  transform: scale(.88);
 }
 /* Smooth, futuristic hover on pointer devices — untouched on mobile taps. */
 @media (hover:hover) and (pointer:fine){
@@ -1022,6 +1025,9 @@ a.name{
   border-color: var(--rani);
   color: var(--rani);
 }
+.pd-link-btn:active{
+  transform: scale(.95);
+}
 .size-table{
   width:100%;
   border-collapse:collapse;
@@ -1304,6 +1310,10 @@ a.name{
 .primary-btn, .ghost-btn, .card .addbtn, .card .buynowbtn, .chip, .subchip, .iconbtn, .star-btn, .whatsapp-btn{
   transition: transform .12s ease;
 }
+.primary-btn:active, .ghost-btn:active, .card .addbtn:active, .card .buynowbtn:active,
+.chip:active, .subchip:active, .iconbtn:active, .star-btn:active{
+  transform: scale(.94);
+}
 .badge{
   transition: transform .1s ease;
 }
@@ -1313,6 +1323,38 @@ a.name{
   100%{transform:scale(1)}
 }
 .badge.bump{animation:badgeBump .26s cubic-bezier(.2,.8,.2,1)}
+.cart-flight-token{
+  position:fixed;
+  z-index:300;
+  pointer-events:none;
+  border-radius:50%;
+  background-size:cover;
+  background-position:center;
+  border:2px solid rgba(255,255,255,.94);
+  box-shadow:0 5px 16px rgba(32,27,61,.2),0 0 0 1px rgba(200,17,99,.1);
+  will-change:transform,opacity;
+}
+@keyframes cartSettle{
+  0%{transform:translateY(0) scale(1)}
+  45%{transform:translateY(1px) scale(.93)}
+  100%{transform:translateY(0) scale(1)}
+}
+.iconbtn.cart-settle{animation:cartSettle .28s cubic-bezier(.22,.72,.22,1)}
+/* A quick, gentle pop whenever a card's Add button swaps to a stepper (or
+   back), without re-animating the whole card. */
+.card-actions > *, .pd-actions > *{
+  animation: actionsIn .2s ease both;
+}
+@keyframes actionsIn{
+  from{
+    opacity:0;
+    transform: scale(.92);
+  }
+  to{
+    opacity:1;
+    transform: scale(1);
+  }
+}
 /* Sections (Popular Picks / New Arrivals) fade + rise into place as they
    scroll into view, via initScrollReveal() in utils.js. */
 .reveal{
@@ -1620,6 +1662,9 @@ a.name{
   text-decoration:none;
   transition: transform .15s ease;
 }
+.wa-float:active{
+  transform: scale(.92);
+}
 /* =========================================================
    V4 FUTURISTIC EXPERIENCE LAYER — frontend only
    Google Sheets / Apps Script logic remains completely unchanged.
@@ -1914,6 +1959,9 @@ body.modal-open{
   font-size:18px;
   line-height:1;
   box-shadow:0 8px 22px rgba(32,27,61,.12);
+}
+.cart-drawer .closebtn:active{
+  transform:scale(.94);
 }
 .cart-drawer > h2{
   min-height:38px;
@@ -2612,6 +2660,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 }
 .primary-btn,.ghost-btn,.iconbtn,.chip,.subchip,.card .addbtn,.card .buynowbtn{
   transition:transform .2s cubic-bezier(.22,.61,.36,1),background-color .2s ease,box-shadow .2s ease;
+}
+.primary-btn:active,.ghost-btn:active,.iconbtn:active,.card .addbtn:active,.card .buynowbtn:active{
+  transform:scale(.98);
 }
 @media(hover:none){
   .card:hover,.card:hover img,.chip:hover,.subchip:hover,.iconbtn:hover,.addbtn:hover{
@@ -3343,6 +3394,9 @@ html[lang="hi"] .hero-compact .hero-title{
     transform:scale(1.025);
   }
 }
+.card:active .imgwrap img{
+  transform:scale(1.02);
+}
 @media(prefers-reduced-motion:reduce){
   .card .imgwrap img,.pd-slide img{
     transition:none;
@@ -3600,6 +3654,9 @@ html[lang="hi"] .hero-compact .hero-title{
   border-color:rgba(200,17,99,.34)!important;
   background:#fff7fb!important;
 }
+.home-cart-btn:active{
+  transform:scale(.94);
+}
 .home-cart-btn.in-cart{
   background:#fff2f7!important;
   border-color:rgba(200,17,99,.28)!important;
@@ -3651,4 +3708,4 @@ html[lang="hi"] .hero-compact .hero-title{
 .quick-size-option.adding{opacity:.58;pointer-events:none}
 .quick-size-open{overflow:hidden}
 @media(min-width:700px){.quick-size-overlay{align-items:center}.quick-size-sheet{border-radius:20px}}
-@media(prefers-reduced-motion:reduce){.quick-size-overlay,.quick-size-sheet,.quick-size-option{transition:none}}
+@media(prefers-reduced-motion:reduce){.quick-size-overlay,.quick-size-sheet,.quick-size-option{transition:none}.cart-flight-token{display:none}}

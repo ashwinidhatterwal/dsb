@@ -127,7 +127,7 @@ function bindCardActionEvents(card, product, list) {
       return;
     }
     updateCardActionsUI(card, product, list);
-    playAddFlourish($('.card-actions', card), {
+    playAddFlourish($('img', card), {
       openCartAfter: true
     });
   });
@@ -154,6 +154,9 @@ function quickSizePickerElement() {
   overlay.addEventListener('click', e => {
     if (e.target === overlay || e.target.closest('.quick-size-close')) closeQuickSizePicker();
   });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) closeQuickSizePicker();
+  });
   return overlay;
 }
 function closeQuickSizePicker() {
@@ -161,7 +164,6 @@ function closeQuickSizePicker() {
   if (!overlay) return;
   overlay.classList.remove('open');
   document.body.classList.remove('quick-size-open');
-  closeDialogFocus($('.quick-size-sheet', overlay));
 }
 function openQuickSizePicker(product, card, list) {
   const overlay = quickSizePickerElement();
@@ -196,13 +198,12 @@ function openQuickSizePicker(product, card, list) {
       closeQuickSizePicker();
       updateCardActionsUI(card, product, list);
       showToast(`${product.name} • ${size} added to cart`);
-      playAddFlourish($('.card-actions', card));
+      playAddFlourish($('img', card));
     });
   });
   overlay.classList.add('open');
   document.body.classList.add('quick-size-open');
-  openDialogFocus($('.quick-size-sheet', overlay), closeQuickSizePicker);
-  options.querySelector('.quick-size-option')?.focus({ preventScroll:true });
+  requestAnimationFrame(() => options.querySelector('.quick-size-option')?.focus({ preventScroll:true }));
 }
 
 async function handleCardAdd(product, delta, card, list) {
@@ -219,7 +220,7 @@ async function handleCardAdd(product, delta, card, list) {
   updateCardActionsUI(card, product, list);
   if (delta > 0) {
     showToast(`${product.name} added to cart`);
-    playAddFlourish($('.card-actions', card));
+    playAddFlourish($('img', card));
   } else {
     updateCartBadge();
   }

@@ -313,6 +313,12 @@ function initUI() {
     inStockOnly = e.target.checked;
     renderGrid();
   });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      closeCart();
+      closeSearch();
+    }
+  });
   document.querySelectorAll('.carousel-section .related-rail').forEach(rail => {
     rail.addEventListener('pointerdown', () => {
       rail.dataset.engaged = '1';

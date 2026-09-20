@@ -12,6 +12,7 @@
     "src/backend/transactions.gs",
     "src/backend/telegram.gs",
     "src/backend/ai-product.gs",
+    "src/backend/ai-admin-chat.gs",
     "src/backend/admin-auth.gs"
   ],
   "styles": [

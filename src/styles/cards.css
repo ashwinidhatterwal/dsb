@@ -54,7 +54,7 @@
 }
 .card:active{
   box-shadow: 0 10px 22px rgba(32,27,61,0.14);
-
+  transform: translateY(-1px);
 }
 .card .imgwrap{
   position:relative;
@@ -80,6 +80,9 @@
 .card-share:hover{
   background:#fff;
   color: var(--rani);
+}
+.card-share:active{
+  transform: scale(.88);
 }
 /* Smooth, futuristic hover on pointer devices — untouched on mobile taps. */
 @media (hover:hover) and (pointer:fine){

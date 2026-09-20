@@ -176,6 +176,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .primary-btn,.ghost-btn,.iconbtn,.chip,.subchip,.card .addbtn,.card .buynowbtn{
   transition:transform .2s cubic-bezier(.22,.61,.36,1),background-color .2s ease,box-shadow .2s ease;
 }
+.primary-btn:active,.ghost-btn:active,.iconbtn:active,.card .addbtn:active,.card .buynowbtn:active{
+  transform:scale(.98);
+}
 @media(hover:none){
   .card:hover,.card:hover img,.chip:hover,.subchip:hover,.iconbtn:hover,.addbtn:hover{
     transform:none;

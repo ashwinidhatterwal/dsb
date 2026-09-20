@@ -105,7 +105,7 @@ async function submitOrder() {
   checkoutBusy = true;
   const btn = $('#orderWaBtn');
   if (btn) {
-    setButtonBusy(btn, true);
+    btn.disabled = true;
     btn.textContent = 'Checking stock…';
   }
   try {
@@ -123,7 +123,7 @@ async function submitOrder() {
   } finally {
     checkoutBusy = false;
     if (btn?.isConnected) {
-      setButtonBusy(btn, false);
+      btn.disabled = false;
       btn.textContent = 'Review order';
     }
   }

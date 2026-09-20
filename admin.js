@@ -115,7 +115,12 @@ function status(el, msg, ok) {
   el.textContent = msg;
   el.className = 'statusline ' + (ok ? 'ok' : 'err');
 }
-
+function showToast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
 async function loadProducts(refreshRelated = true) {
   const statusEl = $('#connectStatus'),
     sequence = ++productRequestSequence;
@@ -124,7 +129,7 @@ async function loadProducts(refreshRelated = true) {
   try {
     if (!ADMIN_PROFILE) {
       const profile = await adminRead('adminSession');
-      if (profile.version !== 11) throw new Error('Deploy the new code.gs version before opening this admin update.');
+      if (profile.version !== 12) throw new Error('Deploy the new code.gs version before opening this admin update.');
       ADMIN_PROFILE = profile;
       applyStaffRole();
       offerSavedDraft();
@@ -550,7 +555,7 @@ async function uploadImageTask() {
   }
   const btn = $('#uploadBtn'),
     label = btn.textContent;
-  setButtonBusy(btn, true);
+  btn.disabled = true;
   btn.textContent = 'Uploading…';
   status(statusEl, 'Uploading…', true);
   try {
@@ -562,7 +567,7 @@ async function uploadImageTask() {
   } catch (err) {
     status(statusEl, 'Upload failed: ' + err.message, false);
   } finally {
-    setButtonBusy(btn, false);
+    btn.disabled = false;
     btn.textContent = label;
   }
 }
@@ -599,7 +604,7 @@ async function uploadExtraImageTask() {
   }
   const btn = $('#uploadExtraBtn'),
     label = btn.textContent;
-  setButtonBusy(btn, true);
+  btn.disabled = true;
   btn.textContent = 'Uploading…';
   status(statusEl, 'Uploading…', true);
   try {
@@ -611,7 +616,7 @@ async function uploadExtraImageTask() {
   } catch (err) {
     status(statusEl, 'Upload failed: ' + err.message, false);
   } finally {
-    setButtonBusy(btn, false);
+    btn.disabled = false;
     btn.textContent = label;
   }
 }
@@ -715,7 +720,7 @@ async function saveProductTask() {
     product
   };
   const btn = $('#saveBtn');
-  setButtonBusy(btn, true);
+  btn.disabled = true;
   btn.textContent = 'Saving…';
   try {
     const res = await adminFetch(API_URL, {
@@ -732,7 +737,7 @@ async function saveProductTask() {
     status(statusEl, isUpdate ? 'Product updated.' : `Product added as ${data.id}.`, true);
     showToast(isUpdate ? 'Product updated' : 'Product added');
     clearForm(true);
-    setButtonBusy(btn, false);
+    btn.disabled = false;
     btn.textContent = 'Save product';
     switchTab('products');
     if (!(await loadProducts(false))) showToast('Product saved. List refresh failed; refresh before editing again.');
@@ -740,7 +745,7 @@ async function saveProductTask() {
   } catch (err) {
     status(statusEl, 'Save could not be confirmed: ' + err.message + ' Check the product list before retrying.', false);
   } finally {
-    setButtonBusy(btn, false);
+    btn.disabled = false;
     btn.textContent = 'Save product';
   }
 }
@@ -773,10 +778,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     const btn = $('#connectBtn');
-    setButtonBusy(btn, true);
+    btn.disabled = true;
     btn.textContent = 'Connecting…';
     await loadProducts();
-    setButtonBusy(btn, false);
+    btn.disabled = false;
     btn.textContent = 'Connect';
   });
   $('#saveBtn').addEventListener('click', saveProduct);
@@ -830,12 +835,12 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#dashRefreshBtn').addEventListener('click', async () => {
     const btn = $('#dashRefreshBtn');
     if (btn.disabled) return;
-    setButtonBusy(btn, true);
+    btn.disabled = true;
     try {
       const ok = await loadDashboard();
       showToast(ok ? 'Dashboard refreshed' : 'Dashboard refresh failed. Try again.');
     } finally {
-      setButtonBusy(btn, false);
+      btn.disabled = false;
     }
   });
 });

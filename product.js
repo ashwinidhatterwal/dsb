@@ -427,7 +427,7 @@ function renderPdActions(p) {
     }
     renderPdActions(p);
     showToast(`${p.name} added to cart`);
-    playAddFlourish($('#pdActions'));
+    playAddFlourish($('.pd-slide img'));
   });
   const buyBtn = $('#pdBuyNow');
   if (buyBtn) buyBtn.addEventListener('click', async () => {
@@ -437,7 +437,7 @@ function renderPdActions(p) {
       return;
     }
     renderPdActions(p);
-    playAddFlourish($('#pdActions'), {
+    playAddFlourish($('.pd-slide img'), {
       openCartAfter: true
     });
   });
@@ -538,7 +538,7 @@ async function submitReview() {
     return;
   }
   const btn = $('#submitReviewBtn');
-  setButtonBusy(btn, true);
+  btn.disabled = true;
   btn.textContent = 'Submitting…';
   try {
     const data = await requestJson(CONFIG.SHEET_API_URL, {
@@ -569,7 +569,7 @@ async function submitReview() {
   } catch (err) {
     status_(statusEl, 'Could not submit feedback: ' + err.message, false);
   } finally {
-    setButtonBusy(btn, false);
+    btn.disabled = false;
     btn.textContent = 'Submit feedback';
   }
 }
@@ -628,6 +628,12 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#cartTrigger').addEventListener('click', openCart);
   $('#cartOverlay').addEventListener('click', e => {
     if (e.target.id === 'cartOverlay') closeCart();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      closeCart();
+      closeSizeGuide();
+    }
   });
   updateCartBadge();
   initWhatsAppFloat();

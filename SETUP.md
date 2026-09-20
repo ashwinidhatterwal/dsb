@@ -162,3 +162,11 @@ The admin AI dialog now has **Fast / Better / Best** quality controls. These ove
 - **Best** → `high` (slowest; use for difficult/ambiguous products)
 
 `AI_REASONING_EFFORT` in Script Properties remains the backend fallback for clients that do not send a per-request selection. No redeploy is needed just to change the Script Property.
+
+## Admin AI chat
+
+The admin panel includes a compact floating **DSB AI** assistant. It uses the same server-side AI provider settings as product AI, so the API key remains in Apps Script Script Properties and is never exposed to the browser.
+
+Chat memory is session-only: recent user/assistant messages are kept in the current browser tab with `sessionStorage` and are not written to Google Sheets. The assistant can read live catalog/order summaries and can prepare product creates/edits, order-status changes, and archive/restore actions. Any write appears as a review card and requires a two-click **Apply → Confirm apply** action before the existing admin backend is called.
+
+After installing this update, replace Apps Script with the generated `code.gs` and deploy a new web-app version. This build uses admin API version 12, so the updated frontend intentionally requires the updated backend.

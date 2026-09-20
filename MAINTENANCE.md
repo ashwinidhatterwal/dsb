@@ -58,8 +58,7 @@ Apps Script functions still share their original global scope. File separation i
 
 ## Safe release checklist
 
-Run the build consistency check, `node scripts/check.mjs`, `node scripts/check-checkout.mjs`, `node scripts/check-autofill.mjs`, `node scripts/check-ai.mjs`, and
-`node scripts/check-feedback.mjs`. Check the home page at phone and desktop widths, choose a priced size, add/remove cart quantities, and inspect the admin editor before publishing. Local checks do not execute live Google APIs or send orders/notifications.
+Run the build consistency check, `node scripts/check.mjs`, `node scripts/check-checkout.mjs`, and `node scripts/check-autofill.mjs`. Check the home page at phone and desktop widths, choose a priced size, add/remove cart quantities, and inspect the admin editor before publishing. Local checks do not execute live Google APIs or send orders/notifications.
 
 When changing a deployed asset, update the version query in HTML and the static-page template. Preserve the `.github` publishing workflow, which excludes developer sources from the public website.
 
@@ -112,26 +111,10 @@ AI generation is deliberately non-destructive: it does not write Sheets, save pr
 
 AI generation uses an elapsed-time/indeterminate progress indicator because third-party AI APIs do not expose reliable percentage completion. Do not replace it with a fake percentage. AI-only Cloudinary URLs are transformed to a lightweight 1280px derivative before analysis; original product URLs stay unchanged. Chat-completions uses compact JSON-object mode to reduce payload and compatibility overhead.
 
-## Interaction feedback
+### Admin AI copilot
 
-`ui-feedback.js` and `ui-feedback.css` are shared by all pages, including admin.
-They own CSS-only button presses, local cart celebrations, toast timing, busy
-indicators, focus outlines and reduced-motion handling. Edit the duration tokens
-in this stylesheet to tune the whole site. Keep this stylesheet after page styles.
-The deferred script runs before DOMContentLoaded consumers; do not mark it async.
-
-Use `setButtonBusy(button, true)` before a request and reset it in `finally`.
-Only show a success toast after the underlying operation succeeds. Existing
-cart/overlay transitions remain owned by their component styles. Do not animate whole render regions on DOM changes: translations can move
-positioned descendants and make the screen jerk. Cart success uses one disposable,
-fixed checkmark/sparkle burst plus a cart-icon wiggle; repeated additions replace
-the previous burst. Buy Now opens immediately, without waiting for decoration.
-Dialog focus restoration uses preventScroll and cart unlock restores the scroll
-position instantly. Press scale belongs only to ui-feedback.css; do not add a
-second click-driven scale or animate replacement action rows.
-
-This cleanup consolidates the two toast implementations, removes redundant
-page-level Escape listeners (the shared dialog manager owns Escape), shares
-focus trapping/restoration with the quick size picker, and repairs
-literal escaped newlines in admin AI progress CSS. Source/build pairs and legacy
-style defaults remain necessary; do not delete them merely because selectors recur.
+- UI: `admin-chat.js` + the compact drawer markup in `admin.html`; styling is in `admin-theme.css`.
+- Backend: maintain `src/backend/ai-admin-chat.gs`; never edit generated `code.gs` directly.
+- Session memory is browser-only and capped; no chat transcript is persisted to Sheets.
+- AI write suggestions are proposals only. Product add/update, archive/restore and order-status changes are executed through the existing validated admin actions after explicit confirmation.
+- Do not add payment verification/refunds, permanent deletes, credentials, or security-setting mutations to the AI action allowlist without a separate higher-assurance approval design.

@@ -71,11 +71,59 @@ function updateCartBadge() {
     badge.classList.add('bump');
   }
 }
-// Success feedback is local and never gates cart state or opening checkout.
-function playAddFlourish(anchor, { openCartAfter = false } = {}) {
-  updateCartBadge();
-  window.DSBFeedback?.celebrate(anchor);
-  if (openCartAfter) openCart();
+function prefersReducedMotion() {
+  return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+// Refined add-to-cart motion: a small product token glides toward the cart
+// while the cart and badge respond with restrained micro-interactions.
+function flyToCart(imgEl, onLand) {
+  const fallback = () => { if (onLand) onLand(); };
+  if (!imgEl || prefersReducedMotion()) { fallback(); return; }
+  const cartIcon = $('#cartTrigger');
+  if (!cartIcon) { fallback(); return; }
+  const startRect = imgEl.getBoundingClientRect();
+  const endRect = cartIcon.getBoundingClientRect();
+  if (!startRect.width || !endRect.width) { fallback(); return; }
+
+  const size = 22;
+  const startX = startRect.right - size - 10;
+  const startY = startRect.bottom - size - 10;
+  const token = document.createElement('div');
+  token.className = 'cart-flight-token';
+  token.style.cssText = `left:${startX}px;top:${startY}px;width:${size}px;height:${size}px;background-image:url("${String(imgEl.currentSrc || imgEl.src || '').replace(/"/g, '%22')}")`;
+  document.body.appendChild(token);
+
+  const dx = endRect.left + endRect.width / 2 - (startX + size / 2);
+  const dy = endRect.top + endRect.height / 2 - (startY + size / 2);
+  const curve = Math.min(54, Math.max(24, Math.abs(dx) * .08));
+  const frames = [
+    { transform:'translate3d(0,0,0) scale(1)', opacity:.94, offset:0 },
+    { transform:`translate3d(${dx*.46}px,${dy*.46-curve}px,0) scale(.86)`, opacity:.9, offset:.46 },
+    { transform:`translate3d(${dx}px,${dy}px,0) scale(.48)`, opacity:.2, offset:1 }
+  ];
+  const anim = token.animate(frames, { duration:430, easing:'cubic-bezier(.22,.72,.22,1)' });
+  anim.onfinish = () => {
+    token.remove();
+    cartIcon.classList.remove('cart-settle');
+    void cartIcon.offsetWidth;
+    cartIcon.classList.add('cart-settle');
+    if (onLand) onLand();
+  };
+  anim.oncancel = () => token.remove();
+}
+
+// Shared "fly into the cart, then react" sequencing used by every Add/Buy
+// Now button across the site — keeps the cart badge bump and (optionally)
+// opening the drawer in sync with the moment the product actually "lands".
+function playAddFlourish(imgEl, {
+  openCartAfter = false
+} = {}) {
+  const finish = () => {
+    updateCartBadge();
+    if (openCartAfter) openCart();
+  };
+  flyToCart(imgEl, finish);
 }
 
 /* ---------------- Track your order ---------------- */
@@ -121,7 +169,7 @@ async function submitTrackOrder() {
   }
   const btn = $('#trackSubmitBtn');
   const originalLabel = btn.textContent;
-  setButtonBusy(btn, true);
+  btn.disabled = true;
   btn.textContent = 'Checking…';
   try {
     const url = `${CONFIG.SHEET_API_URL}?action=trackOrder&orderId=${encodeURIComponent(orderId)}&phone=${encodeURIComponent(phone)}`;
@@ -134,7 +182,7 @@ async function submitTrackOrder() {
   } catch (err) {
     showTrackError('Something went wrong — please try again or message us on WhatsApp.');
   } finally {
-    setButtonBusy(btn, false);
+    btn.disabled = false;
     btn.textContent = originalLabel;
   }
 }
@@ -187,6 +235,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (overlay) overlay.addEventListener('click', e => {
     if (e.target.id === 'trackOverlay') closeTrackOrder();
   });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeTrackOrder();
+  });
 });
 let cartScrollLockY = 0;
 function lockPageForCart() {
@@ -202,7 +253,7 @@ function unlockPageFromCart() {
   document.documentElement.classList.remove('modal-open');
   document.body.classList.remove('modal-open');
   document.body.style.top = '';
-  window.scrollTo({ top: cartScrollLockY, left: 0, behavior: 'instant' });
+  window.scrollTo(0, cartScrollLockY);
 }
 async function openCart() {
   // Reconcile against the live catalog if one is loaded on this page (it
@@ -242,20 +293,7 @@ async function fetchPromosIfNeeded() {
     checkoutState.availablePromos = null;
   }
 }
-let promoBusy = false;
 async function applyPromoCode() {
-  if (promoBusy) return;
-  const button = $('#applyPromoBtn');
-  promoBusy = true;
-  setButtonBusy(button, true);
-  try {
-    await applyPromoCodeTask();
-  } finally {
-    promoBusy = false;
-    setButtonBusy(button, false);
-  }
-}
-async function applyPromoCodeTask() {
   if (checkoutState.availablePromos === null) {
     await fetchPromosIfNeeded();
   }
