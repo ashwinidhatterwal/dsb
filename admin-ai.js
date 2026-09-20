@@ -310,7 +310,10 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    $('#aiGenerateOpenBtn')?.addEventListener('click', openDialog);
+    $('#aiGenerateOpenBtn')?.addEventListener('click', () => {
+      if (window.DSBAdminAI?.openForForm) window.DSBAdminAI.openForForm();
+      else openDialog();
+    });
     $('#aiCloseBtn')?.addEventListener('click', closeDialog);
     $('#aiGenerateBtn')?.addEventListener('click', generateDraft);
     $('#aiRefUploadBtn')?.addEventListener('click', uploadReferenceImage);

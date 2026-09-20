@@ -11,6 +11,7 @@
   let applying = false;
   let sessionEpoch = 0;
   let applyTimer = null;
+  let formMode = false;
 
   const qs = (s, c = document) => c.querySelector(s);
   const qsa = (s, c = document) => Array.from(c.querySelectorAll(s));
@@ -56,9 +57,16 @@
     input?.focus({ preventScroll: true });
   }
 
-  function openChat() {
+  function openChat(options = {}) {
     const drawer = qs('#adminAiDrawer');
     if (!drawer) return;
+    const context = window.DSBProductEditor?.getContext?.();
+    formMode = options.form === true || !!context?.active;
+    drawer.classList.toggle('form-mode', formMode);
+    const headCopy = qs('.admin-ai-head-copy small', drawer);
+    if (headCopy) headCopy.textContent = formMode ? `${context?.mode === 'edit' ? 'Editing existing' : 'Creating new'} product · AI changes stay unsaved` : 'Review changes before applying';
+    const input = qs('#adminAiInput');
+    if (input) input.placeholder = formMode ? 'Tell AI how to complete or improve this form…' : 'Ask about products, orders, stock…';
     drawer.inert = false;
     const backdrop = qs('#adminAiBackdrop');
     if (backdrop) backdrop.hidden = true;
@@ -68,7 +76,7 @@
     renderMessages();
     setTimeout(() => qs('#adminAiInput')?.focus(), 30);
   }
-  function closeChat({ restoreFocus = true } = {}) {
+  function closeChat() {
     const drawer = qs('#adminAiDrawer');
     if (!drawer) return;
     drawer.inert = true;
@@ -77,7 +85,7 @@
     drawer.classList.remove('open');
     drawer.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('admin-ai-open');
-    if (restoreFocus) qs('#adminAiOpen')?.focus({ preventScroll: true });
+    qs('#adminAiOpen')?.focus({ preventScroll: true });
   }
 
   function renderMessages() {
@@ -117,7 +125,6 @@
   function proposalLabel(proposal) {
     if (!proposal) return '';
     if (proposal.type === 'update_product') return 'Product edit';
-    if (proposal.type === 'batch_update_products') return 'Catalog batch';
     if (proposal.type === 'add_product') return 'New product';
     if (proposal.type === 'update_order_status') return 'Order status';
     if (proposal.type === 'archive_product') return proposal.archived ? 'Archive product' : 'Restore product';
@@ -168,17 +175,6 @@
         return `<div class="admin-ai-change"><label><input type="checkbox" data-ai-field="${escapeHtml(key)}" checked> ${escapeHtml(fieldLabel(key))}</label><del><small>Current</small>${escapeHtml(displayValue(before))}</del><strong><small>Edit suggestion</small>${fieldEditor(key, next)}</strong></div>`;
       }).join('');
       detail = `<div class="admin-ai-changes">${rows}</div>`;
-    } else if (proposal.type === 'batch_update_products') {
-      const items = Array.isArray(proposal.items) ? proposal.items : [];
-      const cards = items.map((item, index) => {
-        const fields = Object.entries(item.patch || {}).map(([key, next]) => {
-          const before = item.current ? item.current[key] : '';
-          return `<div class="admin-ai-batch-field"><label><input type="checkbox" data-ai-batch-field="${index}:${escapeHtml(key)}" checked> ${escapeHtml(fieldLabel(key))}</label><span><small>Current</small>${escapeHtml(displayValue(before))}</span><strong><small>Suggested</small>${escapeHtml(displayValue(next))}</strong></div>`;
-        }).join('');
-        return `<details class="admin-ai-batch-card" ${index === 0 ? 'open' : ''}><summary><label><input type="checkbox" data-ai-batch-item="${index}" checked> <b>${escapeHtml(item.targetId || '')}</b> ${escapeHtml(item.title || '')}</label><span>${Object.keys(item.patch || {}).length} fields</span></summary><div>${fields}</div></details>`;
-      }).join('');
-      const warningText = Array.isArray(proposal.warnings) && proposal.warnings.length ? `<div class="admin-ai-batch-warnings"><b>Notes</b>${proposal.warnings.map(x => `<div>${escapeHtml(x)}</div>`).join('')}</div>` : '';
-      detail = `<div class="admin-ai-batch-summary">${items.length} ready for review${proposal.remainingCount ? ` · ${proposal.remainingCount} remaining for later batches` : ''}</div><div class="admin-ai-batch-list">${cards}</div>${warningText}`;
     } else if (proposal.type === 'add_product') {
       const photo = String(proposal.patch?.image || '');
       detail = `${/^https:\/\//i.test(photo) ? `<img class="admin-ai-draft-photo" src="${escapeHtml(photo)}" alt="Proposed listing photo">` : ''}<div class="admin-ai-editor-grid">${productFields.map(key => `<label class="admin-ai-editor-field">${escapeHtml(fieldLabel(key))}${fieldEditor(key, proposal.patch?.[key])}</label>`).join('')}</div>`;
@@ -211,26 +207,6 @@
       btn.textContent = 'Apply';
       btn.classList.remove('armed');
     }));
-    qsa('[data-ai-batch-item]', wrap).forEach(box => box.addEventListener('change', () => {
-      const index = box.dataset.aiBatchItem;
-      qsa(`[data-ai-batch-field^="${index}:"]`, wrap).forEach(field => { field.checked = box.checked; field.disabled = !box.checked; });
-      const btn = qs('#adminAiApplyProposal');
-      btn.disabled = !qsa('[data-ai-batch-field]:checked', wrap).length;
-      btn.dataset.armed = '';
-      btn.textContent = 'Apply';
-      btn.classList.remove('armed');
-    }));
-    qsa('[data-ai-batch-field]', wrap).forEach(box => box.addEventListener('change', () => {
-      const index = box.dataset.aiBatchField.split(':')[0];
-      const item = qs(`[data-ai-batch-item="${index}"]`, wrap);
-      const siblings = qsa(`[data-ai-batch-field^="${index}:"]`, wrap);
-      if (item) item.checked = siblings.some(field => field.checked);
-      const btn = qs('#adminAiApplyProposal');
-      btn.disabled = !qsa('[data-ai-batch-field]:checked', wrap).length;
-      btn.dataset.armed = '';
-      btn.textContent = 'Apply';
-      btn.classList.remove('armed');
-    }));
     const scroller = qs('#adminAiConversation');
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }
@@ -257,17 +233,6 @@
       if (!selected.length) return;
       proposal = { ...proposal, patch: Object.fromEntries(Object.entries(proposal.patch || {}).filter(([key]) => selected.includes(key))) };
     }
-    if (proposal?.type === 'batch_update_products') {
-      const selected = new Map();
-      qsa('[data-ai-batch-field]:checked', qs('#adminAiProposal')).forEach(box => {
-        const [indexText, ...keyParts] = box.dataset.aiBatchField.split(':');
-        const index = Number(indexText), key = keyParts.join(':');
-        if (!selected.has(index)) selected.set(index, []);
-        selected.get(index).push(key);
-      });
-      if (!selected.size) return;
-      proposal = { ...proposal, items: (proposal.items || []).map((item, index) => selected.has(index) ? { ...item, patch: Object.fromEntries(Object.entries(item.patch || {}).filter(([key]) => selected.get(index).includes(key))) } : null).filter(Boolean) };
-    }
     const btn = qs('#adminAiApplyProposal');
     if (!proposal || !btn || busy) return;
     if (['add_product','update_product'].includes(proposal.type)) {
@@ -286,36 +251,6 @@
     btn.textContent = 'Applying…';
     qsa('[data-ai-edit], [data-ai-field]', qs('#adminAiProposal')).forEach(el => { el.disabled = true; });
     try {
-      if (proposal.type === 'batch_update_products') {
-        const items = Array.isArray(proposal.items) ? proposal.items : [];
-        let applied = 0;
-        const appliedIds = [];
-        const failed = [];
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i];
-          btn.textContent = `Applying ${i + 1}/${items.length}…`;
-          try {
-            const res = await adminFetch(API_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              body: JSON.stringify({ key: ADMIN_KEY, action: 'update', clientVersion: 7, product: { id: item.targetId, ...(item.patch || {}), expected_revision: item.expectedRevision } }),
-              timeoutMs: 60000
-            });
-            const data = await res.json();
-            if (data?.error) throw new Error(data.error);
-            applied++;
-            if (item.targetId) appliedIds.push(item.targetId);
-          } catch (err) {
-            failed.push(`${item.targetId}: ${err?.message || err}`);
-          }
-        }
-        if (applied) showToast(`Applied ${applied} catalog update${applied === 1 ? '' : 's'}`);
-        addMessage('assistant', `Batch complete: ${applied} product${applied === 1 ? '' : 's'} updated.${appliedIds.length ? ` Reviewed IDs: ${appliedIds.join(', ')}.` : ''}${failed.length ? ` ${failed.length} failed: ${failed.slice(0,3).join(' | ')}` : ''}${proposal.remainingCount ? ` ${proposal.remainingCount} products remain; ask “continue catalog batch”.` : ''}`);
-        renderProposal(null);
-        if (typeof loadProducts === 'function') loadProducts(false);
-        if (typeof loadDashboard === 'function') loadDashboard();
-        return;
-      }
       let payload;
       if (proposal.type === 'update_product') {
         const product = { id: proposal.targetId, ...(proposal.patch || {}), expected_revision: proposal.expectedRevision };
@@ -429,7 +364,8 @@
     }
     const epoch = sessionEpoch;
     const history = messages.slice(-14).map(({ role, text, images }) => ({ role, text, images: images || [] }));
-    const productDraft = currentProposal?.type === 'add_product' ? readProposalEdits(currentProposal).patch : null;
+    const formContext = formMode ? window.DSBProductEditor?.getContext?.() : null;
+    const productDraft = formContext?.active ? formContext.values : (currentProposal?.type === 'add_product' ? readProposalEdits(currentProposal).patch : null);
     const imageUrls = pendingImageUrls.slice();
     addMessage('user', message, imageUrls);
     input.value = '';
@@ -453,6 +389,7 @@
           message,
           history,
           productDraft,
+          formContext,
           requestedModel: qs('#adminAiModel')?.value || '',
           reasoningEffort: qs('#adminAiQuality')?.value || 'low',
           imageUrls
@@ -463,6 +400,17 @@
       if (data?.error) throw new Error(data.error);
       if (epoch !== sessionEpoch) return;
       addMessage('assistant', data.reply || 'No reply returned.');
+      if (data.proposal?.type === 'form_edit') {
+        const changed = window.DSBProductEditor?.applyPatch?.(data.proposal.patch || {}) || [];
+        renderProposal(null);
+        status.textContent = changed.length ? `Updated ${changed.length} form fields · not saved` : 'No confident form changes';
+        if (changed.length) {
+          addMessage('assistant', `I updated ${changed.length} field${changed.length === 1 ? '' : 's'} in the product form. They are highlighted and remain unsaved until you review and press Save product.`);
+          closeChat();
+          showToast(`AI updated ${changed.length} form fields — review before saving`);
+          return;
+        }
+      }
       renderProposal(data.proposal || null);
       status.textContent = data.elapsedMs ? `${data.model || 'AI'} · ${(data.elapsedMs / 1000).toFixed(1)}s` : (data.model || 'Ready');
     } catch (err) {
@@ -494,6 +442,20 @@
     loadSession();
     renderMessages();
     renderPendingImages();
+    const head = qs('.admin-ai-head');
+    const close = qs('#adminAiClose');
+    if (head && close && !qs('#adminAiOptions')) {
+      const options = document.createElement('button');
+      options.type = 'button';
+      options.id = 'adminAiOptions';
+      options.textContent = 'Options';
+      options.setAttribute('aria-expanded', 'false');
+      options.addEventListener('click', () => {
+        const open = qs('#adminAiDrawer')?.classList.toggle('options-open');
+        options.setAttribute('aria-expanded', String(!!open));
+      });
+      head.insertBefore(options, close);
+    }
     qs('#adminAiTools')?.addEventListener('change', e => {
       const prompts = {
         enrich: 'Find [product name or ID] and enrich its details.',
@@ -519,18 +481,9 @@
       try { await navigator.clipboard.writeText(last.text); showToast('Reply copied'); }
       catch (_) { showToast('Copy unavailable. Select the reply text to copy it.'); }
     });
-    qs('#adminAiOpen')?.addEventListener('click', openChat);
+    qs('#adminAiOpen')?.addEventListener('click', () => openChat());
     qs('#adminAiClose')?.addEventListener('click', closeChat);
     qs('#adminAiBackdrop')?.addEventListener('click', closeChat);
-
-    // Drawer behavior: tapping/clicking anywhere outside DSB AI closes it.
-    // Use pointerdown so the same tap can continue to the admin control underneath.
-    document.addEventListener('pointerdown', (event) => {
-      const drawer = qs('#adminAiDrawer');
-      if (!drawer?.classList.contains('open')) return;
-      if (drawer.contains(event.target) || qs('#adminAiOpen')?.contains(event.target)) return;
-      closeChat({ restoreFocus: false });
-    });
     qs('#adminAiClear')?.addEventListener('click', clearSession);
     qs('#adminAiNew')?.addEventListener('click', clearSession);
     qs('#adminAiSend')?.addEventListener('click', sendMessage);
@@ -552,5 +505,12 @@
       }
       if (e.key === 'Escape' && qs('#adminAiDrawer')?.classList.contains('open')) closeChat();
     });
+    document.addEventListener('pointerdown', e => {
+      const drawer = qs('#adminAiDrawer');
+      if (!drawer?.classList.contains('open')) return;
+      if (drawer.contains(e.target) || qs('#adminAiOpen')?.contains(e.target) || qs('#aiGenerateOpenBtn')?.contains(e.target)) return;
+      closeChat();
+    }, true);
   });
+  globalThis.DSBAdminAI = Object.freeze({ openForForm: () => openChat({ form: true }), open: () => openChat() });
 })();
