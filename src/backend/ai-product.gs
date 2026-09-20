@@ -421,9 +421,8 @@ function aiProductPrompt_(notes, existing, referenceCount) {
   return [
     'Create a factual ecommerce product draft for Dhatterwal Suhag Bhandar (DSB).',
     'Images: first is main product; remaining are optional references. Infer only visually supported descriptive details.',
-    'User notes and existing fields are authoritative. When Notes contains a FORM ASSIST COMMAND, that current command has highest priority for which fields may be rewritten; copy unrelated existing fields exactly rather than improving them on your own.',
-    'Never invent price/MRP/cost, stock quantity/status, GTIN, exact sizes, material, pack quantity, or brand. Change a commercial/factual field only when the current user instruction explicitly supplies the replacement value or the fact is unambiguous from authoritative existing data.',
-    'You may infer or improve name, category, subcategory, visible design/colour, concise English/Hindi descriptions, specifications, tags, and size-selection need when the current instruction asks for it and evidence supports it.',
+    'User notes and existing fields are authoritative. Never invent price/MRP/cost, stock quantity, GTIN, exact sizes, material, pack quantity, or brand unless supplied or clearly printed.',
+    'You may infer name, category, subcategory, visible design/colour, concise English/Hindi descriptions, specifications, tags, and size-selection need when supported.',
     'Keep Hindi natural. Preserve bangle sizes exactly (2.4, 2.6, 2.8). sizeprices format: "2.4=240, 2.6=240" only when explicitly supplied.',
     'Return null for uncertainty. warnings must be short.',
     'Required draft keys: name,namehindi,category,subcategory,price,mrp,costprice,description,stock,stockqty,brand,material,packsize,specifications,gtin,descriptionhindi,sizes,hasSizes,sizeprices,tags.',

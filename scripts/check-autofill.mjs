@@ -3,7 +3,7 @@ import vm from 'node:vm';
 
 const sourcePath = new URL('../admin-autofill.js', import.meta.url);
 let source = fs.readFileSync(sourcePath, 'utf8');
-source = source.replace(/\}\)\(\);\s*$/, 'globalThis.__parseInput = parseInput;})();');
+source = source.replace(/\}\)\(\);\s*$/, 'globalThis.__parseInput = tryParseInput;})();');
 
 const context = { document: { addEventListener() {} }, console };
 vm.createContext(context);

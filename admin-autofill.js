@@ -1,8 +1,8 @@
-/* DSB product autofill
- * Accepts JSON, simple ChatGPT-style "Label: value" text, or copied
- * two-column "Form field / Value to enter" tables.
- * Parsing and form application are deliberately separate so pasted content is
- * always reviewed before it touches the product editor.
+/* DSB product field parser
+ * Turns pasted JSON / "Label: value" text / copied two-column tables into
+ * canonical product fields, and applies them to the live product form.
+ * Pure library - no dialog of its own. The unified AI panel (admin-ai.js)
+ * drives this to support both "paste" and "AI generated" input in one flow.
  */
 (() => {
   'use strict';
@@ -54,8 +54,6 @@
     'size prices': 'sizeprices', 'size price': 'sizeprices', 'price per size': 'sizeprices', 'size pricing': 'sizeprices',
     'tags': 'tags', 'keywords': 'tags'
   }));
-
-  let parsedDraft = null;
 
   function cleanKey(value) {
     return String(value || '')
@@ -213,9 +211,6 @@
     const resolveKnownPrefix = line => {
       const normalized = line.replace(/\u00a0/g, ' ').trim();
       for (const label of knownLabels) {
-        // Keep matching conservative: a copied table normally separates columns
-        // with tabs or multiple spaces. A single-space fallback is allowed only
-        // when the label ends in punctuation such as Price (₹).
         const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
         const pattern = new RegExp(`^(${escaped})(?:\\s*[:=]\\s*|\\t+|\\s{2,})(.+)$`, 'i');
         const match = normalized.match(pattern);
@@ -229,7 +224,6 @@
       if (!line) continue;
       line = line.replace(/^[-•*]\s+/, '').replace(/^\d+[.)]\s+/, '');
 
-      // Ignore common table/headline wrappers copied with ChatGPT answers.
       const heading = cleanKey(line);
       if (!heading || heading === 'form field value to enter' || heading === 'form field' || heading === 'value to enter' ||
           heading === 'fill this product form like this' || heading === 'suggested seo product title' ||
@@ -272,18 +266,12 @@
     return canonicalize(raw);
   }
 
-  function parseInput(text) {
-    if (!String(text || '').trim()) throw new Error('Paste product details first.');
+  // Returns canonical fields, or null if nothing recognizable was found.
+  // Never throws - callers decide what "no fields" means (e.g. fall back to AI).
+  function tryParseInput(text) {
+    if (!String(text || '').trim()) return null;
     const data = parseJson(text) || parseLines(text);
-    if (!data || !Object.keys(data).length) throw new Error('No supported product fields were recognized. Use JSON, “Price: 160” lines, or a copied “Form field / Value to enter” table.');
-    return data;
-  }
-
-  function displayValue(key, value) {
-    if (key === 'sizes' || key === 'tags') return value.join(', ');
-    if (key === 'hasSizes') return value ? 'Yes' : 'No';
-    if (['price', 'mrp', 'costprice'].includes(key)) return `₹${value}`;
-    return String(value);
+    return data && Object.keys(data).length ? data : null;
   }
 
   function labelFor(key) {
@@ -296,17 +284,6 @@
     })[key] || key;
   }
 
-  function renderPreview(data) {
-    const preview = $('#autofillPreview');
-    const rows = Object.entries(data).map(([key, value]) => `
-      <div class="autofill-preview-row">
-        <span>${escapeHtml(labelFor(key))}</span>
-        <strong>${escapeHtml(displayValue(key, value))}</strong>
-      </div>`).join('');
-    preview.innerHTML = rows || '<p class="hint">Nothing recognized yet.</p>';
-    $('#autofillApplyBtn').disabled = !rows;
-  }
-
   function setValue(id, value) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -315,31 +292,28 @@
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  function applyDraft(data) {
-    for (const [key, value] of Object.entries(data)) {
+  // Applies canonical fields directly to the live product form.
+  // Returns the ordered list of field ids touched, so the caller can
+  // animate/highlight them - this is what makes it feel like the AI is
+  // "taking control" of the page instead of showing a separate preview list.
+  function applyToForm(data) {
+    const touched = [];
+    for (const [key, value] of Object.entries(data || {})) {
       if (key === 'hasSizes') {
         const toggle = $('#f-hasSizes');
         if (toggle) {
           toggle.checked = Boolean(value);
           toggle.dispatchEvent(new Event('change', { bubbles: true }));
           $('#sizeOptionsField').hidden = !toggle.checked;
+          touched.push('f-hasSizes');
         }
         continue;
       }
-      if (key === 'stock') {
-        setValue('f-stock', value);
-        continue;
-      }
-      if (key === 'sizes') {
-        setValue('f-sizes', value.join(', '));
-        continue;
-      }
-      if (key === 'tags') {
-        setValue('f-tags', value.join(', '));
-        continue;
-      }
+      if (key === 'stock') { setValue('f-stock', value); touched.push('f-stock'); continue; }
+      if (key === 'sizes') { setValue('f-sizes', value.join(', ')); touched.push('f-sizes'); continue; }
+      if (key === 'tags') { setValue('f-tags', value.join(', ')); touched.push('f-tags'); continue; }
       const id = FIELD_MAP[key];
-      if (id) setValue(id, value);
+      if (id) { setValue(id, value); touched.push(id); }
     }
 
     const inferredHasSizes = data.hasSizes === undefined && ((data.sizes && data.sizes.length) || data.sizeprices);
@@ -348,71 +322,13 @@
       toggle.checked = true;
       toggle.dispatchEvent(new Event('change', { bubbles: true }));
       $('#sizeOptionsField').hidden = false;
+      if (!touched.includes('f-hasSizes')) touched.push('f-hasSizes');
     }
     if (data.image && typeof updateImagePreview === 'function') updateImagePreview(data.image);
-    closeDialog();
-    if (typeof showToast === 'function') showToast(`Applied ${Object.keys(data).length} product field${Object.keys(data).length === 1 ? '' : 's'}. Review before saving.`);
+    return touched;
   }
 
-  function openDialog() {
-    const dialog = $('#autofillDialog');
-    if (typeof dialog.showModal === 'function') dialog.showModal();
-    else dialog.setAttribute('open', '');
-    setTimeout(() => $('#autofillInput')?.focus(), 0);
+  if (typeof window !== 'undefined') {
+    window.DSBAutofill = Object.freeze({ tryParseInput, canonicalize, applyToForm, labelFor });
   }
-
-  function closeDialog() {
-    const dialog = $('#autofillDialog');
-    if (typeof dialog.close === 'function' && dialog.open) dialog.close();
-    else dialog.removeAttribute('open');
-  }
-
-  function parseAndPreview() {
-    const statusEl = $('#autofillStatus');
-    try {
-      parsedDraft = parseInput($('#autofillInput').value);
-      renderPreview(parsedDraft);
-      statusEl.textContent = `${Object.keys(parsedDraft).length} field${Object.keys(parsedDraft).length === 1 ? '' : 's'} recognized. Review below, then apply.`;
-      statusEl.className = 'statusline good';
-    } catch (err) {
-      parsedDraft = null;
-      renderPreview({});
-      statusEl.textContent = err.message;
-      statusEl.className = 'statusline bad';
-    }
-  }
-
-  function resetDialog() {
-    parsedDraft = null;
-    $('#autofillInput').value = '';
-    $('#autofillStatus').textContent = '';
-    renderPreview({});
-  }
-
-  function openDraft(data, meta = {}) {
-    parsedDraft = canonicalize(data || {});
-    if (!Object.keys(parsedDraft).length) throw new Error('The generated draft did not contain any supported product fields.');
-    renderPreview(parsedDraft);
-    const warnings = Array.isArray(meta.warnings) ? meta.warnings.filter(Boolean) : [];
-    const source = meta.source ? String(meta.source) : 'Draft';
-    const model = meta.model ? ` · ${String(meta.model)}` : '';
-    const warningText = warnings.length ? ` Review notes: ${warnings.join(' • ')}` : '';
-    const statusEl = $('#autofillStatus');
-    statusEl.textContent = `${source}${model}: ${Object.keys(parsedDraft).length} field${Object.keys(parsedDraft).length === 1 ? '' : 's'} ready for review.${warningText}`;
-    statusEl.className = warnings.length ? 'statusline' : 'statusline good';
-    openDialog();
-  }
-
-  if (typeof window !== 'undefined') window.DSBAutofill = Object.freeze({ openDraft });
-
-  document.addEventListener('DOMContentLoaded', () => {
-    $('#autofillOpenBtn')?.addEventListener('click', openDialog);
-    $('#autofillParseBtn')?.addEventListener('click', parseAndPreview);
-    $('#autofillApplyBtn')?.addEventListener('click', () => parsedDraft && applyDraft(parsedDraft));
-    $('#autofillCloseBtn')?.addEventListener('click', closeDialog);
-    $('#autofillResetBtn')?.addEventListener('click', resetDialog);
-    $('#autofillDialog')?.addEventListener('click', event => {
-      if (event.target === $('#autofillDialog')) closeDialog();
-    });
-  });
 })();

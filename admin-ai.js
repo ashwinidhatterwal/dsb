@@ -1,6 +1,11 @@
-/* DSB AI product draft UI
- * Keeps OpenAI calls server-side through the authenticated Apps Script backend.
- * The generated draft is always handed to the existing review-first autofill UI.
+/* DSB unified AI product panel
+ * One subtle entry point that replaces the old three-way split
+ * (Generate with AI / Paste from ChatGPT / open the AI chatbox).
+ * The same box accepts a pasted table/JSON *or* freeform instructions:
+ * structured input is parsed and applied instantly; freeform input (or a
+ * photo with no text) is sent to the AI, which returns a draft applied the
+ * same way. Either path fills the live form directly and closes itself so
+ * the fields can be reviewed in place - nothing is saved automatically.
  */
 (() => {
   'use strict';
@@ -9,33 +14,18 @@
   let busy = false;
   let aiReferenceUrls = [];
 
-  function updateImageState() {
-    const imageUrl = $('#f-image')?.value.trim();
-    const file = $('#f-imagefile')?.files?.[0];
-    const refCount = aiReferenceUrls.length;
-    const base = imageUrl
-      ? '✓ Current product image will be analysed.'
-      : file
-        ? '✓ Selected photo will be uploaded first, then analysed.'
-        : 'No main product photo selected. AI can still use your notes, reference photos, and any fields already filled in.';
-    $('#aiImageState').textContent = refCount
-      ? `${base} ${refCount} AI-only reference photo${refCount === 1 ? '' : 's'} added.`
-      : base;
-  }
-
   function openDialog() {
-    const dialog = $('#aiProductDialog');
+    const dialog = $('#aiFillDialog');
     if (!dialog) return;
-    updateImageState();
-    $('#aiStatus').textContent = '';
+    $('#aiFillStatus').textContent = '';
     renderReferencePreview();
     if (typeof dialog.showModal === 'function') dialog.showModal();
     else dialog.setAttribute('open', '');
-    setTimeout(() => $('#aiProductNotes')?.focus(), 0);
+    setTimeout(() => $('#aiFillInput')?.focus(), 0);
   }
 
   function closeDialog() {
-    const dialog = $('#aiProductDialog');
+    const dialog = $('#aiFillDialog');
     if (!dialog || busy) return;
     if (typeof dialog.close === 'function' && dialog.open) dialog.close();
     else dialog.removeAttribute('open');
@@ -70,24 +60,24 @@
     const file = fileInput?.files?.[0];
     if (!file) return '';
     if (typeof uploadFileToCloudinary !== 'function') throw new Error('Image upload helper is unavailable. Upload the photo first and retry.');
-    $('#aiImageState').textContent = 'Uploading the selected photo…';
+    const statusEl = $('#aiFillStatus');
+    statusEl.textContent = 'Uploading photo…';
     imageUrl = await uploadFileToCloudinary(file);
     $('#f-image').value = imageUrl;
     if (typeof updateImagePreview === 'function') updateImagePreview(imageUrl);
     fileInput.value = '';
     $('#uploadStatus').textContent = 'Photo uploaded.';
-    updateImageState();
     return imageUrl;
   }
 
   function setBusy(on) {
     busy = on;
-    const button = $('#aiGenerateBtn');
+    const button = $('#aiFillBtn');
     if (button) {
       button.disabled = on;
-      button.textContent = on ? 'Generating…' : 'Generate product draft';
+      button.textContent = on ? 'Working…' : '✦ Fill form';
     }
-    $('#aiCloseBtn')?.toggleAttribute('disabled', on);
+    $('#aiFillCloseBtn')?.toggleAttribute('disabled', on);
     $('#aiRefUploadBtn')?.toggleAttribute('disabled', on);
     $('#aiRefAddUrlBtn')?.toggleAttribute('disabled', on);
     $('#aiRefClearBtn')?.toggleAttribute('disabled', on);
@@ -97,8 +87,10 @@
     const box = $('#aiReferencePreview');
     if (!box) return;
     if (!aiReferenceUrls.length) {
-      box.innerHTML = '<p class="hint" style="margin:0;">No extra AI-only reference photos added.</p>';
+      box.innerHTML = '';
+      box.hidden = true;
     } else {
+      box.hidden = false;
       box.innerHTML = aiReferenceUrls.map((url, i) => `
         <div class="extra-thumb">
           <img src="${escapeHtml(url)}" alt="Reference photo ${i + 1}" loading="lazy" decoding="async">
@@ -108,11 +100,10 @@
       box.querySelectorAll('button[data-i]').forEach(btn => btn.addEventListener('click', () => {
         aiReferenceUrls.splice(Number(btn.dataset.i), 1);
         renderReferencePreview();
-        updateImageState();
       }));
     }
     const countEl = $('#aiReferenceCount');
-    if (countEl) countEl.textContent = aiReferenceUrls.length ? `${aiReferenceUrls.length}/${MAX_REFERENCE_IMAGES} added` : 'Optional';
+    if (countEl) countEl.textContent = aiReferenceUrls.length ? `${aiReferenceUrls.length}/${MAX_REFERENCE_IMAGES}` : '';
   }
 
   function pushReferenceUrl(url) {
@@ -120,54 +111,46 @@
     if (!cleaned) return false;
     if (!/^https:\/\//i.test(cleaned)) throw new Error('Reference images must use HTTPS URLs.');
     if (aiReferenceUrls.includes(cleaned)) return false;
-    if (aiReferenceUrls.length >= MAX_REFERENCE_IMAGES) throw new Error(`You can add up to ${MAX_REFERENCE_IMAGES} AI-only reference photos.`);
+    if (aiReferenceUrls.length >= MAX_REFERENCE_IMAGES) throw new Error(`Up to ${MAX_REFERENCE_IMAGES} reference photos.`);
     aiReferenceUrls.push(cleaned);
     renderReferencePreview();
-    updateImageState();
     return true;
   }
 
   async function uploadReferenceImage() {
     if (busy) return;
-    const statusEl = $('#aiRefStatus');
+    const statusEl = $('#aiFillStatus');
     const fileInput = $('#aiRefFile');
     const file = fileInput?.files?.[0];
-    if (!file) {
-      statusEl.className = 'statusline bad';
-      statusEl.textContent = 'Choose a reference photo first.';
-      return;
-    }
+    if (!file) { statusEl.className = 'statusline bad'; statusEl.textContent = 'Choose a photo first.'; return; }
     const btn = $('#aiRefUploadBtn');
-    const label = btn.textContent;
     btn.disabled = true;
-    btn.textContent = 'Uploading…';
-    statusEl.className = 'statusline';
-    statusEl.textContent = 'Uploading reference photo…';
     try {
       if (typeof uploadFileToCloudinary !== 'function') throw new Error('Image upload helper is unavailable.');
+      statusEl.className = 'statusline';
+      statusEl.textContent = 'Uploading…';
       const url = await uploadFileToCloudinary(file);
       pushReferenceUrl(url);
       statusEl.className = 'statusline ok';
-      statusEl.textContent = 'Reference photo added for AI.';
+      statusEl.textContent = 'Photo added.';
       fileInput.value = '';
     } catch (err) {
       statusEl.className = 'statusline bad';
       statusEl.textContent = err?.message || String(err);
     } finally {
       btn.disabled = false;
-      btn.textContent = label;
     }
   }
 
   function addReferenceUrl() {
     if (busy) return;
-    const statusEl = $('#aiRefStatus');
+    const statusEl = $('#aiFillStatus');
     const input = $('#aiRefUrl');
     try {
-      if (!input?.value?.trim()) throw new Error('Paste a reference photo URL first.');
+      if (!input?.value?.trim()) throw new Error('Paste a photo URL first.');
       const added = pushReferenceUrl(input.value);
       statusEl.className = added ? 'statusline ok' : 'statusline';
-      statusEl.textContent = added ? 'Reference photo added for AI.' : 'That reference photo is already added.';
+      statusEl.textContent = added ? 'Photo added.' : 'Already added.';
       input.value = '';
     } catch (err) {
       statusEl.className = 'statusline bad';
@@ -176,47 +159,15 @@
   }
 
   function clearReferencePhotos() {
-    if (busy) return;
     aiReferenceUrls = [];
     renderReferencePreview();
-    updateImageState();
-    const statusEl = $('#aiRefStatus');
-    if (statusEl) {
-      statusEl.className = 'statusline';
-      statusEl.textContent = '';
-    }
   }
-
 
   function aiOptimizedImageUrl(url) {
-    const value = String(url || '').trim();
-    if (!value || !/res\.cloudinary\.com/i.test(value) || !/\/upload\//.test(value)) return value;
-    if (/\/upload\/f_auto,q_auto:eco,w_1280,c_limit\//.test(value)) return value;
-    return value.replace('/upload/', '/upload/f_auto,q_auto:eco,w_1280,c_limit/');
-  }
-
-  function startProgress(statusEl, imageCount) {
-    const started = Date.now();
-    const phases = [
-      [0, 'Preparing request'],
-      [2, imageCount ? 'Analysing product photo' : 'Reading product details'],
-      [8, 'Identifying useful product details'],
-      [16, 'Preparing English and Hindi content'],
-      [28, 'Validating structured product fields'],
-      [42, 'Waiting for the AI provider to finish']
-    ];
-    let timer = null;
-
-    const render = () => {
-      const elapsed = Math.max(0, Math.floor((Date.now() - started) / 1000));
-      let phase = phases[0][1];
-      for (const [after, label] of phases) if (elapsed >= after) phase = label;
-      statusEl.className = 'statusline ai-live-progress';
-      statusEl.innerHTML = `<div class="ai-progress-head"><strong>${escapeHtml(phase)}</strong><span>${elapsed}s elapsed</span></div><div class="ai-progress-track" aria-hidden="true"><span></span></div><small>${imageCount ? `${imageCount} image${imageCount === 1 ? '' : 's'} · ` : ''}Generating a concise product draft. This timer is real; the bar is activity, not a fake percentage.</small>`;
-    };
-    render();
-    timer = setInterval(render, 1000);
-    return () => { if (timer) clearInterval(timer); timer = null; };
+    const v = String(url || '').trim();
+    if (!v || !/res\.cloudinary\.com/i.test(v) || !/\/upload\//.test(v)) return v;
+    if (/\/upload\/f_auto,q_auto:eco,w_1280,c_limit\//.test(v)) return v;
+    return v.replace('/upload/', '/upload/f_auto,q_auto:eco,w_1280,c_limit/');
   }
 
   function selectedAiModel() {
@@ -232,32 +183,58 @@
     return /^(low|medium|high)$/.test(effort) ? effort : 'low';
   }
 
-  async function generateDraft() {
-    if (busy) return;
-    const statusEl = $('#aiStatus');
-    let stopProgress = null;
-    setBusy(true);
-    statusEl.className = 'statusline';
-    statusEl.textContent = 'Preparing product information…';
+  function startProgress(statusEl, imageCount) {
+    const started = Date.now();
+    const phases = [
+      [0, 'Preparing request'],
+      [2, imageCount ? 'Analysing photo' : 'Reading details'],
+      [8, 'Identifying product details'],
+      [16, 'Preparing content'],
+      [28, 'Validating fields'],
+      [42, 'Waiting for the AI provider']
+    ];
+    let timer = null;
+    const render = () => {
+      const elapsed = Math.max(0, Math.floor((Date.now() - started) / 1000));
+      let phase = phases[0][1];
+      for (const [after, label] of phases) if (elapsed >= after) phase = label;
+      statusEl.className = 'statusline ai-live-progress';
+      statusEl.innerHTML = `<div class="ai-progress-head"><strong>${escapeHtml(phase)}</strong><span>${elapsed}s</span></div><div class="ai-progress-track" aria-hidden="true"><span></span></div>`;
+    };
+    render();
+    timer = setInterval(render, 1000);
+    return () => { if (timer) clearInterval(timer); timer = null; };
+  }
+
+  // Briefly highlights each filled field in sequence so it visibly reads as
+  // the assistant moving through and editing the form, not a silent bulk-set.
+  function animateTouchedFields(ids) {
+    const unique = [...new Set(ids)].filter(id => document.getElementById(id));
+    unique.forEach((id, i) => {
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.add('ai-just-filled');
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        setTimeout(() => el.classList.remove('ai-just-filled'), 900);
+      }, i * 90);
+    });
+  }
+
+  async function requestAiDraft(notes) {
+    if (!API_URL || !ADMIN_KEY) throw new Error('Connect to the admin backend first.');
+    const statusEl = $('#aiFillStatus');
+    const imageUrl = await ensureImageUrl();
+    const referenceUrls = aiReferenceUrls.slice();
+    const existing = currentProductFacts();
+    if (!imageUrl && !referenceUrls.length && !notes && !Object.keys(existing).length) {
+      throw new Error('Add a photo, a short note, or fill at least one field first.');
+    }
+    const aiImageUrl = aiOptimizedImageUrl(imageUrl);
+    const optimizedReferenceUrls = referenceUrls.map(aiOptimizedImageUrl);
+    const imageCount = (aiImageUrl ? 1 : 0) + optimizedReferenceUrls.length;
+    const stopProgress = startProgress(statusEl, imageCount);
     try {
-      if (!API_URL || !ADMIN_KEY) throw new Error('Connect to the admin backend first.');
-      const imageUrl = await ensureImageUrl();
-      const referenceUrls = aiReferenceUrls.slice();
-      const notes = $('#aiProductNotes').value.trim();
-      const existing = currentProductFacts();
-      const reasoningEffort = selectedReasoningEffort();
-      const requestedModel = selectedAiModel();
-      if (!imageUrl && !referenceUrls.length && !notes && !Object.keys(existing).length) {
-        throw new Error('Add a product photo, AI-only reference photo, a short note, or fill at least one product field first.');
-      }
-
-      // Send lightweight Cloudinary derivatives only to AI. Product/storefront URLs stay untouched.
-      const aiImageUrl = aiOptimizedImageUrl(imageUrl);
-      const optimizedReferenceUrls = referenceUrls.map(aiOptimizedImageUrl);
-      const imageCount = (aiImageUrl ? 1 : 0) + optimizedReferenceUrls.length;
-      stopProgress = startProgress(statusEl, imageCount);
-      statusEl.dataset.quality = reasoningEffort;
-
       const response = await adminFetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -268,64 +245,91 @@
           referenceUrls: optimizedReferenceUrls,
           notes,
           existing,
-          reasoningEffort,
-          requestedModel
+          reasoningEffort: selectedReasoningEffort(),
+          requestedModel: selectedAiModel()
         }),
         timeoutMs: 120000
       });
       const data = await response.json();
       if (data?.error) throw new Error(data.error);
       if (!data?.success || !data.draft || typeof data.draft !== 'object') throw new Error('AI returned an unexpected response.');
-      if (!window.DSBAutofill?.openDraft) throw new Error('Autofill review tool is unavailable. Refresh the admin page and retry.');
+      return data;
+    } finally {
+      stopProgress();
+    }
+  }
 
-      stopProgress?.();
-      stopProgress = null;
-      const warnings = Array.isArray(data.warnings) ? data.warnings : [];
-      statusEl.className = 'statusline good';
-      statusEl.textContent = `Draft ready${data.elapsedMs ? ` in ${(data.elapsedMs / 1000).toFixed(1)}s` : ''}. Opening review…`;
-      const dialog = $('#aiProductDialog');
-      if (typeof dialog?.close === 'function' && dialog.open) dialog.close();
-      else dialog?.removeAttribute('open');
-      window.DSBAutofill.openDraft(data.draft, {
-        source: 'AI generated draft',
-        warnings,
-        model: data.model || ''
-      });
+  async function fillForm() {
+    if (busy) return;
+    const statusEl = $('#aiFillStatus');
+    setBusy(true);
+    statusEl.className = 'statusline';
+    statusEl.textContent = '';
+    try {
+      const raw = $('#aiFillInput').value.trim();
+
+      // Structured input (JSON / "Label: value" lines / a copied table) is
+      // applied straight away - this is the old "paste from ChatGPT" path,
+      // now folded silently into the same box.
+      const parsed = window.DSBAutofill?.tryParseInput?.(raw);
+      let draft, meta;
+      if (parsed) {
+        draft = parsed;
+        meta = { source: 'Parsed from pasted text' };
+      } else {
+        // Freeform notes, an instruction, or just a photo with no text -
+        // ask the AI to generate the draft instead.
+        statusEl.textContent = 'Asking AI…';
+        const data = await requestAiDraft(raw);
+        draft = window.DSBAutofill.canonicalize(data.draft);
+        meta = { source: 'AI generated', warnings: data.warnings, model: data.model };
+      }
+
+      if (!draft || !Object.keys(draft).length) throw new Error('Nothing usable came back. Try adding a photo or a bit more detail.');
+
+      const touched = window.DSBAutofill.applyToForm(draft);
+      closeDialog();
+      animateTouchedFields(touched);
+      const warnings = Array.isArray(meta.warnings) ? meta.warnings.filter(Boolean) : [];
+      const count = Object.keys(draft).length;
+      if (typeof showToast === 'function') {
+        showToast(`AI filled ${count} field${count === 1 ? '' : 's'}${warnings.length ? ' — check the notes below' : ''}. Review before saving.`);
+      }
     } catch (err) {
-      stopProgress?.();
-      stopProgress = null;
-      statusEl.className = 'statusline bad';
       const message = err?.message || String(err);
+      statusEl.className = 'statusline bad';
       if (/timeout|timed out|aborted/i.test(message)) {
-        statusEl.textContent = 'The AI provider took too long (over about 120 seconds). Try again, use a faster model, or reduce reference photos.';
+        statusEl.textContent = 'The AI provider took too long. Try again or use a faster model.';
       } else {
         statusEl.textContent = /unknown action/i.test(message)
-          ? 'AI backend is not deployed yet. Update Apps Script with the latest code.gs and redeploy the web app, then reconnect the admin panel.'
+          ? 'AI backend is not deployed yet. Update Apps Script and reconnect.'
           : message;
       }
     } finally {
-      stopProgress?.();
       setBusy(false);
     }
   }
 
+  function openChatInstead() {
+    closeDialog();
+    $('#adminAiOpen')?.click();
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
-    $('#aiGenerateOpenBtn')?.addEventListener('click', () => {
-      if (window.DSBAdminChat?.openForProductForm) window.DSBAdminChat.openForProductForm();
-      else openDialog();
-    });
-    $('#aiCloseBtn')?.addEventListener('click', closeDialog);
-    $('#aiGenerateBtn')?.addEventListener('click', generateDraft);
+    $('#aiFillOpenBtn')?.addEventListener('click', openDialog);
+    $('#aiFillCloseBtn')?.addEventListener('click', closeDialog);
+    $('#aiFillBtn')?.addEventListener('click', fillForm);
     $('#aiRefUploadBtn')?.addEventListener('click', uploadReferenceImage);
     $('#aiRefAddUrlBtn')?.addEventListener('click', addReferenceUrl);
     $('#aiRefClearBtn')?.addEventListener('click', clearReferencePhotos);
-    $('#f-image')?.addEventListener('input', updateImageState);
-    $('#f-imagefile')?.addEventListener('change', updateImageState);
-    $('#aiProductDialog')?.addEventListener('click', event => {
-      if (event.target === $('#aiProductDialog')) closeDialog();
+    $('#aiFillChatLink')?.addEventListener('click', openChatInstead);
+    $('#aiFillDialog')?.addEventListener('click', event => {
+      if (event.target === $('#aiFillDialog')) closeDialog();
+    });
+    $('#aiFillInput')?.addEventListener('keydown', event => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); fillForm(); }
     });
     renderReferencePreview();
-    updateImageState();
   });
 
   window.DSBAIProductAssist = Object.freeze({

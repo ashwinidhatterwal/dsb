@@ -735,15 +735,8 @@ input[type=checkbox]:disabled {
   margin-bottom: 2px;
 }
 .add-product-heading .admin-section-title { margin-bottom: 0; }
-.autofill-open-btn {
-  flex: 0 0 auto;
-  border-color: #56847d;
-  background: #203d3b;
-  color: #d9f3ed;
-}
-.autofill-hint { margin: 0 0 14px; }
 .autofill-dialog {
-  width: min(620px, calc(100vw - 24px));
+  width: min(560px, calc(100vw - 24px));
   max-height: min(82vh, 760px);
   overflow: auto;
   border: 1px solid #415d68;
@@ -778,9 +771,9 @@ input[type=checkbox]:disabled {
 }
 .autofill-input {
   width: 100%;
-  min-height: 190px;
+  min-height: 150px;
   resize: vertical;
-  margin-top: 10px;
+  margin-top: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
   line-height: 1.55;
@@ -791,100 +784,93 @@ input[type=checkbox]:disabled {
   gap: 8px;
   margin-top: 10px;
 }
-.autofill-preview {
-  display: grid;
-  gap: 7px;
-  margin: 10px 0 12px;
-}
-.autofill-preview-row {
-  display: grid;
-  grid-template-columns: minmax(110px, .55fr) minmax(0, 1.45fr);
-  gap: 12px;
-  align-items: start;
-  padding: 9px 10px;
-  border: 1px solid #344b59;
-  background: #192b38;
-  border-radius: 10px;
-}
-.autofill-preview-row span { color: #aebfca; font-size: 12px; }
-.autofill-preview-row strong {
-  color: #f2f7f9;
-  font-size: 13px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-.autofill-apply { width: 100%; }
+.autofill-apply { width: auto; padding-inline: 16px; }
 .autofill-apply:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width: 560px) {
-  .add-product-heading { align-items: stretch; flex-direction: column; }
-  .autofill-open-btn { width: 100%; }
   .autofill-dialog { padding: 14px; border-radius: 15px; }
-  .autofill-preview-row { grid-template-columns: 1fr; gap: 3px; }
+  .autofill-actions { flex-direction: column-reverse; }
+  .autofill-actions button { width: 100%; }
 }
 
-/* AI-assisted product entry ------------------------------------------------ */
-.product-smart-actions {
+/* AI-assisted product entry — single subtle entry point ------------------- */
+.ai-fill-btn {
+  flex: 0 0 auto;
+  border: 1px solid #3b5967;
+  background: transparent;
+  color: #9fb8c1;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .16s ease, color .16s ease, background .16s ease;
+}
+.ai-fill-btn:hover { border-color: #4bc1b1; color: #dce9ed; background: #15403e; }
+.ai-fill-dialog .upload-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  margin-top: 10px;
   flex-wrap: wrap;
-  justify-content: flex-end;
 }
-.ai-generate-open-btn {
-  width: auto;
-  padding-inline: 14px;
-  background: linear-gradient(135deg, #2d615c, #2d4d65);
-  border-color: #65958f;
-  color: #f5fbfa;
-  box-shadow: 0 8px 22px rgba(10, 33, 43, .24);
-}
-.ai-product-dialog .ai-image-state {
-  margin: 12px 0 4px;
-  padding: 10px 12px;
-  border: 1px solid #385564;
-  border-radius: 10px;
-  background: #192b38;
-  color: #c9d9df;
-  font-size: 13px;
-}
+.ai-fill-dialog .upload-row input[type="text"] { flex: 1 1 160px; min-width: 0; }
+.ai-ref-btn { flex: 0 0 auto; }
 .ai-notes-input { min-height: 120px; }
-.ai-security-note { margin: 8px 0 12px; color: #9eb4bf; }
-@media (max-width: 560px) {
-  .product-smart-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
-  .product-smart-actions button { width: 100%; min-width: 0; }
+.ai-advanced { margin: 10px 0 2px; }
+.ai-advanced summary {
+  cursor: pointer;
+  color: #9fb8c1;
+  font-size: 12px;
+  font-weight: 600;
+  user-select: none;
 }
-\n\n/* Live AI generation feedback */\n.ai-live-progress { margin: 10px 0 12px; padding: 10px 12px; border: 1px solid #365a66; border-radius: 11px; background: #142b36; }\n.ai-progress-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; color:#eaf4f6; }\n.ai-progress-head strong { font-size:13px; font-weight:700; }\n.ai-progress-head span { color:#9fb8c1; font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; }\n.ai-progress-track { position:relative; height:5px; overflow:hidden; border-radius:999px; background:#203f4c; }\n.ai-progress-track span { position:absolute; inset:0 auto 0 -35%; width:35%; border-radius:inherit; background:linear-gradient(90deg,transparent,#70c3bb,transparent); animation:ai-progress-sweep 1.15s ease-in-out infinite; }\n.ai-live-progress small { display:block; margin-top:7px; color:#9fb8c1; line-height:1.35; }\n@keyframes ai-progress-sweep { from{transform:translateX(0)} to{transform:translateX(390%)} }\n@media (prefers-reduced-motion: reduce) { .ai-progress-track span { animation-duration:2.4s; } }\n
+.ai-advanced[open] summary { margin-bottom: 8px; }
+@media (max-width: 560px) {
+  .ai-fill-btn { padding: 6px 12px; }
+}
+
+/* Live AI generation feedback */
+.ai-live-progress { margin: 10px 0 12px; padding: 10px 12px; border: 1px solid #365a66; border-radius: 11px; background: #142b36; }
+.ai-progress-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; color:#eaf4f6; }
+.ai-progress-head strong { font-size:13px; font-weight:700; }
+.ai-progress-head span { color:#9fb8c1; font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ai-progress-track { position:relative; height:5px; overflow:hidden; border-radius:999px; background:#203f4c; }
+.ai-progress-track span { position:absolute; inset:0 auto 0 -35%; width:35%; border-radius:inherit; background:linear-gradient(90deg,transparent,#70c3bb,transparent); animation:ai-progress-sweep 1.15s ease-in-out infinite; }
+@keyframes ai-progress-sweep { from{transform:translateX(0)} to{transform:translateX(390%)} }
+@media (prefers-reduced-motion: reduce) { .ai-progress-track span { animation-duration:2.4s; } }
+
+/* Fields the AI just wrote into — brief highlight so filling reads as the
+   assistant visibly moving through and editing the form. */
+@keyframes aiJustFilled {
+  0% { background-color: rgba(75,193,177,.35); box-shadow: 0 0 0 2px rgba(75,193,177,.55); }
+  100% { background-color: transparent; box-shadow: 0 0 0 2px transparent; }
+}
+.ai-just-filled { animation: aiJustFilled .9s ease-out; border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) { .ai-just-filled { animation: none; outline: 2px solid #4bc1b1; } }
+
 /* Per-generation AI quality selector */
-.ai-quality-field { margin: 12px 0 10px; padding: 0; border: 0; }
-.ai-quality-field legend { margin-bottom: 7px; font-weight: 700; color: #d7e4e9; }
+.ai-quality-field { margin: 8px 0; padding: 0; border: 0; }
+.ai-quality-field legend { margin-bottom: 6px; font-weight: 700; font-size: 12px; color: #d7e4e9; }
 .ai-quality-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
 .ai-quality-options label { position:relative; cursor:pointer; min-width:0; }
 .ai-quality-options input { position:absolute; opacity:0; pointer-events:none; }
-.ai-quality-options span { display:flex; min-height:54px; padding:8px 7px; border:1px solid #3b5967; border-radius:11px; background:#132936; align-items:center; justify-content:center; flex-direction:column; gap:1px; text-align:center; transition:border-color .16s ease,background .16s ease,transform .16s ease; }
-.ai-quality-options strong { color:#dce9ed; font-size:13px; }
-.ai-quality-options small { color:#91aab5; font-size:10px; white-space:nowrap; }
+.ai-quality-options span { display:flex; min-height:38px; padding:6px 7px; border:1px solid #3b5967; border-radius:11px; background:#132936; align-items:center; justify-content:center; text-align:center; transition:border-color .16s ease,background .16s ease,transform .16s ease; }
+.ai-quality-options strong { color:#dce9ed; font-size:12px; }
 .ai-quality-options input:checked + span { border-color:#4bc1b1; background:#15403e; box-shadow:0 0 0 1px rgba(75,193,177,.18) inset; }
 .ai-quality-options input:focus-visible + span { outline:2px solid #78d6cb; outline-offset:2px; }
 .ai-quality-options label:active span { transform:scale(.98); }
-.ai-quality-hint { margin:6px 0 0; font-size:11px; line-height:1.35; }
-@media (max-width:520px) { .ai-quality-options span { min-height:50px; padding:7px 4px; } .ai-quality-options strong { font-size:12px; } .ai-quality-options small { font-size:9px; } }
 
 /* Per-generation Gemini model selector */
-.ai-model-field { margin: 12px 0 10px; padding: 0; border: 0; }
-.ai-model-field legend { margin-bottom: 7px; font-weight: 700; color: #d7e4e9; }
+.ai-model-field { margin: 8px 0; padding: 0; border: 0; }
+.ai-model-field legend { margin-bottom: 6px; font-weight: 700; font-size: 12px; color: #d7e4e9; }
 .ai-model-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
 .ai-model-options label { position:relative; cursor:pointer; min-width:0; }
 .ai-model-options input { position:absolute; opacity:0; pointer-events:none; }
-.ai-model-options span { display:flex; min-height:56px; padding:8px 7px; border:1px solid #3b5967; border-radius:11px; background:#132936; align-items:center; justify-content:center; flex-direction:column; gap:1px; text-align:center; transition:border-color .16s ease,background .16s ease,transform .16s ease; }
+.ai-model-options span { display:flex; min-height:38px; padding:6px 7px; border:1px solid #3b5967; border-radius:11px; background:#132936; align-items:center; justify-content:center; text-align:center; transition:border-color .16s ease,background .16s ease,transform .16s ease; }
 .ai-model-options strong { color:#dce9ed; font-size:12px; line-height:1.15; }
-.ai-model-options small { color:#91aab5; font-size:10px; white-space:nowrap; }
 .ai-model-options input:checked + span { border-color:#4bc1b1; background:#15403e; box-shadow:0 0 0 1px rgba(75,193,177,.18) inset; }
 .ai-model-options input:focus-visible + span { outline:2px solid #78d6cb; outline-offset:2px; }
 .ai-model-options label:active span { transform:scale(.98); }
-.ai-model-hint { margin:6px 0 0; font-size:11px; line-height:1.35; }
-@media (max-width:520px) { .ai-model-options span { min-height:52px; padding:7px 4px; } .ai-model-options strong { font-size:11px; } .ai-model-options small { font-size:9px; } }
-
 /* ===== DSB Admin AI — compact floating copilot ===== */
 .admin-ai-open-btn{position:fixed;right:18px;bottom:18px;z-index:60;width:48px;height:48px;border:0;border-radius:16px;background:linear-gradient(145deg,#7c3aed,#c026d3);color:#fff;box-shadow:0 12px 34px rgba(76,29,149,.32);font-size:20px;font-weight:800;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease}.admin-ai-open-btn:hover{transform:translateY(-2px);box-shadow:0 16px 38px rgba(76,29,149,.38)}.admin-ai-open-btn:active{transform:scale(.95)}
 .admin-ai-drawer{position:fixed;right:18px;bottom:78px;z-index:70;width:min(390px,calc(100vw - 30px));height:min(680px,calc(100vh - 110px));display:flex;flex-direction:column;background:rgba(255,255,255,.98);border:1px solid rgba(92,76,125,.15);border-radius:22px;box-shadow:0 26px 70px rgba(33,22,55,.24);overflow:hidden;opacity:0;transform:translateY(14px) scale(.98);pointer-events:none;transition:opacity .2s ease,transform .2s ease}.admin-ai-drawer.open{opacity:1;transform:none;pointer-events:auto}.admin-ai-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #ece8f2;background:linear-gradient(180deg,#fff,#fbf9ff)}.admin-ai-head-mark{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;background:#f2eaff;color:#7c3aed;font-weight:900}.admin-ai-head-copy{min-width:0;flex:1}.admin-ai-head-copy strong{display:block;font-size:14px}.admin-ai-head-copy small{display:block;color:#7b7488;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.admin-ai-head button{border:0;background:transparent;color:#6c6477;width:30px;height:30px;border-radius:9px;cursor:pointer;font-size:17px}.admin-ai-head button:hover{background:#f3eff7}.admin-ai-mini-controls{display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid #f0edf4;background:#fff}.admin-ai-mini-controls select{min-width:0;flex:1;border:1px solid #e2ddeb;border-radius:10px;background:#faf9fc;padding:7px 8px;font-size:11px;color:#4c4556}.admin-ai-messages{flex:1;overflow:auto;padding:14px 12px;scroll-behavior:smooth}.admin-ai-welcome{text-align:center;padding:30px 8px 12px;color:#5f5868}.admin-ai-welcome .admin-ai-orb{width:48px;height:48px;margin:0 auto 10px;border-radius:17px;display:grid;place-items:center;background:linear-gradient(145deg,#eee5ff,#fde7ff);color:#7c3aed;font-size:22px}.admin-ai-welcome>strong{font-size:16px;color:#282330}.admin-ai-welcome>p{font-size:12px;line-height:1.5;max-width:300px;margin:7px auto 14px}.admin-ai-prompts{display:grid;grid-template-columns:1fr 1fr;gap:7px}.admin-ai-prompts button{border:1px solid #e8e1ef;background:#fff;border-radius:11px;padding:9px 8px;color:#574f61;font-size:11px;cursor:pointer;text-align:left}.admin-ai-prompts button:hover{background:#faf7ff;border-color:#d8c9ec}.admin-ai-msg{display:flex;margin:8px 0}.admin-ai-msg>div{max-width:88%;padding:9px 11px;border-radius:14px;font-size:12.5px;line-height:1.5;word-break:break-word}.admin-ai-msg.user{justify-content:flex-end}.admin-ai-msg.user>div{background:#6d28d9;color:#fff;border-bottom-right-radius:5px}.admin-ai-msg.assistant>div{background:#f4f1f7;color:#342f39;border-bottom-left-radius:5px}.admin-ai-drawer.thinking .admin-ai-head-mark{animation:adminAiPulse 1.2s ease-in-out infinite}@keyframes adminAiPulse{50%{transform:scale(1.08);box-shadow:0 0 0 7px rgba(124,58,237,.08)}}
@@ -1005,7 +991,7 @@ select option{background:#fff;color:#273444}
 .alert-icon,.dash-recent-icon{background:#e8f2f0}.alert-copy small,.dash-legend{color:#667085}.alert-arrow{color:#4d7d77}.dash-legend{background:#f4f6f8}
 
 /* Tables, cards and form surfaces that previously kept hard-coded dark fills. */
-.product-card,.order-card,.archive-card,.form-card,.admin-card,.products-toolbar,.search-row,.pager,.archive-pagination,.autofill-dialog,.ai-product-dialog{background:#fff!important;color:#273444!important;border-color:#dce4ec!important;box-shadow:0 8px 22px rgba(31,41,55,.05)!important}
+.product-card,.order-card,.archive-card,.form-card,.admin-card,.products-toolbar,.search-row,.pager,.archive-pagination,.autofill-dialog,.ai-fill-dialog{background:#fff!important;color:#273444!important;border-color:#dce4ec!important;box-shadow:0 8px 22px rgba(31,41,55,.05)!important}
 
 /* AI launcher + non-blocking side workspace. */
 .admin-ai-backdrop{display:none!important;pointer-events:none!important;background:transparent!important;backdrop-filter:none!important}
@@ -1151,23 +1137,3 @@ body.admin-ai-open{overflow:auto!important}
 .admin-ai-batch-summary{margin:8px 0 10px;padding:9px 11px;border:1px solid #d7e5e2;border-radius:10px;background:#eef7f5;color:#315e59;font-size:12px;font-weight:700}
 .admin-ai-batch-list{display:grid;gap:8px}.admin-ai-batch-card{border:1px solid #dfe6ed;border-radius:12px;background:#fff;overflow:hidden}.admin-ai-batch-card summary{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 11px;cursor:pointer;list-style:none;color:#344054}.admin-ai-batch-card summary::-webkit-details-marker{display:none}.admin-ai-batch-card summary label{display:flex;align-items:center;gap:7px;min-width:0}.admin-ai-batch-card summary span{flex:none;color:#667085;font-size:10px}.admin-ai-batch-card summary input,.admin-ai-batch-field input{width:17px;height:17px;accent-color:#2f6f68;flex:none}.admin-ai-batch-card>div{padding:0 9px 9px;display:grid;gap:6px}.admin-ai-batch-field{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px;border:1px solid #e7ecef;border-radius:9px;background:#fbfcfd;font-size:11px}.admin-ai-batch-field label{grid-column:1/-1;display:flex;align-items:center;gap:7px;color:#475467;font-weight:700}.admin-ai-batch-field span,.admin-ai-batch-field strong{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.4}.admin-ai-batch-field span{color:#7b8794}.admin-ai-batch-field strong{color:#244d49;font-weight:600}.admin-ai-batch-field small{display:block;margin-bottom:2px;text-transform:uppercase;letter-spacing:.04em;font-size:8px;opacity:.7}.admin-ai-batch-warnings{margin-top:8px;padding:8px 10px;border-radius:10px;background:#fff8e6;border:1px solid #f2dfaa;color:#7a5d16;font-size:10px;line-height:1.5}
 @media(max-width:700px){.admin-ai-batch-field{grid-template-columns:1fr}.admin-ai-batch-field label{grid-column:auto}.admin-ai-batch-card summary{padding:10px 9px}.admin-ai-batch-card summary span{font-size:9px}}
-
-
-/* Form-aware AI assistant: AI edits stay reviewable and are never auto-saved. */
-#tab-add .ai-form-edited {
-  border-color: #0f8f83 !important;
-  background: #effbf8 !important;
-  box-shadow: 0 0 0 3px rgba(15,143,131,.12) !important;
-  transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
-}
-#tab-add input[type="checkbox"].ai-form-edited { outline: 3px solid rgba(15,143,131,.18); outline-offset: 3px; }
-#saveStatus.ai-form-review-note {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border: 1px solid #b9ddd8;
-  border-radius: 12px;
-  background: #f0fbf9;
-  color: #20534d;
-  font-weight: 700;
-}
-.admin-ai-form-welcome p { max-width: 38rem; }
