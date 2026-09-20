@@ -115,16 +115,20 @@ AI generation uses an elapsed-time/indeterminate progress indicator because thir
 ## Interaction feedback
 
 `ui-feedback.js` and `ui-feedback.css` are shared by all pages, including admin.
-They own button release feedback, content-update motion, toast timing, busy
+They own CSS-only button presses, local cart celebrations, toast timing, busy
 indicators, focus outlines and reduced-motion handling. Edit the duration tokens
 in this stylesheet to tune the whole site. Keep this stylesheet after page styles.
 The deferred script runs before DOMContentLoaded consumers; do not mark it async.
 
 Use `setButtonBusy(button, true)` before a request and reset it in `finally`.
 Only show a success toast after the underlying operation succeeds. Existing
-cart/overlay transitions remain owned by their component styles. Content observers
-watch named render regions, batch updates per frame, and never intercept requests
-or delay navigation. Add new render-region IDs to `regions` when needed.
+cart/overlay transitions remain owned by their component styles. Do not animate whole render regions on DOM changes: translations can move
+positioned descendants and make the screen jerk. Cart success uses one disposable,
+fixed checkmark/sparkle burst plus a cart-icon wiggle; repeated additions replace
+the previous burst. Buy Now opens immediately, without waiting for decoration.
+Dialog focus restoration uses preventScroll and cart unlock restores the scroll
+position instantly. Press scale belongs only to ui-feedback.css; do not add a
+second click-driven scale or animate replacement action rows.
 
 This cleanup consolidates the two toast implementations, removes redundant
 page-level Escape listeners (the shared dialog manager owns Escape), shares

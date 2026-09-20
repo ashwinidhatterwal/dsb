@@ -427,7 +427,7 @@ function renderPdActions(p) {
     }
     renderPdActions(p);
     showToast(`${p.name} added to cart`);
-    playAddFlourish($('.pd-slide img'));
+    playAddFlourish($('#pdActions'));
   });
   const buyBtn = $('#pdBuyNow');
   if (buyBtn) buyBtn.addEventListener('click', async () => {
@@ -437,7 +437,7 @@ function renderPdActions(p) {
       return;
     }
     renderPdActions(p);
-    playAddFlourish($('.pd-slide img'), {
+    playAddFlourish($('#pdActions'), {
       openCartAfter: true
     });
   });

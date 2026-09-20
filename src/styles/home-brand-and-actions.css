@@ -249,9 +249,6 @@
   border-color:rgba(200,17,99,.34)!important;
   background:#fff7fb!important;
 }
-.home-cart-btn:active{
-  transform:scale(.94);
-}
 .home-cart-btn.in-cart{
   background:#fff2f7!important;
   border-color:rgba(200,17,99,.28)!important;
@@ -303,4 +300,4 @@
 .quick-size-option.adding{opacity:.58;pointer-events:none}
 .quick-size-open{overflow:hidden}
 @media(min-width:700px){.quick-size-overlay{align-items:center}.quick-size-sheet{border-radius:20px}}
-@media(prefers-reduced-motion:reduce){.quick-size-overlay,.quick-size-sheet,.quick-size-option{transition:none}.cart-flight-token{display:none}}
+@media(prefers-reduced-motion:reduce){.quick-size-overlay,.quick-size-sheet,.quick-size-option{transition:none}}

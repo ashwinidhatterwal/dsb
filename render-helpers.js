@@ -127,7 +127,7 @@ function bindCardActionEvents(card, product, list) {
       return;
     }
     updateCardActionsUI(card, product, list);
-    playAddFlourish($('img', card), {
+    playAddFlourish($('.card-actions', card), {
       openCartAfter: true
     });
   });
@@ -196,7 +196,7 @@ function openQuickSizePicker(product, card, list) {
       closeQuickSizePicker();
       updateCardActionsUI(card, product, list);
       showToast(`${product.name} • ${size} added to cart`);
-      playAddFlourish($('img', card));
+      playAddFlourish($('.card-actions', card));
     });
   });
   overlay.classList.add('open');
@@ -219,7 +219,7 @@ async function handleCardAdd(product, delta, card, list) {
   updateCardActionsUI(card, product, list);
   if (delta > 0) {
     showToast(`${product.name} added to cart`);
-    playAddFlourish($('img', card));
+    playAddFlourish($('.card-actions', card));
   } else {
     updateCartBadge();
   }

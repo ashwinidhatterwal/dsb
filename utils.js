@@ -189,7 +189,7 @@ function openDialogFocus(root, onClose) {
     });
   }
   dialogStack.push(entry);
-  (root.querySelector('button:not([disabled]),input,select,textarea,a[href]') || root).focus();
+  (root.querySelector('button:not([disabled]),input,select,textarea,a[href]') || root).focus({ preventScroll: true });
 }
 function closeDialogFocus(root) {
   const index = dialogStack.findIndex(x => x.root === root);
@@ -199,7 +199,7 @@ function closeDialogFocus(root) {
     const entry = dialogStack.pop();
     entry.siblings.forEach(([el, state]) => el.inert = state);
     entry.root.removeAttribute('aria-modal');
-    if (entry.previous && entry.previous.isConnected) entry.previous.focus();
+    if (entry.previous && entry.previous.isConnected) entry.previous.focus({ preventScroll: true });
   }
 }
 document.addEventListener('keydown', e => {
@@ -226,3 +226,7 @@ document.addEventListener('keydown', e => {
     first.focus();
   }
 }, true);
+
+function prefersReducedMotion() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false;
+}

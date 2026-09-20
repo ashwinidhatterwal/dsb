@@ -40,37 +40,35 @@
     toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
   };
 
-  // Capture also covers controls whose own handlers stop event propagation.
-  // Independent scale leaves existing transform-based positioning intact.
-  document.addEventListener('click', event => {
-    const control = event.target.closest?.('button, a[href], [role="button"], input[type="submit"]');
-    if (!control || control.matches(':disabled, [aria-disabled="true"]') || control.closest('[inert]')) return;
-    animate(control, [{scale: '.96'}, {scale: '1'}], 220);
-  }, true);
   document.addEventListener('invalid', event => {
     animate(event.target, [{translate: '-3px 0'}, {translate: '3px 0'}, {translate: '0 0'}]);
   }, true);
 
-  // Only observe content regions; no attribute polling or per-card listeners.
-  // Batch synchronous renders, and animate once per region, not every child.
-  const regions = '.card-actions, #pdActions, .pd-prices, #catalogRoot, #productGrid, #newArrivalsRail, #popularPicksRail, #searchResults, #pdRoot, #cartContent, #productList, #orderList, #archiveList, #trackResult, #autofillPreview';
-  const pending = new Set();
-  let frame = 0;
-  const observer = new MutationObserver(records => {
-    for (const record of records) {
-      const region = record.target.nodeType === 1 ? record.target.closest(regions) : record.target.parentElement?.closest(regions);
-      if (region) pending.add(region);
+  // A single, fixed decorative layer: no moving page regions or layout writes.
+  let burst, burstTimer;
+  function clearBurst() {
+    clearTimeout(burstTimer);
+    burst?.remove();
+    burst = null;
+  }
+  motion.addEventListener('change', () => { if (motion.matches) clearBurst(); });
+  window.DSBFeedback = {
+    celebrate(anchor) {
+      clearBurst();
+      if (motion.matches) return;
+      const cart = document.getElementById('cartTrigger');
+      animate(cart, [{rotate:'0deg'}, {rotate:'-10deg'}, {rotate:'8deg'}, {rotate:'-3deg'}, {rotate:'0deg'}], 440);
+      const rect = (anchor || cart)?.getBoundingClientRect();
+      if (!rect || !rect.width || rect.bottom < 0 || rect.top > innerHeight) return;
+      burst = document.createElement('div');
+      burst.className = 'cart-pop';
+      burst.setAttribute('aria-hidden', 'true');
+      burst.style.left = Math.max(36, Math.min(innerWidth - 36, rect.right - 18)) + 'px';
+      burst.style.top = Math.max(36, Math.min(innerHeight - 36, rect.top)) + 'px';
+      burst.innerHTML = '<span class="cart-pop-check">✓</span>' +
+        Array.from({length: 6}, (_, i) => '<i style="--angle:' + (i * 60) + 'deg"></i>').join('');
+      document.body.appendChild(burst);
+      burstTimer = setTimeout(clearBurst, 650);
     }
-    if (frame || !pending.size) return;
-    frame = requestAnimationFrame(() => {
-      frame = 0;
-      pending.forEach(region => {
-        if (region.getClientRects().length) animate(region, [{opacity: .78, translate: '0 5px'}, {opacity: 1, translate: '0 0'}]);
-      });
-      pending.clear();
-    });
-  });
-  document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll(regions).forEach(region => observer.observe(region, {childList: true, subtree: true}));
-  });
+  };
 })();

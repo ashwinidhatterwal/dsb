@@ -10,9 +10,6 @@
   line-height:1;
   box-shadow:0 8px 22px rgba(32,27,61,.12);
 }
-.cart-drawer .closebtn:active{
-  transform:scale(.94);
-}
 .cart-drawer > h2{
   min-height:38px;
   display:flex;

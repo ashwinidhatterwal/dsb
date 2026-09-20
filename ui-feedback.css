@@ -7,15 +7,17 @@
 :where(button, a, input, select, textarea, [role="button"]) {
   -webkit-tap-highlight-color: transparent;
 }
-:is(button, .primary-btn, .ghost-btn, [role="button"], input[type="submit"]) {
+:root :is(button, .primary-btn, .ghost-btn, [role="button"], input[type="submit"]) {
   transition: background-color var(--ui-fast) ease, color var(--ui-fast) ease,
     border-color var(--ui-fast) ease, box-shadow var(--ui-settle) ease,
     opacity var(--ui-fast) ease, transform var(--ui-settle) var(--ui-ease),
-    scale var(--ui-fast) var(--ui-ease);
+    scale var(--ui-fast) var(--ui-ease), filter var(--ui-fast) ease;
   touch-action: manipulation;
 }
-:is(button, .primary-btn, .ghost-btn, [role="button"]):not(:disabled):not([aria-disabled="true"]):active {
-  scale: .96;
+:root :is(button, .primary-btn, .ghost-btn, [role="button"]):not(:disabled):not([aria-disabled="true"]):active {
+  scale: .98;
+  filter: brightness(.94);
+  transition-duration: 90ms;
 }
 :where(button, a, input, select, textarea, [role="button"]):focus-visible {
   outline: 2px solid currentColor;
@@ -23,11 +25,12 @@
 }
 :is(button, input, select, textarea):disabled { cursor: not-allowed; }
 [aria-busy="true"] { cursor: progress; }
+button[aria-busy="true"] { position: relative; }
 button[aria-busy="true"]::after {
   content: "";
-  display: inline-block;
-  width: .8em; height: .8em;
-  margin-inline-start: .45em;
+  position: absolute;
+  right: 5px; top: 5px;
+  width: .55em; height: .55em;
   border: 2px solid currentColor;
   border-right-color: transparent;
   border-radius: 50%;
@@ -65,6 +68,29 @@ dialog[open]::backdrop { animation: ui-fade var(--ui-fast) ease; }
     transition-delay: 0s !important;
     scroll-behavior: auto !important;
   }
-  :is(button, .primary-btn, .ghost-btn, [role="button"]):active { scale: 1; }
+  :root :is(button, .primary-btn, .ghost-btn, [role="button"]):active { scale: 1; }
   ::view-transition-old(root), ::view-transition-new(root) { animation: none !important; }
 }
+
+/* Cart confetti stays in a fixed, non-interactive 64px square. */
+.cart-pop {
+  position: fixed; width: 64px; height: 64px; margin: -32px;
+  z-index: 350; pointer-events: none; contain: layout style;
+  animation: cart-pop-fade 600ms ease both;
+}
+.cart-pop-check {
+  position: absolute; inset: 17px; display: grid; place-items: center;
+  border-radius: 50%; background: #3e7c59; color: white;
+  font: bold 19px/1 sans-serif; box-shadow: 0 3px 10px #201b3d22;
+  animation: cart-pop-check 500ms cubic-bezier(.2,.8,.2,1) both;
+}
+.cart-pop i {
+  position: absolute; left: 29px; top: 29px; width: 6px; height: 6px;
+  border-radius: 2px; background: #f2a93b;
+  rotate: var(--angle); animation: cart-pop-spark 520ms ease-out both;
+}
+.cart-pop i:nth-child(even) { background: #c81163; border-radius: 50%; }
+@keyframes cart-pop-fade { 0%,70% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes cart-pop-check { 0% { scale: .65; opacity: 0; } 35% { scale: 1.08; opacity: 1; } 65%,100% { scale: 1; opacity: 1; } }
+@keyframes cart-pop-spark { from { transform: translateX(8px) scale(.5); opacity: 1; } to { transform: translateX(29px) scale(.2); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .cart-pop { display: none; } }
