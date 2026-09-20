@@ -511,10 +511,11 @@ function cleanAiDraft_(draft) {
     out[key] = value.slice(0, key === 'description' || key === 'descriptionhindi' || key === 'specifications' ? 2000 : 1000);
   });
   ['price', 'mrp', 'costprice'].forEach(key => {
+    if (draft[key] === null || draft[key] === undefined || typeof draft[key] === 'boolean' || String(draft[key]).trim() === '') return;
     const n = Number(draft[key]);
     if (Number.isFinite(n) && n >= 0) out[key] = n;
   });
-  if (draft.stockqty !== null && draft.stockqty !== undefined && Number.isFinite(Number(draft.stockqty)) && Number(draft.stockqty) >= 0) out.stockqty = Math.floor(Number(draft.stockqty));
+  if (draft.stockqty !== null && draft.stockqty !== undefined && typeof draft.stockqty !== 'boolean' && String(draft.stockqty).trim() !== '' && Number.isFinite(Number(draft.stockqty)) && Number(draft.stockqty) >= 0) out.stockqty = Math.floor(Number(draft.stockqty));
   if (typeof draft.hasSizes === 'boolean') out.hasSizes = draft.hasSizes;
   ['sizes', 'tags'].forEach(key => {
     if (!Array.isArray(draft[key])) return;

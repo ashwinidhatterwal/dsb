@@ -918,3 +918,13 @@ input[type=checkbox]:disabled {
 @media(max-width:700px){.admin-ai-drawer{background:#0d202b;border-color:#31505f;height:min(82vh,760px)}.admin-ai-head{padding-top:14px}.admin-ai-open-btn{background:#0f766e}}
 /* Admin AI chat image attachments */
 .admin-ai-image-preview{display:flex;gap:7px;overflow-x:auto;padding:7px 1px 9px;scrollbar-width:thin}.admin-ai-pending-image{position:relative;flex:0 0 54px;width:54px;height:54px;border:1px solid #31505f;border-radius:10px;overflow:hidden;background:#0a1922}.admin-ai-pending-image img{width:100%;height:100%;object-fit:cover;display:block}.admin-ai-pending-image button{position:absolute;top:2px;right:2px;width:20px;height:20px;border:0;border-radius:7px;background:rgba(6,18,25,.82);color:#fff;line-height:1;cursor:pointer}.admin-ai-attach{flex:0 0 42px;width:42px;height:42px;border:1px solid #31505f;border-radius:11px;background:#112b37;color:#a9e1dc;font-size:23px;line-height:1;cursor:pointer;align-self:flex-end}.admin-ai-attach:hover{background:#173744;border-color:#3e6878}.admin-ai-attach:disabled{opacity:.5;cursor:wait}.admin-ai-msg-images{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px}.admin-ai-msg-images img{width:58px;height:58px;object-fit:cover;border-radius:9px;border:1px solid rgba(255,255,255,.12)}
+
+/* Copilot task shortcuts and selective review. */
+.admin-ai-tools{display:flex;gap:8px;padding:8px 12px;background:#102631;border-bottom:1px solid #294957;flex-shrink:0}
+.admin-ai-tools select{min-width:0;flex:1;background:#132f3c;color:#dce9ed;border:1px solid #365565;border-radius:9px;padding:7px;font:inherit;font-size:11px}
+.admin-ai-tools button{border:1px solid #365565;background:#15303c;color:#dce9ed;border-radius:9px;padding:7px;font-size:11px;cursor:pointer}
+.admin-ai-change label{color:#b6d4dc;font-weight:600;overflow-wrap:anywhere}.admin-ai-change input{accent-color:#2ba79b;width:14px;height:14px;margin:0;vertical-align:middle}
+.admin-ai-change:has(input:not(:checked)){opacity:.5}.admin-ai-proposal[hidden],.admin-ai-image-preview[hidden]{display:none}
+.admin-ai-head,.admin-ai-mini-controls,.admin-ai-compose{flex-shrink:0}.admin-ai-messages{min-height:80px}.admin-ai-proposal{flex-shrink:0;max-height:36vh}
+.admin-ai-proposal-actions{position:sticky;bottom:0;background:#102a36;padding-top:8px}.admin-ai-proposal-actions button:disabled{opacity:.45;cursor:not-allowed}
+@media(min-width:701px){.admin-ai-drawer{width:min(470px,calc(100vw - 30px))}}

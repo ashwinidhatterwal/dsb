@@ -40,3 +40,50 @@ assert(backend.includes('sanitizeAiAdminImageUrls_') && backend.includes("type: 
 assert(backend.includes('(chatImageUrls || []).concat(listingRefs)'), 'Chat images should be merged with product gallery images for enrichment');
 
 console.log('Admin AI chat checks passed.');
+
+const products = [
+  {id:'DSB-0008', name:'Clinic Plus Health Shampoo', description:'Old shampoo copy', image:'https://example.com/shampoo.jpg'},
+  {id:'DSB-0042', name:'Nail Clipper', description:'Old clipper copy', image:'https://example.com/clipper.jpg', images:'https://example.com/back.jpg', price:99, costprice:''}
+];
+context.getAllProducts = () => products;
+context.isArchived_ = p => p.archived === true;
+context.safeNumber_ = (v, fallback) => Number.isFinite(Number(v)) ? Number(v) : fallback;
+context.productRevision_ = () => 'rev1';
+const oldChat = [{role:'assistant',text:'Applied: Update Clinic Plus Health Shampoo (DSB-0008).'}];
+const resolve = (text, history=oldChat) => context.resolveAiAdminTarget_(text, history, products);
+assert.equal(resolve('find nail clipper and enrich the details of product').products[0].id, 'DSB-0042');
+assert.equal(resolve('find nail cutters and enrich details').products[0].id, 'DSB-0042');
+assert.equal(resolve('find lipstick and enrich details').products.length, 0);
+assert.equal(resolve('enrich DSB-9999').products.length, 0);
+assert.equal(resolve('enrich its details').products[0].id, 'DSB-0008');
+products.push({id:'DSB-0043',name:'Small Nail Clipper'});
+assert.equal(resolve('find nail clipper and enrich details').products.length, 2);
+products.pop();
+let draftRequest;
+context.generateAiProductDraft_ = body => {
+  draftRequest = body;
+  return {draft:{description:'Useful clipper copy',descriptionhindi:'नेल क्लिपर',tags:['nail care'],costprice:0,price:1,stockqty:0},model:'fixture',warnings:[]};
+};
+const actor = {role:'owner'};
+const enrich = text => context.maybeGenerateAiAdminProductEnrichment_({},text,oldChat,{},actor,['https://example.com/reference.jpg']);
+let proposal = enrich('find nail clipper and enrich the details of product').proposal;
+assert.equal(proposal.targetId, 'DSB-0042');
+assert.equal(proposal.patch.description, 'Useful clipper copy');
+for (const key of ['costprice','price','stockqty']) assert.equal(proposal.patch[key], undefined);
+assert.equal(draftRequest.imageUrl, products[1].image);
+assert(draftRequest.referenceUrls.includes('https://example.com/reference.jpg'));
+assert(draftRequest.referenceUrls.includes('https://example.com/back.jpg'));
+assert.equal(enrich('fill all missing details for DSB-0042').proposal.patch.description, undefined);
+proposal = enrich('Translate description for DSB-0042 into Hindi').proposal;
+assert.equal(proposal.patch.description, undefined);
+assert.equal(proposal.patch.descriptionhindi, 'नेल क्लिपर');
+assert.equal(enrich('find lipstick and enrich details').proposal, null);
+assert.equal(enrich('generate details for new product'), null);
+assert.equal(context.maybeGenerateAiAdminProductEnrichment_({},'enrich details for DSB-0042',[],{}, {role:'viewer'},[]), null);
+const blocked = context.sanitizeAiAdminChatResult_({reply:'edit',action:{type:'update_product',targetId:'DSB-0008',patch:{description:'Wrong'}}},{target:{ids:['DSB-0042']}},actor);
+assert.equal(blocked.proposal,null);
+products.push({id:'DSB-0050',name:'Nail Clipper',price:100,mrp:80,costprice:110,stockqty:0,stock:'in stock'});
+const audit = context.aiAdminLocalReport_('Audit catalog quality');
+for (const issue of ['MRP below selling price','cost above selling price','stock status disagrees','possible duplicate']) assert(audit.includes(issue));
+assert(context.aiAdminLocalReport_('Show restock report').includes('DSB-0050'));
+console.log('Target, enrichment, image, role, audit and restock regressions passed.');

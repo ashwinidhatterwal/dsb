@@ -169,4 +169,18 @@ The admin panel includes a compact floating **DSB AI** assistant. It uses the sa
 
 Chat memory is session-only: recent user/assistant messages are kept in the current browser tab with `sessionStorage` and are not written to Google Sheets. The assistant can read live catalog/order summaries and can prepare product creates/edits, order-status changes, and archive/restore actions. Any write appears as a review card and requires a two-click **Apply → Confirm apply** action before the existing admin backend is called.
 
-After installing this update, replace Apps Script with the generated `code.gs` and deploy a new web-app version. This build uses admin API version 12, so the updated frontend intentionally requires the updated backend.
+After installing this update, replace Apps Script with the generated `code.gs` and deploy a new web-app version. This build uses admin API version 13, so the updated frontend intentionally requires the updated backend.
+
+
+### Copilot target and enrichment fix
+
+Deploy the generated root `code.gs` as a new version of your existing Apps Script web-app deployment, then upload the website files. Keep the existing deployment URL and Script Properties. Reload the admin page after uploading. Frontend and backend must both be version 13.
+
+- A product name or ID in the current request takes priority over earlier chat. Multiple matches prompt for an ID. Unknown names never fall back to the old product. For unusual wording, use the exact product ID.
+- “Enrich details for DSB-…” improves existing descriptive copy. “Fill missing details for DSB-…” preserves existing fields. Enrichment never changes price, MRP, cost, stock, or size pricing; request those changes explicitly.
+- Photo analysis uses the main listing photo plus up to five references, prioritizing current chat attachments before gallery photos. Model vision support is required. Unknown numeric fields stay blank rather than becoming zero.
+- Task shortcuts: enrichment, Hindi translation, SEO description/tags, Instagram caption drafts, catalog audit, and restock report. Captions are drafts only. Use Copy reply to reuse text.
+- Catalog audit checks missing images/descriptions/category, invalid prices, MRP/cost inconsistencies, stock mismatches and possible duplicate names. Restock reports use a five-unit threshold, flag untracked quantities, and do not guess reorder quantities. These reports use live catalog rules without an AI generation call.
+- Uncheck individual proposed fields before Apply → Confirm apply. New chat clears pending photos; failed chat requests retain photos for retry.
+
+Validation: `node scripts/build.mjs --check`, `node scripts/check-admin-chat.mjs`, `node scripts/check-ai.mjs`, `node scripts/check-chat-client.mjs`, and `node scripts/check.mjs`. Regression fixtures cover switching from shampoo to nail clippers, ambiguous/unknown targets, null numbers, photo references, Hindi-only edits and catalog reports. Live provider response quality still depends on the configured model and evidence in the photos.

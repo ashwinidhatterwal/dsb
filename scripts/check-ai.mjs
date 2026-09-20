@@ -107,3 +107,10 @@ console.log('AI product autofill checks passed.');
 
 assert(backend.includes("if (!config.isGemini && config.imageDetail) image.detail = config.imageDetail"), 'Gemini image payload must omit unsupported detail hint');
 assert(backend.includes('geminiBadRequest'), 'Gemini HTTP 400 compatibility fallback is missing');
+
+for (const value of [null, undefined, '', '  ', false]) {
+  const unknown = context.cleanAiDraft_({price:value,mrp:value,costprice:value,stockqty:value});
+  for (const key of ['price','mrp','costprice','stockqty']) assert.equal(unknown[key], undefined, `${key} must remain unknown`);
+}
+assert.equal(context.cleanAiDraft_({costprice:0}).costprice, 0);
+console.log('Unknown numeric values remain unknown.');
