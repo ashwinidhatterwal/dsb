@@ -25,6 +25,7 @@ element('#adminAiInput').value='find nail clipper and enrich the details of prod
 await context.testChat.sendMessage();
 assert.equal(requests[0].imageUrls[0],'https://example.com/reference.jpg');
 assert(element('#adminAiMessages').innerHTML.includes('admin-ai-msg-images'));
+assert(element('#adminAiMessages').innerHTML.includes('data-ai-product-id=\"DSB-0042\"'), 'Assistant product IDs should render as editor links');
 assert(element('#adminAiProposal').innerHTML.includes('data-ai-field="descriptionhindi"'));
 await context.testChat.applyProposal();
 assert.equal(requests[1].product.id,'DSB-0042');

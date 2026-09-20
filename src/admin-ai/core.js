@@ -34,6 +34,34 @@ function loadSession() {
 function saveSession() {
   try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-MAX_MESSAGES))); } catch (_) {}
 }
+function renderAiMessageText(text, role) {
+  const safe = escapeHtml(String(text || '')).replace(/\n/g, '<br>');
+  if (role !== 'assistant') return safe;
+  return safe.replace(/\b(DSB-[A-Za-z0-9_-]{2,40})\b/g, (match, id) =>
+    `<a href="#" class="admin-ai-product-link" data-ai-product-id="${escapeHtml(id)}" title="Edit ${escapeHtml(id)}">${escapeHtml(id)}</a>`
+  );
+}
+
+async function openAiProductEditor(productId) {
+  const id = String(productId || '').trim();
+  if (!id || busy || applying) return;
+  let product = Array.isArray(PRODUCTS) ? PRODUCTS.find(p => String(p.id || '').toLowerCase() === id.toLowerCase()) : null;
+  try {
+    if (!product) {
+      if (!API_URL || !ADMIN_KEY || typeof adminRead !== 'function') throw new Error('Admin backend is not connected.');
+      const data = await adminRead('adminProductsPage', { archived: false, query: id, sort: 'id-asc', page: 0 });
+      product = Array.isArray(data?.products) ? data.products.find(p => String(p.id || '').toLowerCase() === id.toLowerCase()) : null;
+    }
+    if (!product) throw new Error(`Product ${id} was not found in the active catalog.`);
+    if (typeof fillForm !== 'function') throw new Error('Product editor is unavailable.');
+    fillForm(product);
+    closeChat({ restoreFocus: false });
+    showToast(`Editing ${id}`);
+  } catch (err) {
+    showToast(err?.message || `Could not open ${id}`);
+  }
+}
+
 function addMessage(role, text, images = []) {
   const clean = String(text || '').trim();
   if (!clean) return;
@@ -115,8 +143,12 @@ function renderMessages() {
   }
   root.innerHTML = messages.map(m => {
     const thumbs = Array.isArray(m.images) && m.images.length ? `<div class="admin-ai-msg-images">${m.images.map((url, i) => `<img src="${escapeHtml(url)}" alt="Attached photo ${i + 1}" loading="lazy" decoding="async">`).join('')}</div>` : '';
-    return `<div class="admin-ai-msg ${m.role}"><div>${thumbs}${escapeHtml(m.text).replace(/\n/g, '<br>')}</div></div>`;
+    return `<div class="admin-ai-msg ${m.role}"><div>${thumbs}${renderAiMessageText(m.text, m.role)}</div></div>`;
   }).join('');
+  root.querySelectorAll('[data-ai-product-id]').forEach(link => link.addEventListener('click', event => {
+    event.preventDefault();
+    openAiProductEditor(link.dataset.aiProductId);
+  }));
   const scroller = qs('#adminAiConversation') || root;
   scroller.scrollTop = scroller.scrollHeight;
 }

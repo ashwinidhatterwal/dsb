@@ -8,6 +8,7 @@ const backend = aiSources.map(file => fs.readFileSync(file, 'utf8')).join('\n');
 const auth = fs.readFileSync('src/backend/admin-auth.gs', 'utf8');
 const html = fs.readFileSync('admin.html', 'utf8');
 const client = fs.readFileSync('admin-chat.js', 'utf8');
+const productAssist = fs.readFileSync('admin-ai.js', 'utf8');
 
 assert(order.backend.includes('src/backend/ai-admin-chat.gs') && order.backend.includes('src/backend/ai-admin-context.gs') && order.backend.includes('src/backend/ai-admin-actions.gs'), 'Modular Admin AI backend missing from build order');
 assert(Array.isArray(order.adminChat) && order.adminChat.length >= 5, 'Admin AI client must be built from maintainable source fragments');
@@ -18,6 +19,8 @@ assert(client.includes('sessionStorage') && client.includes('dsb_admin_ai_chat_v
 assert(client.includes('CONTEXT_MESSAGES = 6') && client.includes('sessionState: collectAiSessionState()'), 'Compact chat context/session state is missing');
 assert(client.includes("action: 'aiAdminChat'"), 'Admin AI client does not call chat backend');
 assert(client.includes('Confirm apply') && client.includes('applyProposal'), 'Confirmation-first action apply flow is missing');
+assert(client.includes('data-ai-product-id') && client.includes('openAiProductEditor'), 'AI product references must open the product editor');
+assert(productAssist.includes('closeDialog({ force: true })'), 'Successful product detail generation must auto-close its dialog');
 assert(client.includes("action: 'update'") && client.includes("action: 'add'") && client.includes("action: 'updateOrderStatus'") && client.includes("action: 'archiveProduct'"), 'Expected admin action adapters are missing');
 assert(!backend.includes('deleteProduct(') && !backend.includes('verifyPayment_('), 'AI chat must not directly perform destructive/payment actions');
 assert(backend.includes('maybeGenerateAiAdminProductEnrichment_') && backend.includes('generateAiProductDraft_'), 'Admin AI product enrichment must reuse the vision product generator');

@@ -123,3 +123,8 @@ AI generation uses an elapsed-time/indeterminate progress indicator because thir
 
 ### Admin AI catalog batch enrichment
 The admin AI recognizes catalog-wide requests such as “batch fix every product that is missing details”. It scans active listings, prepares up to 8 image-aware descriptive enrichment proposals per review batch, and requires explicit review/apply. Batch mode never proposes price, MRP, cost, stock, quantity, product ID, GTIN, sizes or size prices. Use “continue catalog batch” after applying a batch to move to remaining listings recorded in the current chat context.
+
+### AI product navigation and auto-close (2026-09-20)
+- Successful `Fill or edit this product` generation force-closes its dialog after the form is populated, then leaves the form unsaved for human review.
+- Product IDs in DSB AI assistant replies are rendered as editor links. Link handling lives in `src/admin-ai/core.js`; it resolves the exact active product through the existing admin read service and reuses `fillForm()` rather than creating a second editor path.
+- Keep product navigation deterministic in the client; prompts only need to include the exact product name and ID.

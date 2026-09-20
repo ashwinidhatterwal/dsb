@@ -24,9 +24,9 @@
     setTimeout(() => $('#aiFillInput')?.focus(), 0);
   }
 
-  function closeDialog() {
+  function closeDialog({ force = false } = {}) {
     const dialog = $('#aiFillDialog');
-    if (!dialog || busy) return;
+    if (!dialog || (busy && !force)) return;
     if (typeof dialog.close === 'function' && dialog.open) dialog.close();
     else dialog.removeAttribute('open');
   }
@@ -288,7 +288,9 @@
       if (!draft || !Object.keys(draft).length) throw new Error('Nothing usable came back. Try adding a photo or a bit more detail.');
 
       const touched = window.DSBAutofill.applyToForm(draft);
-      closeDialog();
+      // Successful generation is complete: close immediately so the admin
+      // can review the populated form without manually dismissing AI.
+      closeDialog({ force: true });
       animateTouchedFields(touched);
       const warnings = Array.isArray(meta.warnings) ? meta.warnings.filter(Boolean) : [];
       const count = Object.keys(draft).length;
