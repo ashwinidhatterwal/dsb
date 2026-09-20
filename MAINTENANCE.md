@@ -118,3 +118,9 @@ AI generation uses an elapsed-time/indeterminate progress indicator because thir
 - Session memory is browser-only and capped; no chat transcript is persisted to Sheets.
 - AI write suggestions are proposals only. Product add/update, archive/restore and order-status changes are executed through the existing validated admin actions after explicit confirmation.
 - Do not add payment verification/refunds, permanent deletes, credentials, or security-setting mutations to the AI action allowlist without a separate higher-assurance approval design.
+
+### Admin AI catalog batch enrichment
+The admin AI recognizes catalog-wide requests such as “batch fix every product that is missing details”. It scans active listings, prepares up to 8 image-aware descriptive enrichment proposals per review batch, and requires explicit review/apply. Batch mode never proposes price, MRP, cost, stock, quantity, product ID, GTIN, sizes or size prices. Use “continue catalog batch” after applying a batch to move to remaining listings recorded in the current chat context.
+
+### Form-aware admin AI
+When the Add/Edit Product tab is active, DSB AI runs in form-assist mode. The current form values and product photos are sent to the existing authenticated `aiProductDraft` action; the returned structured draft is diffed against the open form and only changed fields are written into the browser form. AI-edited fields are highlighted, the AI drawer closes after a successful edit, and the product is never saved automatically. Price/MRP/cost/stock/barcode changes require an explicit matching instruction in the current prompt. Catalog-wide analysis remains separate from this fast single-product path.

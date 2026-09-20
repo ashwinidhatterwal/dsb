@@ -473,36 +473,6 @@ function fillForm(p) {
   });
 }
 
-function productHealthGaps(p) {
-  const gaps = [];
-  if (!String(p.image || '').trim()) gaps.push('photo');
-  if (!String(p.description || '').trim()) gaps.push('description');
-  if (!String(p.descriptionhindi || '').trim()) gaps.push('Hindi description');
-  if (!String(p.category || '').trim() || String(p.category).toLowerCase() === 'other') gaps.push('category');
-  if (!String(p.material || '').trim()) gaps.push('material');
-  if (!String(p.specifications || '').trim()) gaps.push('specifications');
-  if (!String(p.tags || '').trim()) gaps.push('tags');
-  return gaps;
-}
-function showCatalogHealth() {
-  const panel = $('#catalogHealthPanel');
-  if (!panel) return;
-  const incomplete = PRODUCTS.map(p => ({ p, gaps: productHealthGaps(p) })).filter(x => x.gaps.length).sort((a, b) => b.gaps.length - a.gaps.length);
-  panel.hidden = false;
-  panel.innerHTML = `<div class="catalog-health-head"><div><strong>${incomplete.length} of ${PRODUCTS.length} products need attention</strong><span>This scan is instant and uses no AI credits. Open one product at a time for reliable AI help.</span></div><button type="button" class="ghost-btn" id="closeCatalogHealth">×</button></div>${incomplete.length ? `<div class="catalog-health-list">${incomplete.slice(0, 40).map(({ p, gaps }) => `<button type="button" data-health-id="${escapeHtml(String(p.id || ''))}"><b>${escapeHtml(p.name || p.id || 'Unnamed product')}</b><small>${escapeHtml(gaps.join(' · '))}</small><span>Edit with AI →</span></button>`).join('')}</div>${incomplete.length > 40 ? `<p class="hint">Showing the first 40 highest-priority products.</p>` : ''}` : '<p>Every product has the core descriptive fields.</p>'}`;
-  $('#closeCatalogHealth')?.addEventListener('click', () => { panel.hidden = true; });
-  $$('[data-health-id]', panel).forEach(btn => btn.addEventListener('click', () => {
-    const product = PRODUCTS.find(p => String(p.id) === btn.dataset.healthId);
-    if (!product) return;
-    fillForm(product);
-    setTimeout(() => {
-      window.DSBAdminAI?.openForForm?.();
-      const input = $('#adminAiInput');
-      if (input) input.value = `Complete the safely fillable missing details for this product. Focus on: ${productHealthGaps(product).join(', ')}. Preserve confirmed facts and commercial values.`;
-    }, 80);
-  }));
-}
-
 // Keeps the current form's field values but detaches it from the product
 // being edited, so Save adds it as a brand-new listing with its own ID
 // instead of trying to (and failing to) rename the original's ID.
@@ -549,94 +519,6 @@ function clearForm() {
   $('#addTabTitle').textContent = 'Add a product';
   $('#saveStatus').textContent = '';
 }
-
-/* Product-form bridge for DSB AI. AI edits the unsaved form only; the normal
- * Save product button remains the single catalog write path. */
-const AI_FORM_FIELDS = {
-  id: 'f-id', name: 'f-name', namehindi: 'f-nameHindi', category: 'f-category',
-  subcategory: 'f-subcategory', price: 'f-price', mrp: 'f-mrp', costprice: 'f-costprice',
-  image: 'f-image', description: 'f-description', stock: 'f-stock', stockqty: 'f-stockqty',
-  tags: 'f-tags', brand: 'f-brand', material: 'f-material', packsize: 'f-packsize',
-  specifications: 'f-specifications', gtin: 'f-gtin', descriptionhindi: 'f-descriptionhindi',
-  sizes: 'f-sizes', sizeprices: 'f-sizeprices'
-};
-function aiFormSnapshot() {
-  const values = {};
-  Object.entries(AI_FORM_FIELDS).forEach(([key, id]) => { values[key] = $('#' + id)?.value ?? ''; });
-  values.images = currentExtraImages.join(',');
-  values.hasSizes = $('#f-hasSizes').checked;
-  return values;
-}
-function clearAiFormMarks() {
-  $$('.ai-form-edited').forEach(el => el.classList.remove('ai-form-edited'));
-}
-function restoreAiFormSnapshot(snapshot) {
-  if (!snapshot) return;
-  Object.entries(AI_FORM_FIELDS).forEach(([key, id]) => {
-    const el = $('#' + id);
-    if (el && Object.prototype.hasOwnProperty.call(snapshot, key)) el.value = snapshot[key] ?? '';
-  });
-  currentExtraImages = String(snapshot.images || '').split(',').map(x => x.trim()).filter(Boolean);
-  renderExtraImagesPreview();
-  $('#f-hasSizes').checked = snapshot.hasSizes === true || String(snapshot.sizes || '').trim() !== '';
-  $('#sizeOptionsField').hidden = !$('#f-hasSizes').checked;
-  updateImagePreview(snapshot.image || '');
-  clearAiFormMarks();
-}
-function applyAiFormPatch(patch) {
-  if (!patch || typeof patch !== 'object') return [];
-  const before = aiFormSnapshot();
-  const changed = [];
-  clearAiFormMarks();
-  Object.entries(patch).forEach(([key, raw]) => {
-    if (key === 'images') {
-      const urls = Array.isArray(raw) ? raw : String(raw || '').split(',');
-      const next = urls.map(x => String(x).trim()).filter(x => /^https:\/\//i.test(x));
-      if (next.join(',') !== before.images) {
-        currentExtraImages = next;
-        renderExtraImagesPreview();
-        $('#extraImagesPreview')?.classList.add('ai-form-edited');
-        changed.push(key);
-      }
-      return;
-    }
-    if (key === 'hasSizes' || key === 'id' || !AI_FORM_FIELDS[key]) return;
-    const el = $('#' + AI_FORM_FIELDS[key]);
-    const next = raw === null || raw === undefined ? '' : Array.isArray(raw) ? raw.join(', ') : String(raw);
-    if (String(el.value) === next) return;
-    el.value = next;
-    el.classList.add('ai-form-edited');
-    changed.push(key);
-  });
-  if (changed.includes('sizes')) {
-    $('#f-hasSizes').checked = !!$('#f-sizes').value.trim();
-    $('#sizeOptionsField').hidden = !$('#f-hasSizes').checked;
-  }
-  if (changed.includes('image')) updateImagePreview($('#f-image').value.trim());
-  const offer = $('#draftOffer');
-  const labels = changed.map(key => key === 'namehindi' ? 'Hindi name' : key === 'descriptionhindi' ? 'Hindi description' : key === 'sizeprices' ? 'size prices' : key).join(', ');
-  offer.hidden = false;
-  offer.className = 'ai-form-review';
-  offer.innerHTML = `<div><strong>AI updated ${changed.length} field${changed.length === 1 ? '' : 's'}.</strong><span>Review the highlighted fields before saving: ${escapeHtml(labels || 'none')}.</span></div><button type="button" id="undoAiFormBtn" class="ghost-btn">Undo AI edits</button>`;
-  $('#undoAiFormBtn')?.addEventListener('click', () => {
-    restoreAiFormSnapshot(before);
-    offer.hidden = true;
-    showToast('AI form edits undone');
-  }, { once: true });
-  if (changed.length) {
-    const first = $('#' + AI_FORM_FIELDS[changed.find(key => AI_FORM_FIELDS[key])]);
-    first?.scrollIntoView({ behavior: reducedMotion() ? 'instant' : 'smooth', block: 'center' });
-  }
-  return changed;
-}
-window.DSBProductEditor = Object.freeze({
-  getContext() {
-    const tabOpen = $('#tab-add')?.classList.contains('active');
-    return { active: !!tabOpen, mode: editingProductId ? 'edit' : 'add', targetId: editingProductId || '', values: aiFormSnapshot() };
-  },
-  applyPatch: applyAiFormPatch,
-  clearMarks: clearAiFormMarks
-});
 
 // Shared upload helper — both the main photo and the additional-photos
 // section use this, so there's exactly one place that talks to Cloudinary.
@@ -888,7 +770,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $$('[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
-  $('#catalogHealthBtn')?.addEventListener('click', showCatalogHealth);
   $('#connectBtn').addEventListener('click', async () => {
     API_URL = $('#apiUrl').value.trim();
     ADMIN_KEY = $('#adminKey').value;

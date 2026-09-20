@@ -11,7 +11,6 @@
   let applying = false;
   let sessionEpoch = 0;
   let applyTimer = null;
-  let formMode = false;
 
   const qs = (s, c = document) => c.querySelector(s);
   const qsa = (s, c = document) => Array.from(c.querySelectorAll(s));
@@ -57,16 +56,9 @@
     input?.focus({ preventScroll: true });
   }
 
-  function openChat(options = {}) {
+  function openChat() {
     const drawer = qs('#adminAiDrawer');
     if (!drawer) return;
-    const context = window.DSBProductEditor?.getContext?.();
-    formMode = options.form === true || !!context?.active;
-    drawer.classList.toggle('form-mode', formMode);
-    const headCopy = qs('.admin-ai-head-copy small', drawer);
-    if (headCopy) headCopy.textContent = formMode ? `${context?.mode === 'edit' ? 'Editing existing' : 'Creating new'} product · AI changes stay unsaved` : 'Review changes before applying';
-    const input = qs('#adminAiInput');
-    if (input) input.placeholder = formMode ? 'Tell AI how to complete or improve this form…' : 'Ask about products, orders, stock…';
     drawer.inert = false;
     const backdrop = qs('#adminAiBackdrop');
     if (backdrop) backdrop.hidden = true;
@@ -76,7 +68,7 @@
     renderMessages();
     setTimeout(() => qs('#adminAiInput')?.focus(), 30);
   }
-  function closeChat() {
+  function closeChat({ restoreFocus = true } = {}) {
     const drawer = qs('#adminAiDrawer');
     if (!drawer) return;
     drawer.inert = true;
@@ -85,19 +77,224 @@
     drawer.classList.remove('open');
     drawer.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('admin-ai-open');
-    qs('#adminAiOpen')?.focus({ preventScroll: true });
+    if (restoreFocus) qs('#adminAiOpen')?.focus({ preventScroll: true });
+  }
+
+
+  const formFieldMap = {
+    name: 'f-name', namehindi: 'f-nameHindi', category: 'f-category', subcategory: 'f-subcategory',
+    price: 'f-price', mrp: 'f-mrp', costprice: 'f-costprice', description: 'f-description',
+    stock: 'f-stock', stockqty: 'f-stockqty', brand: 'f-brand', material: 'f-material',
+    packsize: 'f-packsize', specifications: 'f-specifications', gtin: 'f-gtin',
+    descriptionhindi: 'f-descriptionhindi', sizes: 'f-sizes', sizeprices: 'f-sizeprices', tags: 'f-tags'
+  };
+
+  function productFormActive() {
+    return qs('#tab-add')?.classList.contains('active');
+  }
+
+  function formModeLabel() {
+    if (!productFormActive()) return '';
+    const id = String(qs('#f-id')?.value || '').trim();
+    const name = String(qs('#f-name')?.value || '').trim();
+    return id ? `Form assist · ${id}` : name ? `Form assist · ${name.slice(0, 28)}` : 'Form assist · new product';
+  }
+
+  function currentFormFacts() {
+    const out = {};
+    Object.entries(formFieldMap).forEach(([key, id]) => {
+      const el = qs('#' + id);
+      if (!el) return;
+      const value = String(el.value ?? '').trim();
+      if (!value) return;
+      if (['price','mrp','costprice','stockqty'].includes(key) && Number.isFinite(Number(value))) out[key] = Number(value);
+      else if (key === 'sizes' || key === 'tags') out[key] = value.split(',').map(x => x.trim()).filter(Boolean);
+      else out[key] = value;
+    });
+    const toggle = qs('#f-hasSizes');
+    if (toggle?.checked) out.hasSizes = true;
+    return out;
+  }
+
+  function optimizedAiImageUrl(url) {
+    const value = String(url || '').trim();
+    if (!value || !/res\.cloudinary\.com/i.test(value) || !/\/upload\//.test(value)) return value;
+    if (/\/upload\/f_auto,q_auto:eco,w_1280,c_limit\//.test(value)) return value;
+    return value.replace('/upload/', '/upload/f_auto,q_auto:eco,w_1280,c_limit/');
+  }
+
+  async function ensureFormImageUrl() {
+    let url = String(qs('#f-image')?.value || '').trim();
+    if (url) return url;
+    const fileInput = qs('#f-imagefile');
+    const file = fileInput?.files?.[0];
+    if (!file) return '';
+    if (typeof uploadFileToCloudinary !== 'function') throw new Error('Upload the selected product photo first, then try again.');
+    const status = qs('#adminAiStatus');
+    if (status) status.textContent = 'Uploading the product photo for AI…';
+    url = await uploadFileToCloudinary(file);
+    qs('#f-image').value = url;
+    fileInput.value = '';
+    if (typeof updateImagePreview === 'function') updateImagePreview(url);
+    const uploadStatus = qs('#uploadStatus');
+    if (uploadStatus) uploadStatus.textContent = 'Photo uploaded.';
+    return url;
+  }
+
+  function comparable(value) {
+    if (Array.isArray(value)) return value.map(x => String(x).trim()).filter(Boolean).join(', ').toLowerCase();
+    if (value === true) return 'true';
+    if (value === false) return 'false';
+    return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+  }
+
+  function protectedFormFieldAllowed(key, message) {
+    const text = String(message || '').toLowerCase();
+    if (key === 'price') return /\b(price|selling price|sale price)\b|₹|\brs\.?\b|\brupees?\b/.test(text);
+    if (key === 'mrp') return /\bmrp\b|maximum retail price/.test(text);
+    if (key === 'costprice') return /\b(cost|purchase)\s*price\b/.test(text);
+    if (key === 'stockqty') return /\b(stock\s*(quantity|qty)|inventory\s*(quantity|qty)|quantity in stock)\b/.test(text);
+    if (key === 'stock') return /\b(stock|availability|in stock|out of stock)\b/.test(text);
+    if (key === 'gtin') return /\b(gtin|barcode)\b/.test(text);
+    return true;
+  }
+
+  function setFormValue(key, value) {
+    if (key === 'hasSizes') {
+      const toggle = qs('#f-hasSizes');
+      if (!toggle) return null;
+      toggle.checked = Boolean(value);
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      const group = qs('#sizeOptionsField');
+      if (group) group.hidden = !toggle.checked;
+      return toggle;
+    }
+    const id = formFieldMap[key];
+    const el = id ? qs('#' + id) : null;
+    if (!el) return null;
+    let next = value;
+    if (Array.isArray(value)) next = value.join(', ');
+    if (next === null || next === undefined) return null;
+    el.value = String(next);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return el;
+  }
+
+  function markAiEdited(el) {
+    if (!el) return;
+    el.classList.add('ai-form-edited');
+    const clear = () => el.classList.remove('ai-form-edited');
+    el.addEventListener('input', clear, { once: true });
+    el.addEventListener('change', clear, { once: true });
+  }
+
+  function applyDraftToOpenForm(draft, message) {
+    const before = currentFormFacts();
+    const changed = [];
+    Object.entries(draft || {}).forEach(([key, value]) => {
+      if (value === null || value === undefined || value === '') return;
+      if (!protectedFormFieldAllowed(key, message)) return;
+      const previous = key === 'hasSizes' ? Boolean(qs('#f-hasSizes')?.checked) : before[key];
+      if (comparable(previous) === comparable(value)) return;
+      const el = setFormValue(key, value);
+      if (!el) return;
+      markAiEdited(el);
+      changed.push({ key, el });
+    });
+    if (changed.some(x => x.key === 'sizes' || x.key === 'sizeprices')) {
+      const toggle = qs('#f-hasSizes');
+      if (toggle && !toggle.checked) {
+        toggle.checked = true;
+        toggle.dispatchEvent(new Event('change', { bubbles: true }));
+        qs('#sizeOptionsField').hidden = false;
+        markAiEdited(toggle);
+        changed.push({ key: 'hasSizes', el: toggle });
+      }
+    }
+    const saveStatus = qs('#saveStatus');
+    if (saveStatus && changed.length) {
+      saveStatus.className = 'statusline ai-form-review-note';
+      saveStatus.textContent = `AI edited ${changed.length} field${changed.length === 1 ? '' : 's'}. Review the highlighted fields, then Save product yourself.`;
+    }
+    return changed;
+  }
+
+  async function runFormAssistant(message, imageUrls, epoch) {
+    const status = qs('#adminAiStatus');
+    const existing = currentFormFacts();
+    const imageUrl = await ensureFormImageUrl();
+    const refs = [];
+    const seen = new Set();
+    const addRef = value => {
+      const url = String(value || '').trim();
+      if (!/^https:\/\//i.test(url) || url === imageUrl || seen.has(url) || refs.length >= 5) return;
+      seen.add(url); refs.push(optimizedAiImageUrl(url));
+    };
+    (Array.isArray(imageUrls) ? imageUrls : []).forEach(addRef);
+    try { if (Array.isArray(currentExtraImages)) currentExtraImages.forEach(addRef); } catch (_) {}
+    status.textContent = 'Editing the open product form…';
+    const res = await adminFetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        key: ADMIN_KEY,
+        action: 'aiProductDraft',
+        imageUrl: optimizedAiImageUrl(imageUrl),
+        referenceUrls: refs,
+        notes: `FORM ASSIST COMMAND (highest priority): ${message}\nOnly change fields the command asks to improve or fill. Keep unrelated existing fields exactly as they are. Never guess commercial facts.`,
+        existing,
+        requestedModel: qs('#adminAiModel')?.value || '',
+        reasoningEffort: qs('#adminAiQuality')?.value || 'low'
+      }),
+      timeoutMs: 120000
+    });
+    const data = await res.json();
+    if (data?.error) throw new Error(data.error);
+    if (epoch !== sessionEpoch) return true;
+    if (!data?.success || !data.draft) throw new Error('AI returned no usable product form changes.');
+    const changed = applyDraftToOpenForm(data.draft, message);
+    if (!changed.length) {
+      addMessage('assistant', 'I did not find any safe form changes for that instruction. Try telling me which fields to improve, or attach a clearer product photo.');
+      status.textContent = data.model || 'Ready';
+      return true;
+    }
+    const labels = changed.slice(0, 6).map(x => fieldLabel(x.key));
+    addMessage('assistant', `Updated ${changed.length} field${changed.length === 1 ? '' : 's'} in the open product form${labels.length ? `: ${labels.join(', ')}${changed.length > labels.length ? '…' : ''}` : ''}. Nothing was saved; review the highlighted fields.`);
+    status.textContent = `${data.model || 'AI'} · form updated`;
+    closeChat({ restoreFocus: false });
+    requestAnimationFrame(() => {
+      const first = changed[0]?.el;
+      first?.scrollIntoView({ behavior: (typeof reducedMotion === 'function' && reducedMotion()) ? 'auto' : 'smooth', block: 'center' });
+      first?.focus?.({ preventScroll: true });
+      showToast(`AI updated ${changed.length} field${changed.length === 1 ? '' : 's'} — review before saving.`);
+    });
+    return true;
   }
 
   function renderMessages() {
     const root = qs('#adminAiMessages');
     if (!root) return;
     const context = qs('#adminAiContext');
-    if (context) context.textContent = messages.length ? `${Math.min(14, messages.length)} recent messages in context` : 'Fresh context';
+    const formMode = productFormActive();
+    if (context) context.textContent = formMode ? formModeLabel() : (messages.length ? `${Math.min(14, messages.length)} recent messages in context` : 'Fresh context');
+    const input = qs('#adminAiInput');
+    if (input) input.placeholder = formMode ? 'Tell AI how to edit this form…' : 'Message DSB AI…';
     if (!messages.length) {
-      root.innerHTML = `<div class="admin-ai-welcome">
+      root.innerHTML = formMode ? `<div class="admin-ai-welcome admin-ai-form-welcome">
+        <div class="admin-ai-orb">✦</div>
+        <strong>Edit this product with AI</strong>
+        <p>Tell me what to improve. I will edit the open form, highlight every changed field, close this panel, and leave Save entirely to you.</p>
+        <div class="admin-ai-prompts">
+          <button type="button" data-prompt="Fill the missing descriptive details professionally. Do not change price, stock, product ID or barcode.">Fill missing details</button>
+          <button type="button" data-prompt="Improve the name, descriptions, category, specifications and tags. Keep factual values and commercial fields unchanged.">Improve listing</button>
+          <button type="button" data-prompt="Write or improve the Hindi name and Hindi description only.">Hindi copy</button>
+          <button type="button" data-prompt="Improve the English description, specifications and tags for search and customers. Do not change price or stock.">SEO & copy</button>
+        </div>
+      </div>` : `<div class="admin-ai-welcome">
         <div class="admin-ai-orb">✦</div>
         <strong>AI Copilot</strong>
-        <p>Work with products, orders, stock and sales in one conversation. Find a product by name or ID; enrichment checks its main photo, gallery and your attachments, and every admin change is reviewed before apply.</p>
+        <p>Work with products, orders, stock and sales in one conversation. Find a product by name or ID; every admin change is reviewed before apply.</p>
         <div class="admin-ai-prompts">
           <button type="button" data-prompt="Summarize the shop today.">Today's summary</button>
           <button type="button" data-prompt="Show me the products that need restocking.">Low stock</button>
@@ -125,6 +322,7 @@
   function proposalLabel(proposal) {
     if (!proposal) return '';
     if (proposal.type === 'update_product') return 'Product edit';
+    if (proposal.type === 'batch_update_products') return 'Catalog batch';
     if (proposal.type === 'add_product') return 'New product';
     if (proposal.type === 'update_order_status') return 'Order status';
     if (proposal.type === 'archive_product') return proposal.archived ? 'Archive product' : 'Restore product';
@@ -175,6 +373,17 @@
         return `<div class="admin-ai-change"><label><input type="checkbox" data-ai-field="${escapeHtml(key)}" checked> ${escapeHtml(fieldLabel(key))}</label><del><small>Current</small>${escapeHtml(displayValue(before))}</del><strong><small>Edit suggestion</small>${fieldEditor(key, next)}</strong></div>`;
       }).join('');
       detail = `<div class="admin-ai-changes">${rows}</div>`;
+    } else if (proposal.type === 'batch_update_products') {
+      const items = Array.isArray(proposal.items) ? proposal.items : [];
+      const cards = items.map((item, index) => {
+        const fields = Object.entries(item.patch || {}).map(([key, next]) => {
+          const before = item.current ? item.current[key] : '';
+          return `<div class="admin-ai-batch-field"><label><input type="checkbox" data-ai-batch-field="${index}:${escapeHtml(key)}" checked> ${escapeHtml(fieldLabel(key))}</label><span><small>Current</small>${escapeHtml(displayValue(before))}</span><strong><small>Suggested</small>${escapeHtml(displayValue(next))}</strong></div>`;
+        }).join('');
+        return `<details class="admin-ai-batch-card" ${index === 0 ? 'open' : ''}><summary><label><input type="checkbox" data-ai-batch-item="${index}" checked> <b>${escapeHtml(item.targetId || '')}</b> ${escapeHtml(item.title || '')}</label><span>${Object.keys(item.patch || {}).length} fields</span></summary><div>${fields}</div></details>`;
+      }).join('');
+      const warningText = Array.isArray(proposal.warnings) && proposal.warnings.length ? `<div class="admin-ai-batch-warnings"><b>Notes</b>${proposal.warnings.map(x => `<div>${escapeHtml(x)}</div>`).join('')}</div>` : '';
+      detail = `<div class="admin-ai-batch-summary">${items.length} ready for review${proposal.remainingCount ? ` · ${proposal.remainingCount} remaining for later batches` : ''}</div><div class="admin-ai-batch-list">${cards}</div>${warningText}`;
     } else if (proposal.type === 'add_product') {
       const photo = String(proposal.patch?.image || '');
       detail = `${/^https:\/\//i.test(photo) ? `<img class="admin-ai-draft-photo" src="${escapeHtml(photo)}" alt="Proposed listing photo">` : ''}<div class="admin-ai-editor-grid">${productFields.map(key => `<label class="admin-ai-editor-field">${escapeHtml(fieldLabel(key))}${fieldEditor(key, proposal.patch?.[key])}</label>`).join('')}</div>`;
@@ -207,6 +416,26 @@
       btn.textContent = 'Apply';
       btn.classList.remove('armed');
     }));
+    qsa('[data-ai-batch-item]', wrap).forEach(box => box.addEventListener('change', () => {
+      const index = box.dataset.aiBatchItem;
+      qsa(`[data-ai-batch-field^="${index}:"]`, wrap).forEach(field => { field.checked = box.checked; field.disabled = !box.checked; });
+      const btn = qs('#adminAiApplyProposal');
+      btn.disabled = !qsa('[data-ai-batch-field]:checked', wrap).length;
+      btn.dataset.armed = '';
+      btn.textContent = 'Apply';
+      btn.classList.remove('armed');
+    }));
+    qsa('[data-ai-batch-field]', wrap).forEach(box => box.addEventListener('change', () => {
+      const index = box.dataset.aiBatchField.split(':')[0];
+      const item = qs(`[data-ai-batch-item="${index}"]`, wrap);
+      const siblings = qsa(`[data-ai-batch-field^="${index}:"]`, wrap);
+      if (item) item.checked = siblings.some(field => field.checked);
+      const btn = qs('#adminAiApplyProposal');
+      btn.disabled = !qsa('[data-ai-batch-field]:checked', wrap).length;
+      btn.dataset.armed = '';
+      btn.textContent = 'Apply';
+      btn.classList.remove('armed');
+    }));
     const scroller = qs('#adminAiConversation');
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }
@@ -233,6 +462,17 @@
       if (!selected.length) return;
       proposal = { ...proposal, patch: Object.fromEntries(Object.entries(proposal.patch || {}).filter(([key]) => selected.includes(key))) };
     }
+    if (proposal?.type === 'batch_update_products') {
+      const selected = new Map();
+      qsa('[data-ai-batch-field]:checked', qs('#adminAiProposal')).forEach(box => {
+        const [indexText, ...keyParts] = box.dataset.aiBatchField.split(':');
+        const index = Number(indexText), key = keyParts.join(':');
+        if (!selected.has(index)) selected.set(index, []);
+        selected.get(index).push(key);
+      });
+      if (!selected.size) return;
+      proposal = { ...proposal, items: (proposal.items || []).map((item, index) => selected.has(index) ? { ...item, patch: Object.fromEntries(Object.entries(item.patch || {}).filter(([key]) => selected.get(index).includes(key))) } : null).filter(Boolean) };
+    }
     const btn = qs('#adminAiApplyProposal');
     if (!proposal || !btn || busy) return;
     if (['add_product','update_product'].includes(proposal.type)) {
@@ -251,6 +491,36 @@
     btn.textContent = 'Applying…';
     qsa('[data-ai-edit], [data-ai-field]', qs('#adminAiProposal')).forEach(el => { el.disabled = true; });
     try {
+      if (proposal.type === 'batch_update_products') {
+        const items = Array.isArray(proposal.items) ? proposal.items : [];
+        let applied = 0;
+        const appliedIds = [];
+        const failed = [];
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          btn.textContent = `Applying ${i + 1}/${items.length}…`;
+          try {
+            const res = await adminFetch(API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({ key: ADMIN_KEY, action: 'update', clientVersion: 7, product: { id: item.targetId, ...(item.patch || {}), expected_revision: item.expectedRevision } }),
+              timeoutMs: 60000
+            });
+            const data = await res.json();
+            if (data?.error) throw new Error(data.error);
+            applied++;
+            if (item.targetId) appliedIds.push(item.targetId);
+          } catch (err) {
+            failed.push(`${item.targetId}: ${err?.message || err}`);
+          }
+        }
+        if (applied) showToast(`Applied ${applied} catalog update${applied === 1 ? '' : 's'}`);
+        addMessage('assistant', `Batch complete: ${applied} product${applied === 1 ? '' : 's'} updated.${appliedIds.length ? ` Reviewed IDs: ${appliedIds.join(', ')}.` : ''}${failed.length ? ` ${failed.length} failed: ${failed.slice(0,3).join(' | ')}` : ''}${proposal.remainingCount ? ` ${proposal.remainingCount} products remain; ask “continue catalog batch”.` : ''}`);
+        renderProposal(null);
+        if (typeof loadProducts === 'function') loadProducts(false);
+        if (typeof loadDashboard === 'function') loadDashboard();
+        return;
+      }
       let payload;
       if (proposal.type === 'update_product') {
         const product = { id: proposal.targetId, ...(proposal.patch || {}), expected_revision: proposal.expectedRevision };
@@ -364,8 +634,7 @@
     }
     const epoch = sessionEpoch;
     const history = messages.slice(-14).map(({ role, text, images }) => ({ role, text, images: images || [] }));
-    const formContext = formMode ? window.DSBProductEditor?.getContext?.() : null;
-    const productDraft = formContext?.active ? formContext.values : (currentProposal?.type === 'add_product' ? readProposalEdits(currentProposal).patch : null);
+    const productDraft = currentProposal?.type === 'add_product' ? readProposalEdits(currentProposal).patch : null;
     const imageUrls = pendingImageUrls.slice();
     addMessage('user', message, imageUrls);
     input.value = '';
@@ -380,6 +649,10 @@
     status.textContent = 'Working with live shop data…';
     qs('#adminAiDrawer')?.classList.add('thinking');
     try {
+      if (productFormActive()) {
+        await runFormAssistant(message, imageUrls, epoch);
+        return;
+      }
       const res = await adminFetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -389,7 +662,6 @@
           message,
           history,
           productDraft,
-          formContext,
           requestedModel: qs('#adminAiModel')?.value || '',
           reasoningEffort: qs('#adminAiQuality')?.value || 'low',
           imageUrls
@@ -400,17 +672,6 @@
       if (data?.error) throw new Error(data.error);
       if (epoch !== sessionEpoch) return;
       addMessage('assistant', data.reply || 'No reply returned.');
-      if (data.proposal?.type === 'form_edit') {
-        const changed = window.DSBProductEditor?.applyPatch?.(data.proposal.patch || {}) || [];
-        renderProposal(null);
-        status.textContent = changed.length ? `Updated ${changed.length} form fields · not saved` : 'No confident form changes';
-        if (changed.length) {
-          addMessage('assistant', `I updated ${changed.length} field${changed.length === 1 ? '' : 's'} in the product form. They are highlighted and remain unsaved until you review and press Save product.`);
-          closeChat();
-          showToast(`AI updated ${changed.length} form fields — review before saving`);
-          return;
-        }
-      }
       renderProposal(data.proposal || null);
       status.textContent = data.elapsedMs ? `${data.model || 'AI'} · ${(data.elapsedMs / 1000).toFixed(1)}s` : (data.model || 'Ready');
     } catch (err) {
@@ -442,20 +703,6 @@
     loadSession();
     renderMessages();
     renderPendingImages();
-    const head = qs('.admin-ai-head');
-    const close = qs('#adminAiClose');
-    if (head && close && !qs('#adminAiOptions')) {
-      const options = document.createElement('button');
-      options.type = 'button';
-      options.id = 'adminAiOptions';
-      options.textContent = 'Options';
-      options.setAttribute('aria-expanded', 'false');
-      options.addEventListener('click', () => {
-        const open = qs('#adminAiDrawer')?.classList.toggle('options-open');
-        options.setAttribute('aria-expanded', String(!!open));
-      });
-      head.insertBefore(options, close);
-    }
     qs('#adminAiTools')?.addEventListener('change', e => {
       const prompts = {
         enrich: 'Find [product name or ID] and enrich its details.',
@@ -481,9 +728,18 @@
       try { await navigator.clipboard.writeText(last.text); showToast('Reply copied'); }
       catch (_) { showToast('Copy unavailable. Select the reply text to copy it.'); }
     });
-    qs('#adminAiOpen')?.addEventListener('click', () => openChat());
+    qs('#adminAiOpen')?.addEventListener('click', openChat);
     qs('#adminAiClose')?.addEventListener('click', closeChat);
     qs('#adminAiBackdrop')?.addEventListener('click', closeChat);
+
+    // Drawer behavior: tapping/clicking anywhere outside DSB AI closes it.
+    // Use pointerdown so the same tap can continue to the admin control underneath.
+    document.addEventListener('pointerdown', (event) => {
+      const drawer = qs('#adminAiDrawer');
+      if (!drawer?.classList.contains('open')) return;
+      if (drawer.contains(event.target) || qs('#adminAiOpen')?.contains(event.target)) return;
+      closeChat({ restoreFocus: false });
+    });
     qs('#adminAiClear')?.addEventListener('click', clearSession);
     qs('#adminAiNew')?.addEventListener('click', clearSession);
     qs('#adminAiSend')?.addEventListener('click', sendMessage);
@@ -505,12 +761,15 @@
       }
       if (e.key === 'Escape' && qs('#adminAiDrawer')?.classList.contains('open')) closeChat();
     });
-    document.addEventListener('pointerdown', e => {
-      const drawer = qs('#adminAiDrawer');
-      if (!drawer?.classList.contains('open')) return;
-      if (drawer.contains(e.target) || qs('#adminAiOpen')?.contains(e.target) || qs('#aiGenerateOpenBtn')?.contains(e.target)) return;
-      closeChat();
-    }, true);
   });
-  globalThis.DSBAdminAI = Object.freeze({ openForForm: () => openChat({ form: true }), open: () => openChat() });
+
+  if (typeof window !== 'undefined') window.DSBAdminChat = Object.freeze({
+    open: openChat,
+    openForProductForm() {
+      if (!productFormActive() && typeof switchTab === 'function') switchTab('add');
+      openChat();
+      renderMessages();
+      setTimeout(() => qs('#adminAiInput')?.focus(), 30);
+    }
+  });
 })();

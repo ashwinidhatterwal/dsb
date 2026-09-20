@@ -311,7 +311,7 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     $('#aiGenerateOpenBtn')?.addEventListener('click', () => {
-      if (window.DSBAdminAI?.openForForm) window.DSBAdminAI.openForForm();
+      if (window.DSBAdminChat?.openForProductForm) window.DSBAdminChat.openForProductForm();
       else openDialog();
     });
     $('#aiCloseBtn')?.addEventListener('click', closeDialog);
