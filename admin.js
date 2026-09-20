@@ -103,8 +103,8 @@ function orderStatusActionsHtml(current, hasPendingCancellation) {
       : '<p class="order-workflow-done">No actions</p>';
   }
   return `<div class="order-status-actions">
-    ${progress ? `<button type="button" class="primary-btn order-next-action" data-order-status="${escapeHtml(progress)}">${current === 'Cancelled' ? 'Reopen' : 'Next: ' + escapeHtml(progress)}</button>` : ''}
-    ${canCancel ? '<button type="button" class="ghost-btn order-cancel-action" data-order-status="Cancelled">Cancel</button>' : ''}
+    ${progress ? `<button type="button" class="primary-btn order-next-action icon-action" data-order-status="${escapeHtml(progress)}" aria-label="${current === 'Cancelled' ? 'Reopen as Pending' : 'Move to ' + escapeHtml(progress)}" title="${current === 'Cancelled' ? 'Reopen' : 'Next: ' + escapeHtml(progress)}">${current === 'Cancelled' ? '↶' : '→'}</button>` : ''}
+    ${canCancel ? '<button type="button" class="ghost-btn order-cancel-action icon-action" data-order-status="Cancelled" aria-label="Cancel order" title="Cancel">×</button>' : ''}
   </div>`;
 }
 function orderRequestsHtml(order) {
@@ -338,7 +338,7 @@ function renderOrderList() {
           <strong class="ocust">${escapeHtml(o.customername) || '(no name)'}</strong>
           <div class="order-compact-meta"><span>${escapeHtml(formatDateTime(o.date))}</span>${payment ? `<span>${payment}</span>` : ''}<strong>${total}</strong></div>
         </div>
-        <button type="button" class="order-expand-btn" data-order-toggle aria-expanded="${expanded ? 'true' : 'false'}">${expanded ? 'Close' : 'View'}</button>
+        <button type="button" class="order-expand-btn icon-btn" data-order-toggle aria-expanded="${expanded ? 'true' : 'false'}" aria-label="${expanded ? 'Close order details' : 'View order details'}" title="${expanded ? 'Close' : 'View details'}">${expanded ? '⌃' : '⌄'}</button>
       </div>
 
       <div class="order-expanded-panel" ${expanded ? '' : 'hidden'}>
@@ -368,7 +368,7 @@ function renderOrderList() {
     </article>`;
   }).join('');
   if (pageCount > 1) {
-    wrap.insertAdjacentHTML('beforeend', `<nav class="order-pagination" aria-label="Order pages"><button class="ghost-btn" data-order-page="prev" ${orderPage === 0 ? 'disabled' : ''}>Previous</button><span>Page ${orderPage + 1} of ${pageCount} · ${filteredCount} orders</span><button class="ghost-btn" data-order-page="next" ${orderPage === pageCount - 1 ? 'disabled' : ''}>Next</button></nav>`);
+    wrap.insertAdjacentHTML('beforeend', `<nav class="order-pagination" aria-label="Order pages"><button class="ghost-btn icon-btn" data-order-page="prev" ${orderPage === 0 ? 'disabled' : ''} aria-label="Previous order page" title="Previous">‹</button><span>Page ${orderPage + 1} of ${pageCount} · ${filteredCount} orders</span><button class="ghost-btn icon-btn" data-order-page="next" ${orderPage === pageCount - 1 ? 'disabled' : ''} aria-label="Next order page" title="Next">›</button></nav>`);
     $('[data-order-page="prev"]', wrap).onclick = () => { orderPage--; loadOrders(); };
     $('[data-order-page="next"]', wrap).onclick = () => { orderPage++; loadOrders(); };
   }
@@ -381,7 +381,9 @@ function renderOrderList() {
       panel.toggleAttribute('hidden', !willExpand);
       row.classList.toggle('is-expanded', willExpand);
       button.setAttribute('aria-expanded', String(willExpand));
-      button.textContent = willExpand ? 'Close' : 'View';
+      button.textContent = willExpand ? '⌃' : '⌄';
+      button.setAttribute('aria-label', willExpand ? 'Close order details' : 'View order details');
+      button.title = willExpand ? 'Close' : 'View details';
       if (willExpand) expandedOrderIds.add(String(orderId));
       else expandedOrderIds.delete(String(orderId));
     });

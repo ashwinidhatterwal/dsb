@@ -171,3 +171,9 @@ Order status lifecycle rules live in `src/backend/config.gs` and stock-safe stat
 
 ## Compact Orders UI checkpoint
 The admin Orders list now renders compact summary cards by default. Keep the collapsed card limited to operational scan data (order ID, status, customer, date, payment, total, pending-request count). Detailed contact, items, requests, payment verification, and lifecycle controls belong inside the expandable panel. Avoid reintroducing long explanatory copy into order cards; workflow rules are enforced by code/backend rather than prose.
+
+## Admin surface + action pass (2026-09-20)
+
+- `admin-surface.css` is the final, small visual hierarchy layer for the admin workspace. Keep card/canvas contrast, elevation, and shared icon-button sizing there instead of adding more overrides to `admin-theme.css`.
+- Symbol-first admin actions use `.icon-btn` / `.icon-action` with mandatory `aria-label` and `title`. Keep text on ambiguous or destructive multi-step actions where a symbol alone would be unclear.
+- Permanent deletion from Archived products uses the explicit `deleteArchivedProduct` admin action and the existing `deleteProduct()` backend guard. The backend still refuses deletion unless the product is archived and its revision matches.

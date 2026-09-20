@@ -28,7 +28,7 @@ function dispatchAdmin_(body, actor) {
   const action = String(body.action || '');
   assertAdminPermission_(actor, action);
   if (action === 'adminSession') return {
-    version: 16,
+    version: 17,
     name: actor.name,
     role: actor.role
   };
@@ -43,7 +43,7 @@ function dispatchAdmin_(body, actor) {
     if (!body.product?.expected_revision && body.clientVersion >= 7) throw new Error('Refresh and reopen the product before saving.');
     return updateProduct(body.product || {});
   }
-  if (action === 'delete') return deleteProduct(body.id, body.expected_revision);
+  if (action === 'delete' || action === 'deleteArchivedProduct') return deleteProduct(body.id, body.expected_revision);
   if (action === 'archiveProduct') return archiveProduct_(body);
   if (action === 'updateOrderStatus') return updateOrderStatus(body.orderId, body.status);
   if (action === 'resolveOrderRequest') return resolveOrderRequest_(body, actor);

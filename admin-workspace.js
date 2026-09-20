@@ -151,7 +151,7 @@ function renderPaymentControls() {
     const box = document.createElement('div');
     box.className = 'payment-admin';
     const canVerify = ADMIN_PROFILE?.role === 'admin';
-    box.innerHTML = `<div class="order-section-title"><div><span class="order-section-label">Payment</span><strong>Verification</strong></div></div><strong>Payment: ${escapeHtml(order.paymentstatus || 'Unverified')}</strong><p class="hint">${escapeHtml(order.paymentreference || 'No manual verification recorded.')}${order.paymentverifiedby ? ' · ' + escapeHtml(order.paymentverifiedby) : ''}</p>${canVerify ? '<div class="payment-fields"><select aria-label="Payment verification status"><option>Unverified</option><option>Received</option><option>Refunded</option></select><input maxlength="120" aria-label="Transaction reference or verification note" placeholder="Transaction reference / verification note"><button type="button" class="ghost-btn">Save verification</button></div><p class="hint">Check bank/cash records first. This does not charge or refund money.</p>' : ''}`;
+    box.innerHTML = `<div class="order-section-title"><div><span class="order-section-label">Payment</span><strong>Verification</strong></div></div><strong>Payment: ${escapeHtml(order.paymentstatus || 'Unverified')}</strong><p class="hint">${escapeHtml(order.paymentreference || 'No manual verification recorded.')}${order.paymentverifiedby ? ' · ' + escapeHtml(order.paymentverifiedby) : ''}</p>${canVerify ? '<div class="payment-fields"><select aria-label="Payment verification status"><option>Unverified</option><option>Received</option><option>Refunded</option></select><input maxlength="120" aria-label="Transaction reference or verification note" placeholder="Transaction reference / verification note"><button type="button" class="icon-btn" aria-label="Save payment verification" title="Save">✓</button></div><p class="hint">Check bank/cash records first. This does not charge or refund money.</p>' : ''}`;
     const slot = $('.order-payment-slot', row) || row;
     slot.appendChild(box);
     if (ADMIN_PROFILE?.role === 'viewer') $$('[data-role]', row).forEach(el => el.disabled = true);
@@ -194,7 +194,7 @@ async function loadArchive() {
     archivePage = data.page;
     archivedProducts = data.products;
     $('#archiveStatus').textContent = `${data.total} archived products`;
-    $('#archiveList').innerHTML = data.products.length ? data.products.map(p => `<div class="archive-card"><img src="${escapeHtml(p.image || '')}" alt="" loading="lazy"><div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.id)} · ${escapeHtml(p.category)} · ₹${Number(p.price) || 0}</small></div><div class="archive-actions"><button class="ghost-btn" data-restore="${escapeHtml(p.id)}" ${ADMIN_PROFILE?.role === 'viewer' ? 'disabled' : ''}>Restore</button>${ADMIN_PROFILE?.role === 'admin' ? `<button class="ghost-btn archive-delete" data-delete="${escapeHtml(p.id)}">Delete permanently</button>` : ''}</div></div>`).join('') : '<p class="hint">No archived products.</p>';
+    $('#archiveList').innerHTML = data.products.length ? data.products.map(p => `<div class="archive-card"><img src="${escapeHtml(p.image || '')}" alt="" loading="lazy"><div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.id)} · ${escapeHtml(p.category)} · ₹${Number(p.price) || 0}</small></div><div class="archive-actions"><button class="icon-btn archive-restore" data-restore="${escapeHtml(p.id)}" ${ADMIN_PROFILE?.role === 'viewer' ? 'disabled' : ''} aria-label="Restore ${escapeHtml(p.name)}" title="Restore">↶</button>${ADMIN_PROFILE?.role === 'admin' ? `<button class="icon-btn archive-delete" data-delete="${escapeHtml(p.id)}" aria-label="Delete ${escapeHtml(p.name)} permanently" title="Delete permanently">×</button>` : ''}</div></div>`).join('') : '<p class="hint">No archived products.</p>';
     $('#archivePage').textContent = `${archivePage + 1} / ${Math.max(1, Math.ceil(data.total / 40))}`;
     $('#archivePrev').disabled = archivePage === 0;
     $('#archiveNext').disabled = (archivePage + 1) * 40 >= data.total;
@@ -204,20 +204,29 @@ async function loadArchive() {
 }
 async function permanentlyDeleteProduct(product) {
   if (pendingDeletes.has(product.id)) return;
-  const typed = prompt(`Permanently delete "${product.name}"? This cannot be undone. Existing order records stay. Type ${product.id} to confirm.`);
-  if (typed !== String(product.id)) return;
+  if (!confirm(`Delete "${product.name}" permanently?\n\nThis cannot be undone. Existing order history will remain.`)) return;
   pendingDeletes.add(product.id);
+  const button = Array.from(document.querySelectorAll('[data-delete]')).find(el => el.dataset.delete === String(product.id));
+  if (button) {
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+  }
   try {
-    await adminWrite('delete', {
+    await adminWrite('deleteArchivedProduct', {
       id: product.id,
       expected_revision: product._revision
     });
-    showToast('Product permanently deleted');
-    await Promise.all([loadArchive(), loadProducts(false)]);
+    showToast('Product deleted');
+    await Promise.all([loadArchive(), loadProducts(false), loadDashboard()]);
   } catch (err) {
-    $('#archiveStatus').textContent = err.message;
+    showToast(err.message || 'Delete failed');
+    $('#archiveStatus').textContent = err.message || 'Delete failed';
   } finally {
     pendingDeletes.delete(product.id);
+    if (button?.isConnected) {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+    }
   }
 }
 document.addEventListener('DOMContentLoaded', () => {
