@@ -24,7 +24,7 @@ assert(orders.includes('function updateOrderStatusUnlocked_') && orders.includes
 assert(admin.includes('orderLifecycleHtml') && admin.includes('orderStatusActionsHtml') && admin.includes('Approve & cancel'), 'Admin orders should use explicit lifecycle/actions and clear cancellation approval');
 
 assert(admin.includes('order-compact-row') && admin.includes('data-order-toggle') && admin.includes('order-expanded-panel'), 'Orders should default to compact expandable cards');
-assert(admin.includes("'Close order details' : 'View order details'") && admin.includes("'⌃' : '⌄'"), 'Compact order cards should expose concise accessible expand/collapse controls');
+assert(admin.includes("'Close order details' : 'View order details'") && admin.includes("${expanded ? 'Close' : 'View'}</button>") && admin.includes("button.textContent = willExpand ? 'Close' : 'View';"), 'Compact order cards should expose clear expand/collapse labels');
 assert(!admin.includes('What happens next') && !admin.includes('Items & price breakdown') && !admin.includes('Only valid next steps are actionable'), 'Orders UI should avoid verbose legacy copy');
 assert(!admin.includes('data-role="statusSelect"') && !admin.includes('function orderStatusOptions'), 'Confusing status dropdown should be removed');
 assert(requests.includes('hasPendingCancellationRequest_') && orders.includes('Handle the pending cancellation request before progressing this order.'), 'Pending cancellation must block forward order progress');

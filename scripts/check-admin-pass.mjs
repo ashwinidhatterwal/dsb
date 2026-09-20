@@ -7,17 +7,18 @@ const auth=read('src/backend/admin-auth.gs');
 const css=read('admin-surface.css');
 const code=read('code.gs');
 const fail=(m)=>{ throw new Error(m); };
-if(!html.includes('admin-surface.css?v=20260920adminpass1')) fail('admin surface stylesheet not loaded');
+if(!html.includes('admin-surface.css?v=20260920labels-teal1')) fail('admin surface stylesheet not loaded');
 if(!css.includes('--admin-canvas') || !css.includes('--admin-shadow')) fail('surface contrast/elevation tokens missing');
 if(!css.includes('.order-card') || !css.includes('.archive-card') || !css.includes('.dash-panel')) fail('surface pass does not cover major admin tiles');
-if(!html.includes('aria-label="Archived products"') || !html.includes('aria-label="Sign out"')) fail('symbol top actions need accessible names');
+if(!html.includes('>Archived</button>') || !html.includes('>Sign out</button>') || !html.includes('>View store</a>')) fail('top action labels not restored');
 if(!ws.includes("adminWrite('deleteArchivedProduct'")) fail('archive delete is not using explicit action');
 if(ws.includes('Type ${product.id} to confirm')) fail('fragile typed-ID deletion prompt still present');
 if(!auth.includes("action === 'delete' || action === 'deleteArchivedProduct'")) fail('backend does not route explicit archived delete action');
 if(!code.includes("action === 'delete' || action === 'deleteArchivedProduct'")) fail('generated code.gs missing archived delete action');
 if(!ws.includes("showToast('Product deleted')")) fail('delete success feedback missing');
 if(!ws.includes("showToast(err.message || 'Delete failed')")) fail('delete error feedback missing');
-if(!admin.includes("'Close order details' : 'View order details'")) fail('order detail icon lacks accessible label');
+if(!admin.includes("${expanded ? 'Close' : 'View'}</button>") || !admin.includes("button.textContent = willExpand ? 'Close' : 'View';")) fail('order detail labels not restored');
+if(!css.includes('--admin-teal') || !css.includes('#e7f1ef')) fail('teal surface palette not restored');
 console.log('Admin surface/action regression passed.');
 
 // Regression: frontend admin API version must match backend session version.

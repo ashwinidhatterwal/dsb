@@ -1,65 +1,68 @@
-/* Admin surface pass — strong visual separation, compact symbol-first actions.
-   Loaded after admin-theme.css so hierarchy lives in one small, removable layer. */
+/* Admin surface refinement — teal palette, clear labels, strong card separation.
+   Loaded after admin-theme.css. Keep this layer small and presentation-only. */
 :root{
-  --admin-canvas:#edf1f5;
+  --admin-canvas:#e7f1ef;
   --admin-surface:#ffffff;
-  --admin-surface-soft:#f8fafc;
-  --admin-border:#d5dee7;
-  --admin-shadow:0 8px 22px rgba(31,41,55,.09),0 2px 6px rgba(31,41,55,.045);
-  --admin-shadow-hover:0 12px 30px rgba(31,41,55,.12),0 3px 8px rgba(31,41,55,.055);
+  --admin-surface-soft:#f2f8f7;
+  --admin-border:#bfd5d1;
+  --admin-border-strong:#9fc4be;
+  --admin-teal:#2f746b;
+  --admin-teal-soft:#e2f1ee;
+  --admin-shadow:0 8px 22px rgba(24,72,66,.10),0 2px 6px rgba(24,72,66,.05);
+  --admin-shadow-hover:0 12px 30px rgba(24,72,66,.14),0 3px 8px rgba(24,72,66,.06);
 }
 html,body{background:var(--admin-canvas)!important}
-body{background:linear-gradient(180deg,#f0f3f6 0,var(--admin-canvas) 100%)!important}
+body{background:linear-gradient(180deg,#eef7f5 0,var(--admin-canvas) 100%)!important}
 .admin-main{background:transparent}
 
-/* Reusable compact symbol button. Text is retained in aria-label/title. */
-.icon-btn{width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important;padding:0!important;display:inline-grid!important;place-items:center!important;border-radius:11px!important;font-size:20px!important;line-height:1!important;text-decoration:none!important;flex:0 0 40px!important}
-.icon-action{min-width:46px!important;width:46px!important;flex:0 0 46px!important;padding:0!important;font-size:19px!important}
-.top-actions .icon-btn{width:42px!important;min-width:42px!important;height:42px!important;min-height:42px!important}
+/* Restore readable labelled actions. Icons may remain inside navigation where context is obvious. */
+.icon-btn,.icon-action{width:auto!important;min-width:0!important;height:auto!important;min-height:38px!important;padding:8px 12px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;border-radius:10px!important;font-size:13px!important;line-height:1.15!important;flex:0 0 auto!important;white-space:nowrap}
+.top-actions .icon-btn{width:auto!important;min-width:0!important;height:auto!important;min-height:38px!important}
+.top-actions{gap:8px!important}
+.view-store{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-height:38px!important;padding:8px 12px!important;border-radius:10px!important;text-decoration:none!important}
 
-/* Every working surface should read as a separate object from the canvas. */
+/* Separate working surfaces from the canvas without making Admin visually heavy. */
 .connect-card,.dash-panel,.dash-stat,.dash-alert,.dash-quick,.arow,.orow,.order-card,.archive-card,
 .search-row,.inventory-filters,.product-pagination,.archive-pagination,.form-card,.admin-card,
 .autofill-dialog,.ai-fill-dialog,.payment-admin,.order-request-box,.order-detail-body .oitems,
-#draftOffer,.img-preview,.extra-images-preview{
-  border-color:var(--admin-border)!important;
-}
+#draftOffer,.img-preview,.extra-images-preview{border-color:var(--admin-border)!important}
 .dash-panel,.dash-stat,.arow,.orow,.order-card,.archive-card,.form-card,.admin-card,.connect-card{
   background:var(--admin-surface)!important;
   box-shadow:var(--admin-shadow)!important;
 }
 .dash-panel,.dash-stat,.order-card,.archive-card,.arow{transition:box-shadow .18s ease,border-color .18s ease,transform .18s ease}
 @media(hover:hover){
-  .dash-panel:hover,.dash-stat:hover,.order-card:hover,.archive-card:hover,.arow:hover{box-shadow:var(--admin-shadow-hover)!important;border-color:#c2ced9!important}
+  .dash-panel:hover,.dash-stat:hover,.order-card:hover,.archive-card:hover,.arow:hover{
+    box-shadow:var(--admin-shadow-hover)!important;
+    border-color:var(--admin-border-strong)!important;
+  }
 }
+.search-row,.inventory-filters,.product-pagination,.archive-pagination{
+  background:var(--admin-surface-soft)!important;
+  box-shadow:0 2px 8px rgba(24,72,66,.045)!important;
+}
+.admin-topbar,.admin-tabbar,.admin-sidebar{box-shadow:0 3px 14px rgba(24,72,66,.07)}
 
-/* Keep secondary controls visibly subordinate to primary tiles. */
-.search-row,.inventory-filters,.product-pagination,.archive-pagination{background:var(--admin-surface-soft)!important;box-shadow:0 2px 8px rgba(31,41,55,.04)!important}
-.admin-topbar,.admin-tabbar,.admin-sidebar{box-shadow:0 3px 14px rgba(31,41,55,.055)}
-
-/* Orders need extra separation because many cards are scanned vertically. */
-.order-card{margin:0 0 16px!important;border:1px solid #cfd9e3!important;box-shadow:0 10px 26px rgba(31,41,55,.105),0 2px 5px rgba(31,41,55,.05)!important}
-.order-card.is-expanded{border-color:#a9c8c3!important;box-shadow:0 14px 34px rgba(31,41,55,.13),0 3px 8px rgba(31,41,55,.055)!important}
-.order-expanded-panel{background:#fbfcfd!important}
+/* Order cards stay especially distinct because they are scanned vertically. */
+.order-card{margin:0 0 16px!important;border:1px solid var(--admin-border)!important;box-shadow:0 10px 26px rgba(24,72,66,.115),0 2px 5px rgba(24,72,66,.055)!important}
+.order-card.is-expanded{border-color:#7eafa7!important;box-shadow:0 14px 34px rgba(24,72,66,.15),0 3px 8px rgba(24,72,66,.06)!important}
+.order-expanded-panel{background:#f7fbfa!important}
 .order-compact-row{background:#fff}
+.order-expand-btn{background:var(--admin-teal-soft)!important;border-color:#afd0ca!important;color:#285f58!important;font-weight:700!important;padding:8px 14px!important;min-width:64px!important}
+.order-status-actions{justify-content:flex-start!important;gap:8px!important}.order-status-actions button{flex:0 0 auto!important;min-height:40px!important;padding:8px 13px!important}
 
-/* Products + archive use the same elevated tile language. */
-.arow,.archive-card{border:1px solid #cfd9e3!important;margin-bottom:11px!important}
+/* Product/archive surfaces use the same teal-accented hierarchy. */
+.arow,.archive-card{border:1px solid var(--admin-border)!important;margin-bottom:11px!important}
 .archive-card{border-radius:15px!important;padding:10px!important}
 .archive-actions{display:flex!important;gap:7px!important;align-items:center!important}
 .archive-delete{background:#fff1f2!important;border-color:#e7b7bd!important;color:#a33f4e!important}
 .archive-delete:hover:not(:disabled){background:#fde8eb!important;border-color:#d58e98!important}
-.archive-restore{background:#eef7f5!important;border-color:#bcd8d3!important;color:#2f6f68!important}
+.archive-restore{background:#e7f4f1!important;border-color:#add0c9!important;color:#28675f!important}
+.arow-actions button,.order-expand-btn,.archive-actions button{box-shadow:0 2px 7px rgba(24,72,66,.06)}
 
-/* Icon controls should feel intentional, not like tiny text buttons. */
-.arow-actions button,.order-expand-btn,.archive-actions button{box-shadow:0 2px 7px rgba(31,41,55,.06)}
-.order-expand-btn{background:#eef6f5!important;border-color:#bfd7d3!important;color:#2f6f68!important}
-.order-status-actions{justify-content:flex-start!important}.order-status-actions button{flex:0 0 46px!important;min-height:44px!important}
-.payment-fields .icon-btn{align-self:stretch!important;height:auto!important;min-height:42px!important}
-
-/* Cleaner top action cluster on narrow screens. */
 @media(max-width:760px){
-  .top-actions{gap:7px!important}.top-actions .live-pill{display:none!important}
+  .top-actions{gap:6px!important}.top-actions .live-pill{display:none!important}
+  .top-actions .ghost-btn,.top-actions .view-store{padding:7px 9px!important;font-size:12px!important}
   .order-card{margin-bottom:14px!important}
-  .dash-panel,.dash-stat,.arow,.archive-card{box-shadow:0 7px 18px rgba(31,41,55,.095),0 2px 5px rgba(31,41,55,.04)!important}
+  .dash-panel,.dash-stat,.arow,.archive-card{box-shadow:0 7px 18px rgba(24,72,66,.10),0 2px 5px rgba(24,72,66,.045)!important}
 }

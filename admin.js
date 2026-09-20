@@ -103,8 +103,8 @@ function orderStatusActionsHtml(current, hasPendingCancellation) {
       : '<p class="order-workflow-done">No actions</p>';
   }
   return `<div class="order-status-actions">
-    ${progress ? `<button type="button" class="primary-btn order-next-action icon-action" data-order-status="${escapeHtml(progress)}" aria-label="${current === 'Cancelled' ? 'Reopen as Pending' : 'Move to ' + escapeHtml(progress)}" title="${current === 'Cancelled' ? 'Reopen' : 'Next: ' + escapeHtml(progress)}">${current === 'Cancelled' ? '↶' : '→'}</button>` : ''}
-    ${canCancel ? '<button type="button" class="ghost-btn order-cancel-action icon-action" data-order-status="Cancelled" aria-label="Cancel order" title="Cancel">×</button>' : ''}
+    ${progress ? `<button type="button" class="primary-btn order-next-action icon-action" data-order-status="${escapeHtml(progress)}" aria-label="${current === 'Cancelled' ? 'Reopen as Pending' : 'Move to ' + escapeHtml(progress)}" title="${current === 'Cancelled' ? 'Reopen' : 'Next: ' + escapeHtml(progress)}">${current === 'Cancelled' ? 'Reopen' : 'Next: ' + escapeHtml(progress)}</button>` : ''}
+    ${canCancel ? '<button type="button" class="ghost-btn order-cancel-action" data-order-status="Cancelled">Cancel</button>' : ''}
   </div>`;
 }
 function orderRequestsHtml(order) {
@@ -338,7 +338,7 @@ function renderOrderList() {
           <strong class="ocust">${escapeHtml(o.customername) || '(no name)'}</strong>
           <div class="order-compact-meta"><span>${escapeHtml(formatDateTime(o.date))}</span>${payment ? `<span>${payment}</span>` : ''}<strong>${total}</strong></div>
         </div>
-        <button type="button" class="order-expand-btn icon-btn" data-order-toggle aria-expanded="${expanded ? 'true' : 'false'}" aria-label="${expanded ? 'Close order details' : 'View order details'}" title="${expanded ? 'Close' : 'View details'}">${expanded ? '⌃' : '⌄'}</button>
+        <button type="button" class="order-expand-btn" data-order-toggle aria-expanded="${expanded ? 'true' : 'false'}" aria-label="${expanded ? 'Close order details' : 'View order details'}" title="${expanded ? 'Close' : 'View details'}">${expanded ? 'Close' : 'View'}</button>
       </div>
 
       <div class="order-expanded-panel" ${expanded ? '' : 'hidden'}>
@@ -381,7 +381,7 @@ function renderOrderList() {
       panel.toggleAttribute('hidden', !willExpand);
       row.classList.toggle('is-expanded', willExpand);
       button.setAttribute('aria-expanded', String(willExpand));
-      button.textContent = willExpand ? '⌃' : '⌄';
+      button.textContent = willExpand ? 'Close' : 'View';
       button.setAttribute('aria-label', willExpand ? 'Close order details' : 'View order details');
       button.title = willExpand ? 'Close' : 'View details';
       if (willExpand) expandedOrderIds.add(String(orderId));
@@ -504,8 +504,8 @@ function renderProductList() {
         <div class="arow-sub">${escapeHtml(p.id)} • ${escapeHtml(p.category)} • ₹${Number(p.price) || 0}${p.stockqty !== undefined && p.stockqty !== null && p.stockqty !== '' ? ` • Qty ${Number(p.stockqty) || 0}` : ''}</div>
       </div>
       <div class="arow-actions">
-        <button data-act="edit" aria-label="Edit">✏️</button>
-        <button data-act="delete" class="danger" aria-label="${p.archived === 'yes' ? 'Restore' : 'Archive'} ${escapeHtml(p.name)}" title="${p.archived === 'yes' ? 'Restore' : 'Archive'}">${p.archived === 'yes' ? '↶' : '▣'}</button>
+        <button data-act="edit">Edit</button>
+        <button data-act="delete" class="danger" aria-label="${p.archived === 'yes' ? 'Restore' : 'Archive'} ${escapeHtml(p.name)}" title="${p.archived === 'yes' ? 'Restore' : 'Archive'}">${p.archived === 'yes' ? 'Restore' : 'Archive'}</button>
       </div>
     </div>
   `).join('');
