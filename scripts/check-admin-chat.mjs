@@ -87,3 +87,32 @@ const audit = context.aiAdminLocalReport_('Audit catalog quality');
 for (const issue of ['MRP below selling price','cost above selling price','stock status disagrees','possible duplicate']) assert(audit.includes(issue));
 assert(context.aiAdminLocalReport_('Show restock report').includes('DSB-0050'));
 console.log('Target, enrichment, image, role, audit and restock regressions passed.');
+
+// Creation must use the full generator and assign the original upload URLs.
+context.generateAiProductDraft_ = body => {
+ draftRequest = body;
+ return {draft:{name:'Nail clipper',price:99,description:'A compact nail care tool.',descriptionhindi:'नाखून काटने का उपकरण।',category:'Personal care',tags:['nail care']},warnings:[],model:'fixture'};
+};
+const photos = ['https://example.com/front.jpg','https://example.com/back.jpg'];
+const newDraft = context.maybeGenerateAiAdminNewProduct_({},'Add a new product with these photos',[],actor,photos,false);
+assert.equal(newDraft.proposal.type,'add_product');
+assert.equal(newDraft.proposal.patch.image,photos[0]);
+assert.equal(newDraft.proposal.patch.images,photos[1]);
+assert(newDraft.proposal.patch.description);
+assert(newDraft.proposal.patch.descriptionhindi);
+assert.equal(draftRequest.referenceUrls.length,1);
+assert.equal(newDraft.proposal.patch.tags,'nail care');
+const remembered=context.sanitizeAiAdminHistory_([{role:'user',text:'Nail clipper, price 99',images:photos}]);
+assert.equal(context.aiAdminRequestImages_({},'Add a product from this photo',remembered)[0],photos[0]);
+assert.equal(context.aiAdminRequestImages_({},'Find shampoo',remembered).length,0);
+assert.equal(context.aiAdminRequestImages_({},'Use this photo',[]).length,0);
+const oldApplied=[...remembered,{role:'assistant',text:'Applied: new product'}];
+assert.equal(context.aiAdminRequestImages_({},'Use this photo',oldApplied).length,0);
+context.maybeGenerateAiAdminNewProduct_({},'Add a new product',remembered,actor,['https://example.com/new.jpg'],false);
+assert(!draftRequest.notes.includes('price 99'), 'Old photo facts must not leak into a different upload');
+context.maybeGenerateAiAdminNewProduct_({},'Add a new product without photo',remembered,actor,photos,false);
+assert.equal(context.maybeGenerateAiAdminNewProduct_({},'Add a new product without photo',remembered,actor,photos,false).proposal.patch.image,undefined);
+context.generateAiProductDraft_ = () => ({draft:{name:'Draft without price',description:'Photo-supported description'},warnings:[]});
+assert.equal(context.maybeGenerateAiAdminNewProduct_({},'Add a new product',[],actor,photos,false).proposal.patch.price,undefined);
+assert.equal(context.maybeGenerateAiAdminNewProduct_({},'Add a new product',[],{role:'viewer'},photos,false),null);
+console.log('Photo creation regressions passed: full drafts, original image URLs, photo follow-ups, unknown price and context isolation.');

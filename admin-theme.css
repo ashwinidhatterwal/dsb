@@ -928,3 +928,28 @@ input[type=checkbox]:disabled {
 .admin-ai-head,.admin-ai-mini-controls,.admin-ai-compose{flex-shrink:0}.admin-ai-messages{min-height:80px}.admin-ai-proposal{flex-shrink:0;max-height:36vh}
 .admin-ai-proposal-actions{position:sticky;bottom:0;background:#102a36;padding-top:8px}.admin-ai-proposal-actions button:disabled{opacity:.45;cursor:not-allowed}
 @media(min-width:701px){.admin-ai-drawer{width:min(470px,calc(100vw - 30px))}}
+
+/* Chat context controls and one continuous review surface. */
+.admin-ai-head #adminAiNew{width:auto;min-height:36px;padding:7px 10px;white-space:nowrap;background:#14453f;border:1px solid #32766e;color:#b9fff0;font:inherit;font-size:12px;font-weight:700}
+.admin-ai-context{display:flex;align-items:center;justify-content:space-between;padding:7px 13px;background:#0c242f;border-bottom:1px solid #294957;color:#9cb9c4;font-size:11px;flex-shrink:0}
+.admin-ai-context button{border:0;border-radius:7px;background:transparent;color:#c2dce4;min-height:32px;padding:5px 9px;cursor:pointer;font:inherit}
+.admin-ai-context button:hover{background:#23424f}.admin-ai-head button:disabled,.admin-ai-context button:disabled{opacity:.45;cursor:wait}
+.admin-ai-conversation{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#42616d transparent;background:#0b1c26}
+.admin-ai-conversation .admin-ai-messages{overflow:visible;min-height:0;flex:none;background:transparent}
+.admin-ai-conversation .admin-ai-proposal{max-height:none;overflow:visible;margin:4px 12px 14px}
+.admin-ai-proposal-actions{position:static}.admin-ai-change{grid-template-columns:1fr 1fr;gap:7px;padding:10px;font-size:12px}.admin-ai-change label{grid-column:1/-1;display:flex;align-items:center;gap:8px;min-height:28px}.admin-ai-change input{width:18px;height:18px;flex:none}
+.admin-ai-change del,.admin-ai-change strong{white-space:pre-wrap;font-weight:400;line-height:1.5}.admin-ai-change del{text-decoration:none;color:#8da4af}.admin-ai-change strong{color:#daf5ed}
+.admin-ai-proposal-actions button{min-height:40px}.admin-ai-compose-meta{gap:10px;flex-wrap:wrap}.admin-ai-compose-meta span{font-size:10px}.admin-ai-msg>div{font-size:13px;line-height:1.6}
+.admin-ai-tools button,.admin-ai-tools select{min-height:36px}.admin-ai-drawer button:focus-visible,.admin-ai-drawer select:focus-visible{outline:2px solid #65d4c6;outline-offset:2px}
+@media(max-width:700px){.admin-ai-drawer{height:90dvh;max-height:900px}.admin-ai-compose{padding-bottom:max(10px,env(safe-area-inset-bottom))}.admin-ai-compose textarea{font-size:16px}.admin-ai-head-copy small{font-size:9px}.admin-ai-head #adminAiNew{font-size:11px;padding:6px 8px}.admin-ai-mini-controls{padding:6px 12px}.admin-ai-tools{padding:6px 12px}}
+
+.admin-ai-change del small,.admin-ai-change strong small{display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:.04em;opacity:.7}
+
+/* Dedicated floating chat workspace. */
+.admin-ai-backdrop{position:fixed;inset:0;z-index:1000;border:0;background:rgba(2,8,18,.72);backdrop-filter:blur(5px);cursor:default}.admin-ai-backdrop[hidden]{display:none}
+body.admin-ai-open{overflow:hidden}.admin-ai-drawer{z-index:1001!important;top:4vh;bottom:auto;right:50%;width:min(700px,94vw);height:92vh;height:92dvh;max-height:1000px;border:1px solid #6261a0;border-radius:22px;transform:translate(50%,12px);background:#13172b;box-shadow:0 30px 100px #0009}.admin-ai-drawer.open{transform:translateX(50%)}
+.admin-ai-head{background:linear-gradient(115deg,#302c56,#162c3d);border-bottom-color:#4b4d74}.admin-ai-head-mark{background:#41386b;color:#d6ceff;border-color:#6e62a3}.admin-ai-conversation{background:#111827}.admin-ai-msg.assistant>div{background:#222b41;border-color:#394660}.admin-ai-msg.user>div{background:#4c4382;border-color:#746aa9}.admin-ai-compose,.admin-ai-tools,.admin-ai-mini-controls,.admin-ai-context{background:#192238}.admin-ai-proposal{background:#1b2c3a}
+.admin-ai-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.admin-ai-editor-field{display:flex;flex-direction:column;gap:5px;color:#b9d2dc;font-size:12px}.admin-ai-editor-field:has(textarea){grid-column:1/-1}
+.admin-ai-drawer [data-ai-edit]{box-sizing:border-box;width:100%;min-width:0;padding:10px;border:1px solid #50647a;border-radius:8px;background:#101d2e;color:#eef6ff;font:inherit;font-size:14px;line-height:1.5;resize:vertical}.admin-ai-drawer [data-ai-edit]:focus{outline:2px solid #a69bea;outline-offset:1px}
+.admin-ai-draft-photo{display:block;width:100px;height:100px;object-fit:contain;border-radius:12px;background:#fff;margin:10px 0 16px}.admin-ai-proposal-actions{padding:12px 0 4px;background:transparent}
+@media(max-width:700px){.admin-ai-drawer{top:2dvh;right:50%;width:96vw;height:96dvh;max-height:none;border-radius:18px;transform:translate(50%,12px)}.admin-ai-drawer.open{transform:translateX(50%)}.admin-ai-editor-grid{grid-template-columns:1fr}.admin-ai-drawer [data-ai-edit]{font-size:16px}.admin-ai-change{grid-template-columns:1fr}.admin-ai-change label{grid-column:auto}}

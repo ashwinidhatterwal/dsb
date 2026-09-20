@@ -8,6 +8,9 @@
   let currentProposal = null;
   let pendingImageUrls = [];
   let uploading = false;
+  let applying = false;
+  let sessionEpoch = 0;
+  let applyTimer = null;
 
   const qs = (s, c = document) => c.querySelector(s);
   const qsa = (s, c = document) => Array.from(c.querySelectorAll(s));
@@ -30,20 +33,35 @@
     renderMessages();
   }
   function clearSession() {
-    if (busy || uploading) return;
+    if (applying) return showToast('Wait for the current change to finish saving.');
+    // In-flight AI replies/uploads belong to the old context and are discarded.
+    sessionEpoch++;
+    busy = false;
+    uploading = false;
     pendingImageUrls = [];
-    renderPendingImages();
     messages = [];
     currentProposal = null;
+    const input = qs('#adminAiInput');
+    if (input) input.value = '';
+    const file = qs('#adminAiImageInput');
+    if (file) file.value = '';
     saveSession();
+    renderPendingImages();
     renderMessages();
     renderProposal(null);
-    qs('#adminAiInput')?.focus();
+    autoSizeInput();
+    ['#adminAiSend', '#adminAiAttach', '#adminAiClear', '#adminAiNew'].forEach(id => { const el = qs(id); if (el) el.disabled = false; });
+    qs('#adminAiDrawer')?.classList.remove('thinking');
+    qs('#adminAiStatus').textContent = 'Fresh chat — previous context cleared';
+    input?.focus({ preventScroll: true });
   }
 
   function openChat() {
     const drawer = qs('#adminAiDrawer');
     if (!drawer) return;
+    drawer.inert = false;
+    const backdrop = qs('#adminAiBackdrop');
+    if (backdrop) backdrop.hidden = false;
     drawer.classList.add('open');
     drawer.setAttribute('aria-hidden', 'false');
     document.body.classList.add('admin-ai-open');
@@ -53,14 +71,20 @@
   function closeChat() {
     const drawer = qs('#adminAiDrawer');
     if (!drawer) return;
+    drawer.inert = true;
+    const backdrop = qs('#adminAiBackdrop');
+    if (backdrop) backdrop.hidden = true;
     drawer.classList.remove('open');
     drawer.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('admin-ai-open');
+    qs('#adminAiOpen')?.focus({ preventScroll: true });
   }
 
   function renderMessages() {
     const root = qs('#adminAiMessages');
     if (!root) return;
+    const context = qs('#adminAiContext');
+    if (context) context.textContent = messages.length ? `${Math.min(14, messages.length)} recent messages in context` : 'Fresh context';
     if (!messages.length) {
       root.innerHTML = `<div class="admin-ai-welcome">
         <div class="admin-ai-orb">✦</div>
@@ -83,7 +107,8 @@
       const thumbs = Array.isArray(m.images) && m.images.length ? `<div class="admin-ai-msg-images">${m.images.map((url, i) => `<img src="${escapeHtml(url)}" alt="Attached photo ${i + 1}" loading="lazy" decoding="async">`).join('')}</div>` : '';
       return `<div class="admin-ai-msg ${m.role}"><div>${thumbs}${escapeHtml(m.text).replace(/\n/g, '<br>')}</div></div>`;
     }).join('');
-    root.scrollTop = root.scrollHeight;
+    const scroller = qs('#adminAiConversation') || root;
+    scroller.scrollTop = scroller.scrollHeight;
   }
 
   const fieldLabels = { namehindi: 'Hindi name', descriptionhindi: 'Hindi description', costprice: 'Cost price', stockqty: 'Stock quantity', packsize: 'Pack size', sizeprices: 'Size prices', gtin: 'GTIN', mrp: 'MRP' };
@@ -101,7 +126,31 @@
     if (value === '' || value === null || value === undefined) return '—';
     return typeof value === 'object' ? JSON.stringify(value) : String(value);
   }
+  const productFields = ['name','namehindi','price','mrp','costprice','category','subcategory','description','descriptionhindi','brand','material','packsize','specifications','tags','sizes','sizeprices','stock','stockqty','gtin','image','images'];
+  const numericFields = ['price','mrp','costprice','stockqty'];
+  function fieldEditor(key, value) {
+    const text = value === undefined || value === null ? '' : String(value);
+    const long = ['description','descriptionhindi','specifications','images'].includes(key);
+    const attrs = `data-ai-edit="${escapeHtml(key)}" aria-label="${escapeHtml(fieldLabel(key))}"`;
+    return long ? `<textarea ${attrs} rows="3" maxlength="${key === 'images' ? 5000 : 2000}">${escapeHtml(text)}</textarea>` : `<input ${attrs} type="${numericFields.includes(key) ? 'number' : 'text'}" ${numericFields.includes(key) ? `min="0" step="${key === 'stockqty' ? '1' : 'any'}"` : 'maxlength="1000"'} value="${escapeHtml(text)}">`;
+  }
+  function readProposalEdits(proposal) {
+    if (!proposal || !['add_product','update_product'].includes(proposal.type)) return proposal;
+    const patch = { ...proposal.patch };
+    qsa('[data-ai-edit]', qs('#adminAiProposal')).forEach(input => {
+      const key = input.dataset.aiEdit;
+      const value = input.value.trim();
+      if (numericFields.includes(key)) {
+        if (!value) delete patch[key];
+        else patch[key] = Number(value);
+      } else if (value || proposal.type === 'update_product') patch[key] = value;
+      else delete patch[key];
+    });
+    return { ...proposal, patch };
+  }
   function renderProposal(proposal) {
+    clearTimeout(applyTimer);
+    applyTimer = null;
     const wrap = qs('#adminAiProposal');
     if (!wrap) return;
     if (proposal && proposal.type === 'add_product' && !proposal.requestId) proposal.requestId = crypto.randomUUID();
@@ -115,11 +164,12 @@
     if (proposal.type === 'update_product') {
       const rows = Object.entries(proposal.patch || {}).map(([key, next]) => {
         const before = proposal.current ? proposal.current[key] : '';
-        return `<div class="admin-ai-change"><label><input type="checkbox" data-ai-field="${escapeHtml(key)}" checked> ${escapeHtml(fieldLabel(key))}</label><del>${escapeHtml(displayValue(before))}</del><strong>${escapeHtml(displayValue(next))}</strong></div>`;
+        return `<div class="admin-ai-change"><label><input type="checkbox" data-ai-field="${escapeHtml(key)}" checked> ${escapeHtml(fieldLabel(key))}</label><del><small>Current</small>${escapeHtml(displayValue(before))}</del><strong><small>Edit suggestion</small>${fieldEditor(key, next)}</strong></div>`;
       }).join('');
       detail = `<div class="admin-ai-changes">${rows}</div>`;
     } else if (proposal.type === 'add_product') {
-      detail = `<div class="admin-ai-changes">${Object.entries(proposal.patch || {}).map(([key, value]) => `<div class="admin-ai-change single"><span>${escapeHtml(fieldLabel(key))}</span><strong>${escapeHtml(displayValue(value))}</strong></div>`).join('')}</div>`;
+      const photo = String(proposal.patch?.image || '');
+      detail = `${/^https:\/\//i.test(photo) ? `<img class="admin-ai-draft-photo" src="${escapeHtml(photo)}" alt="Proposed listing photo">` : ''}<div class="admin-ai-editor-grid">${productFields.map(key => `<label class="admin-ai-editor-field">${escapeHtml(fieldLabel(key))}${fieldEditor(key, proposal.patch?.[key])}</label>`).join('')}</div>`;
     } else if (proposal.type === 'update_order_status') {
       detail = `<div class="admin-ai-status-change"><span>${escapeHtml(proposal.currentStatus || 'Pending')}</span><b>→</b><strong>${escapeHtml(proposal.status)}</strong></div>`;
     } else if (proposal.type === 'archive_product') {
@@ -135,6 +185,13 @@
     qs('#adminAiDismissProposal')?.addEventListener('click', () => renderProposal(null));
     qs('#adminAiDismissProposal2')?.addEventListener('click', () => renderProposal(null));
     qs('#adminAiApplyProposal')?.addEventListener('click', armProposalApply);
+    qsa('[data-ai-edit]', wrap).forEach(input => input.addEventListener('input', () => {
+      clearTimeout(applyTimer);
+      const btn = qs('#adminAiApplyProposal');
+      btn.dataset.armed = '';
+      btn.textContent = 'Apply';
+      btn.classList.remove('armed');
+    }));
     qsa('[data-ai-field]', wrap).forEach(box => box.addEventListener('change', () => {
       const btn = qs('#adminAiApplyProposal');
       btn.disabled = !qsa('[data-ai-field]:checked', wrap).length;
@@ -142,7 +199,8 @@
       btn.textContent = 'Apply';
       btn.classList.remove('armed');
     }));
-    wrap.scrollIntoView({ block: 'nearest', behavior: reducedMotion?.() ? 'auto' : 'smooth' });
+    const scroller = qs('#adminAiConversation');
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }
 
   function armProposalApply() {
@@ -151,7 +209,8 @@
     btn.dataset.armed = '1';
     btn.textContent = 'Confirm apply';
     btn.classList.add('armed');
-    setTimeout(() => {
+    clearTimeout(applyTimer);
+    applyTimer = setTimeout(() => {
       if (!btn.isConnected) return;
       btn.dataset.armed = '';
       btn.textContent = 'Apply';
@@ -160,7 +219,7 @@
   }
 
   async function applyProposal() {
-    let proposal = currentProposal;
+    let proposal = readProposalEdits(currentProposal);
     if (proposal?.type === 'update_product') {
       const selected = qsa('[data-ai-field]:checked', qs('#adminAiProposal')).map(box => box.dataset.aiField);
       if (!selected.length) return;
@@ -168,9 +227,21 @@
     }
     const btn = qs('#adminAiApplyProposal');
     if (!proposal || !btn || busy) return;
+    if (['add_product','update_product'].includes(proposal.type)) {
+      for (const key of numericFields) {
+        if (proposal.patch[key] !== undefined && (!Number.isFinite(proposal.patch[key]) || proposal.patch[key] < 0 || (key === 'stockqty' && !Number.isInteger(proposal.patch[key])))) return showToast('Enter a valid ' + fieldLabel(key));
+      }
+      if (proposal.type === 'add_product' && (!String(proposal.patch.name || '').trim() || !(proposal.patch.price > 0))) return showToast('Enter a product name and selling price greater than zero.');
+      for (const key of ['image','images']) {
+        if (proposal.patch[key] && (key === 'image' ? [String(proposal.patch[key])] : String(proposal.patch[key]).split(',')).some(url => !/^https:\/\//i.test(url.trim()))) return showToast('Product photos must use HTTPS URLs.');
+      }
+    }
     busy = true;
+    applying = true;
+    ['#adminAiNew', '#adminAiClear', '#adminAiSend', '#adminAiAttach'].forEach(id => { if (qs(id)) qs(id).disabled = true; });
     btn.disabled = true;
     btn.textContent = 'Applying…';
+    qsa('[data-ai-edit], [data-ai-field]', qs('#adminAiProposal')).forEach(el => { el.disabled = true; });
     try {
       let payload;
       if (proposal.type === 'update_product') {
@@ -209,7 +280,10 @@
       const proposalCopy = proposal;
       renderProposal(proposalCopy);
     } finally {
+      applying = false;
       busy = false;
+      ['#adminAiNew', '#adminAiClear', '#adminAiSend', '#adminAiAttach'].forEach(id => { if (qs(id)) qs(id).disabled = false; });
+      qsa('[data-ai-edit], [data-ai-field]', qs('#adminAiProposal')).forEach(el => { el.disabled = false; });
       const liveBtn = qs('#adminAiApplyProposal');
       if (liveBtn) {
         liveBtn.disabled = false;
@@ -241,6 +315,7 @@
     if (typeof uploadFileToCloudinary !== 'function') return showToast('Image upload helper is unavailable');
     const attach = qs('#adminAiAttach');
     const status = qs('#adminAiStatus');
+    const epoch = sessionEpoch;
     uploading = true;
     if (attach) attach.disabled = true;
     qs('#adminAiSend').disabled = true;
@@ -249,14 +324,17 @@
       for (let i = 0; i < selected.length; i++) {
         status.textContent = `Uploading photo ${i + 1}/${selected.length}…`;
         const url = await uploadFileToCloudinary(selected[i]);
+        if (epoch !== sessionEpoch) return;
         if (url && !pendingImageUrls.includes(url)) pendingImageUrls.push(url);
         renderPendingImages();
       }
       status.textContent = `${pendingImageUrls.length} photo${pendingImageUrls.length === 1 ? '' : 's'} ready for AI`;
     } catch (err) {
+      if (epoch !== sessionEpoch) return;
       showToast(err?.message || 'Could not upload photo');
       status.textContent = 'Photo upload failed';
     } finally {
+      if (epoch !== sessionEpoch) return;
       uploading = false;
       if (attach) attach.disabled = false;
       qs('#adminAiSend').disabled = false;
@@ -276,7 +354,9 @@
       showToast('Connect to the admin backend first');
       return;
     }
-    const history = messages.slice(-14).map(({ role, text }) => ({ role, text }));
+    const epoch = sessionEpoch;
+    const history = messages.slice(-14).map(({ role, text, images }) => ({ role, text, images: images || [] }));
+    const productDraft = currentProposal?.type === 'add_product' ? readProposalEdits(currentProposal).patch : null;
     const imageUrls = pendingImageUrls.slice();
     addMessage('user', message, imageUrls);
     input.value = '';
@@ -287,7 +367,7 @@
     busy = true;
     send.disabled = true;
     qs('#adminAiAttach').disabled = true;
-    qs('#adminAiClear').disabled = true;
+    qs('#adminAiClear').disabled = false;
     status.textContent = 'Working with live shop data…';
     qs('#adminAiDrawer')?.classList.add('thinking');
     try {
@@ -299,6 +379,7 @@
           action: 'aiAdminChat',
           message,
           history,
+          productDraft,
           requestedModel: qs('#adminAiModel')?.value || '',
           reasoningEffort: qs('#adminAiQuality')?.value || 'low',
           imageUrls
@@ -307,22 +388,25 @@
       });
       const data = await res.json();
       if (data?.error) throw new Error(data.error);
+      if (epoch !== sessionEpoch) return;
       addMessage('assistant', data.reply || 'No reply returned.');
       renderProposal(data.proposal || null);
       status.textContent = data.elapsedMs ? `${data.model || 'AI'} · ${(data.elapsedMs / 1000).toFixed(1)}s` : (data.model || 'Ready');
     } catch (err) {
+      if (epoch !== sessionEpoch) return;
       addMessage('assistant', `I couldn't complete that request: ${err?.message || err}`);
       pendingImageUrls = imageUrls;
       renderPendingImages();
       if (!input.value) input.value = message;
       status.textContent = 'Request failed — you can retry';
     } finally {
+      if (epoch !== sessionEpoch) return;
       busy = false;
       send.disabled = false;
       qs('#adminAiAttach').disabled = false;
       qs('#adminAiClear').disabled = false;
       qs('#adminAiDrawer')?.classList.remove('thinking');
-      input.focus();
+      if (qs('#adminAiDrawer')?.classList.contains('open')) input.focus({ preventScroll: true });
     }
   }
 
@@ -350,7 +434,7 @@
         const input = qs('#adminAiInput');
         input.value = prompts[e.target.value];
         autoSizeInput();
-        input.focus();
+        if (qs('#adminAiDrawer')?.classList.contains('open')) input.focus({ preventScroll: true });
         const start = input.value.indexOf('[');
         if (start !== -1) input.setSelectionRange(start, input.value.indexOf(']') + 1);
       }
@@ -364,18 +448,26 @@
     });
     qs('#adminAiOpen')?.addEventListener('click', openChat);
     qs('#adminAiClose')?.addEventListener('click', closeChat);
+    qs('#adminAiBackdrop')?.addEventListener('click', closeChat);
     qs('#adminAiClear')?.addEventListener('click', clearSession);
+    qs('#adminAiNew')?.addEventListener('click', clearSession);
     qs('#adminAiSend')?.addEventListener('click', sendMessage);
     qs('#adminAiAttach')?.addEventListener('click', () => qs('#adminAiImageInput')?.click());
     qs('#adminAiImageInput')?.addEventListener('change', e => attachImages(e.target.files));
     qs('#adminAiInput')?.addEventListener('input', autoSizeInput);
     qs('#adminAiInput')?.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
         e.preventDefault();
         sendMessage();
       }
     });
     document.addEventListener('keydown', e => {
+      if (e.key === 'Tab' && qs('#adminAiDrawer')?.classList.contains('open')) {
+        const controls = qsa('button:not(:disabled),select:not(:disabled),textarea:not(:disabled),input:not(:disabled)', qs('#adminAiDrawer')).filter(el => !el.hidden && el.getClientRects().length);
+        const first = controls[0], last = controls[controls.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
       if (e.key === 'Escape' && qs('#adminAiDrawer')?.classList.contains('open')) closeChat();
     });
   });

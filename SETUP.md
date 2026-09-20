@@ -169,7 +169,7 @@ The admin panel includes a compact floating **DSB AI** assistant. It uses the sa
 
 Chat memory is session-only: recent user/assistant messages are kept in the current browser tab with `sessionStorage` and are not written to Google Sheets. The assistant can read live catalog/order summaries and can prepare product creates/edits, order-status changes, and archive/restore actions. Any write appears as a review card and requires a two-click **Apply → Confirm apply** action before the existing admin backend is called.
 
-After installing this update, replace Apps Script with the generated `code.gs` and deploy a new web-app version. This build uses admin API version 13, so the updated frontend intentionally requires the updated backend.
+After installing this update, replace Apps Script with the generated `code.gs` and deploy a new web-app version. This build uses admin API version 14, so the updated frontend intentionally requires the updated backend.
 
 
 ### Copilot target and enrichment fix
@@ -184,3 +184,25 @@ Deploy the generated root `code.gs` as a new version of your existing Apps Scrip
 - Uncheck individual proposed fields before Apply → Confirm apply. New chat clears pending photos; failed chat requests retain photos for retry.
 
 Validation: `node scripts/build.mjs --check`, `node scripts/check-admin-chat.mjs`, `node scripts/check-ai.mjs`, `node scripts/check-chat-client.mjs`, and `node scripts/check.mjs`. Regression fixtures cover switching from shampoo to nail clippers, ambiguous/unknown targets, null numbers, photo references, Hindi-only edits and catalog reports. Live provider response quality still depends on the configured model and evidence in the photos.
+
+
+### Chat reset and interface update
+
+The prominent **New chat** header button and **Clear chat** context-row button both start fresh: they remove the conversation from this tab's session memory, clear draft text, attached photos and pending proposals, and send no previous history on the next request. Earlier conversations are not archived. Model and quality preferences remain selected. Replies or image uploads already in progress are ignored after reset; an already-running provider request may still finish on the server. Reset is temporarily disabled while an approved product/order change is being saved.
+
+The chat now has one scrolling conversation/review area, clearer Current/Suggested values, larger field-selection controls, a context indicator, safer keyboard focus and mobile safe-area spacing. Hindi IME composition no longer triggers Enter-to-send. Regression tests include resetting during generation and photo uploads.
+
+For this UI update, upload the website files and reload the admin page. If the previous copilot fix is already installed, no new Apps Script deployment is needed (API version remains 13). Otherwise also deploy this archive's `code.gs`.
+
+
+### Photo creation and editable chat drafts (API 14)
+
+Deploy this archive's generated `code.gs` as a new version of the existing Apps Script web app, then upload the website files and reload admin. This update requires both frontend and backend version 14; older UI-only installation notes above apply only to those older updates.
+
+New-product requests run through the full photo-based product draft generator. They request English/Hindi descriptions, category, specifications and tags as supported by available evidence. The first supplied photo becomes the listing image and further photos become gallery images; original upload URLs are assigned by the backend. Ask to omit photos if they are reference-only, or clear the image fields in review. Photo references travel with recent chat history, allowing instructions such as “create a product from this photo” on a follow-up. Fresh chat clears them. Uploaded images used for a completed create are not silently reused for another product.
+
+Review cards now contain editable fields. New-product cards expose all supported fields, including fields AI could not fill. Existing-product edits retain selection checkboxes and editable suggestions. Correct details before Apply → Confirm apply. Missing price is allowed in a draft, but saving requires a name and positive selling price. Numeric values and HTTPS image URLs are checked before submission. Changing an editor field resets confirmation. You can also send a follow-up about the visible new-product draft; its current edited values are sent as context.
+
+The chat opens as a centered dialog with a dimmed, blurred backdrop, distinct purple/navy colours, keyboard focus cycling and a mobile layout. Clicking outside or pressing Escape closes it without clearing the conversation.
+
+Automated tests cover original photo URL assignment, full generated fields, photo follow-ups, reset isolation, unknown price, and manual edits reaching the save request. Live provider quality and browser visual appearance still require deployment verification.
