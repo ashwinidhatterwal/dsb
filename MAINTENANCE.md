@@ -23,7 +23,8 @@ Upload the whole project, including `.github`, `scripts`, and `src`, to the exis
 | `cart.js` | Persistent cart and stock-aware mutations |
 | `products-data.js` | Catalogue loading, caching and normalized products |
 | `render-helpers.js` | Product cards and their actions |
-| `cart-ui-core.js` | Cart state, badge animation, tracking, promo/fee helpers and drawer lifecycle |
+| `cart-ui-core.js` | Cart state, badge animation, promo/fee helpers and drawer lifecycle |
+| `track-order.js` | Dedicated customer order lookup, timeline, cancellation/support request UI |
 | `cart-ui-drawer.js` | Cart rendering, order confirmation and downloadable receipt |
 | `cart-ui-checkout.js` | Checkout validation/submission, retry recovery and payment QR |
 | `app.js` | Home categories, sorting, search and carousels |
@@ -158,3 +159,9 @@ Regression command for this layer: `node scripts/check-level1.mjs`.
 - `ORDER_STATUS_TRANSITIONS` in `src/backend/config.gs` is the single backend lifecycle definition. Keep client options in `admin.js` aligned and covered by `scripts/check-level3.mjs`.
 - Order request rows contain a phone hash only; raw customer phone is not duplicated into the requests sheet.
 - Do not bypass `updateOrderStatus()` when changing status because cancellation/reactivation also adjusts tracked inventory transactionally.
+
+### Dedicated order tracking
+- `track-order.html` owns the customer-facing tracking experience.
+- `track-order.js` sends Order ID + phone by POST; only the non-sensitive Order ID may appear in the page query string for prefill.
+- Storefront track buttons link to the page instead of embedding duplicated tracking overlays.
+- Customer cancellation/support requests remain proposals for admin review; they never directly mutate order status or inventory.

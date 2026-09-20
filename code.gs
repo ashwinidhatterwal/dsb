@@ -129,9 +129,6 @@ function doGet(e) {
       error: 'admin reads require POST'
     });
   }
-  if (action === 'trackOrder') {
-    return jsonResponse(trackOrder(e.parameter.orderId, e.parameter.phone));
-  }
   if (action === 'dashboard') {
     return jsonResponse({
       error: 'admin reads require POST'

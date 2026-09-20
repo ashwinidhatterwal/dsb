@@ -230,7 +230,7 @@ function renderOrderConfirmation(receipt) {
   $('#confirmCloseBtn').addEventListener('click', close);
   $('#downloadReceiptBtn').addEventListener('click', () => downloadReceipt(receipt));
   $('#printReceiptBtn').addEventListener('click', () => downloadReceipt(receipt, true));
-  $('#confirmTrackBtn')?.addEventListener('click', () => openTrackOrder(orderId));
+  $('#confirmTrackBtn')?.addEventListener('click', () => goToTrackOrder(orderId));
   document.dispatchEvent(new CustomEvent('dsb:ordercomplete'));
   $('#downloadReceiptBtn').focus();
   if (isUpi) renderPaymentQr(buildUpiLink(receipt.total, orderId));

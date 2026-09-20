@@ -3739,3 +3739,14 @@ a.assurance-item:hover,a.assurance-item:focus-visible{border-color:rgba(200,17,9
 .track-request-status{font-size:12px;margin-top:8px}.track-request-list{display:grid;gap:7px;margin-top:12px}.track-request-item{display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:8px 10px;border-radius:10px;background:rgba(32,52,89,.05)}
 .order-request-box{margin-top:10px;padding:10px;border:1px solid #e7d9ad;border-radius:12px;background:#fffaf0}.order-request-box strong{display:block;margin-bottom:4px}.order-request-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.order-request-actions input{min-width:160px;flex:1}.order-lifecycle-note{font-size:11px;color:#6f7890;margin-top:6px}
 @media(max-width:640px){.track-request-actions{display:grid}.order-request-actions{display:grid}.order-request-actions input{width:100%}}
+
+/* Dedicated order tracking page */
+.track-page{min-height:calc(100vh - 72px);padding:clamp(22px,5vw,54px) 16px 72px;background:linear-gradient(180deg,rgba(247,249,252,.85),#fff 42%)}
+.track-shell{width:min(780px,100%);margin:0 auto}
+.track-page-head{display:grid;gap:8px;margin:10px 0 24px}.track-page-head h1{margin:0;font-size:clamp(30px,6vw,48px);line-height:1.05}.track-page-head p{margin:0;color:var(--muted,#687080);max-width:620px}
+.track-lookup-card{padding:clamp(18px,4vw,28px);border:1px solid var(--line,#e6e8ee);border-radius:22px;background:var(--surface,#fff);box-shadow:0 16px 50px rgba(25,35,55,.08)}
+.track-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.track-form-grid .field{margin:0}.track-form-actions{display:flex;gap:10px;align-items:center;margin-top:16px}.track-form-actions .primary-btn{min-width:160px}
+.track-result-wrap{margin-top:20px}.track-result-wrap:empty{display:none}.track-page .track-card{max-width:none;margin:0}.track-page .track-request-panel{background:rgba(247,249,252,.85)}
+.track-security-note{display:flex;gap:9px;align-items:flex-start;margin-top:14px;font-size:12px;line-height:1.5;color:var(--muted,#687080)}
+.track-page-back{display:inline-flex;align-items:center;gap:7px;text-decoration:none;font-weight:700;margin-bottom:12px}
+@media(max-width:640px){.track-form-grid{grid-template-columns:1fr}.track-form-actions{display:grid}.track-form-actions .primary-btn{width:100%}.track-page{padding-top:18px}}
