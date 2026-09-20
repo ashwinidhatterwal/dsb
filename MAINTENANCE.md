@@ -58,7 +58,8 @@ Apps Script functions still share their original global scope. File separation i
 
 ## Safe release checklist
 
-Run the build consistency check, `node scripts/check.mjs`, `node scripts/check-checkout.mjs`, and `node scripts/check-autofill.mjs`. Check the home page at phone and desktop widths, choose a priced size, add/remove cart quantities, and inspect the admin editor before publishing. Local checks do not execute live Google APIs or send orders/notifications.
+Run the build consistency check, `node scripts/check.mjs`, `node scripts/check-checkout.mjs`, `node scripts/check-autofill.mjs`, `node scripts/check-ai.mjs`, and
+`node scripts/check-feedback.mjs`. Check the home page at phone and desktop widths, choose a priced size, add/remove cart quantities, and inspect the admin editor before publishing. Local checks do not execute live Google APIs or send orders/notifications.
 
 When changing a deployed asset, update the version query in HTML and the static-page template. Preserve the `.github` publishing workflow, which excludes developer sources from the public website.
 
@@ -110,3 +111,23 @@ AI generation is deliberately non-destructive: it does not write Sheets, save pr
 
 
 AI generation uses an elapsed-time/indeterminate progress indicator because third-party AI APIs do not expose reliable percentage completion. Do not replace it with a fake percentage. AI-only Cloudinary URLs are transformed to a lightweight 1280px derivative before analysis; original product URLs stay unchanged. Chat-completions uses compact JSON-object mode to reduce payload and compatibility overhead.
+
+## Interaction feedback
+
+`ui-feedback.js` and `ui-feedback.css` are shared by all pages, including admin.
+They own button release feedback, content-update motion, toast timing, busy
+indicators, focus outlines and reduced-motion handling. Edit the duration tokens
+in this stylesheet to tune the whole site. Keep this stylesheet after page styles.
+The deferred script runs before DOMContentLoaded consumers; do not mark it async.
+
+Use `setButtonBusy(button, true)` before a request and reset it in `finally`.
+Only show a success toast after the underlying operation succeeds. Existing
+cart/overlay transitions remain owned by their component styles. Content observers
+watch named render regions, batch updates per frame, and never intercept requests
+or delay navigation. Add new render-region IDs to `regions` when needed.
+
+This cleanup consolidates the two toast implementations, removes redundant
+page-level Escape listeners (the shared dialog manager owns Escape), shares
+focus trapping/restoration with the quick size picker, and repairs
+literal escaped newlines in admin AI progress CSS. Source/build pairs and legacy
+style defaults remain necessary; do not delete them merely because selectors recur.

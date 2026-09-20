@@ -1,0 +1,70 @@
+/* Shared interaction tokens for storefront and admin. No layout animation. */
+:root {
+  --ui-fast: 180ms;
+  --ui-settle: 280ms;
+  --ui-ease: cubic-bezier(.22,.72,.22,1);
+}
+:where(button, a, input, select, textarea, [role="button"]) {
+  -webkit-tap-highlight-color: transparent;
+}
+:is(button, .primary-btn, .ghost-btn, [role="button"], input[type="submit"]) {
+  transition: background-color var(--ui-fast) ease, color var(--ui-fast) ease,
+    border-color var(--ui-fast) ease, box-shadow var(--ui-settle) ease,
+    opacity var(--ui-fast) ease, transform var(--ui-settle) var(--ui-ease),
+    scale var(--ui-fast) var(--ui-ease);
+  touch-action: manipulation;
+}
+:is(button, .primary-btn, .ghost-btn, [role="button"]):not(:disabled):not([aria-disabled="true"]):active {
+  scale: .96;
+}
+:where(button, a, input, select, textarea, [role="button"]):focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+:is(button, input, select, textarea):disabled { cursor: not-allowed; }
+[aria-busy="true"] { cursor: progress; }
+button[aria-busy="true"]::after {
+  content: "";
+  display: inline-block;
+  width: .8em; height: .8em;
+  margin-inline-start: .45em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: middle;
+  animation: ui-spin 700ms linear infinite;
+}
+@keyframes ui-spin { to { rotate: 360deg; } }
+:is(input, select, textarea) {
+  transition: border-color var(--ui-fast) ease, box-shadow var(--ui-fast) ease;
+}
+:is(.chip, .subchip, .size-option, .quick-size-option, .payment-option, .thumb) {
+  transition: background-color var(--ui-fast) ease, border-color var(--ui-fast) ease,
+    box-shadow var(--ui-settle) ease, scale var(--ui-fast) var(--ui-ease);
+}
+.admin-tab.active, dialog[open] { animation: ui-enter var(--ui-settle) var(--ui-ease); }
+dialog[open]::backdrop { animation: ui-fade var(--ui-fast) ease; }
+@keyframes ui-enter { from { opacity: .65; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
+@keyframes ui-fade { from { opacity: 0; } to { opacity: 1; } }
+/* Native dialog exit transitions progressively enhance supported browsers. */
+@supports (transition-behavior: allow-discrete) {
+  dialog.autofill-dialog {
+    opacity: 0;
+    translate: 0 8px;
+    transition: opacity var(--ui-fast), translate var(--ui-settle) var(--ui-ease),
+      display var(--ui-settle) allow-discrete, overlay var(--ui-settle) allow-discrete;
+  }
+  dialog.autofill-dialog[open] { opacity: 1; translate: 0 0; animation: none; }
+  @starting-style { dialog.autofill-dialog[open] { opacity: 0; translate: 0 8px; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+  :is(button, .primary-btn, .ghost-btn, [role="button"]):active { scale: 1; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none !important; }
+}

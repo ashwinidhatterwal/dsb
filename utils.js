@@ -40,15 +40,7 @@ function formatDateTime(value) {
     minute: '2-digit'
   });
 }
-let toastTimer;
-function showToast(msg) {
-  const t = $('#toast');
-  if (!t) return;
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
-}
+
 
 // Points the floating WhatsApp button at the shop's number from config.js,
 // so it only ever needs to be set in one place.

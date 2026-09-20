@@ -79,7 +79,7 @@ function prefersReducedMotion() {
 // while the cart and badge respond with restrained micro-interactions.
 function flyToCart(imgEl, onLand) {
   const fallback = () => { if (onLand) onLand(); };
-  if (!imgEl || prefersReducedMotion()) { fallback(); return; }
+  if (!imgEl || !Element.prototype.animate || prefersReducedMotion()) { fallback(); return; }
   const cartIcon = $('#cartTrigger');
   if (!cartIcon) { fallback(); return; }
   const startRect = imgEl.getBoundingClientRect();
@@ -169,7 +169,7 @@ async function submitTrackOrder() {
   }
   const btn = $('#trackSubmitBtn');
   const originalLabel = btn.textContent;
-  btn.disabled = true;
+  setButtonBusy(btn, true);
   btn.textContent = 'Checking…';
   try {
     const url = `${CONFIG.SHEET_API_URL}?action=trackOrder&orderId=${encodeURIComponent(orderId)}&phone=${encodeURIComponent(phone)}`;
@@ -182,7 +182,7 @@ async function submitTrackOrder() {
   } catch (err) {
     showTrackError('Something went wrong — please try again or message us on WhatsApp.');
   } finally {
-    btn.disabled = false;
+    setButtonBusy(btn, false);
     btn.textContent = originalLabel;
   }
 }
@@ -234,9 +234,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (submitBtn) submitBtn.addEventListener('click', submitTrackOrder);
   if (overlay) overlay.addEventListener('click', e => {
     if (e.target.id === 'trackOverlay') closeTrackOrder();
-  });
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeTrackOrder();
   });
 });
 let cartScrollLockY = 0;
@@ -293,7 +290,20 @@ async function fetchPromosIfNeeded() {
     checkoutState.availablePromos = null;
   }
 }
+let promoBusy = false;
 async function applyPromoCode() {
+  if (promoBusy) return;
+  const button = $('#applyPromoBtn');
+  promoBusy = true;
+  setButtonBusy(button, true);
+  try {
+    await applyPromoCodeTask();
+  } finally {
+    promoBusy = false;
+    setButtonBusy(button, false);
+  }
+}
+async function applyPromoCodeTask() {
   if (checkoutState.availablePromos === null) {
     await fetchPromosIfNeeded();
   }

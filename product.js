@@ -538,7 +538,7 @@ async function submitReview() {
     return;
   }
   const btn = $('#submitReviewBtn');
-  btn.disabled = true;
+  setButtonBusy(btn, true);
   btn.textContent = 'Submitting…';
   try {
     const data = await requestJson(CONFIG.SHEET_API_URL, {
@@ -569,7 +569,7 @@ async function submitReview() {
   } catch (err) {
     status_(statusEl, 'Could not submit feedback: ' + err.message, false);
   } finally {
-    btn.disabled = false;
+    setButtonBusy(btn, false);
     btn.textContent = 'Submit feedback';
   }
 }
@@ -628,12 +628,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#cartTrigger').addEventListener('click', openCart);
   $('#cartOverlay').addEventListener('click', e => {
     if (e.target.id === 'cartOverlay') closeCart();
-  });
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') {
-      closeCart();
-      closeSizeGuide();
-    }
   });
   updateCartBadge();
   initWhatsAppFloat();

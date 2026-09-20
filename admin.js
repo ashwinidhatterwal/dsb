@@ -115,12 +115,7 @@ function status(el, msg, ok) {
   el.textContent = msg;
   el.className = 'statusline ' + (ok ? 'ok' : 'err');
 }
-function showToast(msg) {
-  const t = $('#toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 1800);
-}
+
 async function loadProducts(refreshRelated = true) {
   const statusEl = $('#connectStatus'),
     sequence = ++productRequestSequence;
@@ -555,7 +550,7 @@ async function uploadImageTask() {
   }
   const btn = $('#uploadBtn'),
     label = btn.textContent;
-  btn.disabled = true;
+  setButtonBusy(btn, true);
   btn.textContent = 'Uploading…';
   status(statusEl, 'Uploading…', true);
   try {
@@ -567,7 +562,7 @@ async function uploadImageTask() {
   } catch (err) {
     status(statusEl, 'Upload failed: ' + err.message, false);
   } finally {
-    btn.disabled = false;
+    setButtonBusy(btn, false);
     btn.textContent = label;
   }
 }
@@ -604,7 +599,7 @@ async function uploadExtraImageTask() {
   }
   const btn = $('#uploadExtraBtn'),
     label = btn.textContent;
-  btn.disabled = true;
+  setButtonBusy(btn, true);
   btn.textContent = 'Uploading…';
   status(statusEl, 'Uploading…', true);
   try {
@@ -616,7 +611,7 @@ async function uploadExtraImageTask() {
   } catch (err) {
     status(statusEl, 'Upload failed: ' + err.message, false);
   } finally {
-    btn.disabled = false;
+    setButtonBusy(btn, false);
     btn.textContent = label;
   }
 }
@@ -720,7 +715,7 @@ async function saveProductTask() {
     product
   };
   const btn = $('#saveBtn');
-  btn.disabled = true;
+  setButtonBusy(btn, true);
   btn.textContent = 'Saving…';
   try {
     const res = await adminFetch(API_URL, {
@@ -737,7 +732,7 @@ async function saveProductTask() {
     status(statusEl, isUpdate ? 'Product updated.' : `Product added as ${data.id}.`, true);
     showToast(isUpdate ? 'Product updated' : 'Product added');
     clearForm(true);
-    btn.disabled = false;
+    setButtonBusy(btn, false);
     btn.textContent = 'Save product';
     switchTab('products');
     if (!(await loadProducts(false))) showToast('Product saved. List refresh failed; refresh before editing again.');
@@ -745,7 +740,7 @@ async function saveProductTask() {
   } catch (err) {
     status(statusEl, 'Save could not be confirmed: ' + err.message + ' Check the product list before retrying.', false);
   } finally {
-    btn.disabled = false;
+    setButtonBusy(btn, false);
     btn.textContent = 'Save product';
   }
 }
@@ -778,10 +773,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     const btn = $('#connectBtn');
-    btn.disabled = true;
+    setButtonBusy(btn, true);
     btn.textContent = 'Connecting…';
     await loadProducts();
-    btn.disabled = false;
+    setButtonBusy(btn, false);
     btn.textContent = 'Connect';
   });
   $('#saveBtn').addEventListener('click', saveProduct);
@@ -835,12 +830,12 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#dashRefreshBtn').addEventListener('click', async () => {
     const btn = $('#dashRefreshBtn');
     if (btn.disabled) return;
-    btn.disabled = true;
+    setButtonBusy(btn, true);
     try {
       const ok = await loadDashboard();
       showToast(ok ? 'Dashboard refreshed' : 'Dashboard refresh failed. Try again.');
     } finally {
-      btn.disabled = false;
+      setButtonBusy(btn, false);
     }
   });
 });

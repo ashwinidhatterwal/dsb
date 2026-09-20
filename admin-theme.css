@@ -854,7 +854,19 @@ input[type=checkbox]:disabled {
   .product-smart-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
   .product-smart-actions button { width: 100%; min-width: 0; }
 }
-\n\n/* Live AI generation feedback */\n.ai-live-progress { margin: 10px 0 12px; padding: 10px 12px; border: 1px solid #365a66; border-radius: 11px; background: #142b36; }\n.ai-progress-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; color:#eaf4f6; }\n.ai-progress-head strong { font-size:13px; font-weight:700; }\n.ai-progress-head span { color:#9fb8c1; font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; }\n.ai-progress-track { position:relative; height:5px; overflow:hidden; border-radius:999px; background:#203f4c; }\n.ai-progress-track span { position:absolute; inset:0 auto 0 -35%; width:35%; border-radius:inherit; background:linear-gradient(90deg,transparent,#70c3bb,transparent); animation:ai-progress-sweep 1.15s ease-in-out infinite; }\n.ai-live-progress small { display:block; margin-top:7px; color:#9fb8c1; line-height:1.35; }\n@keyframes ai-progress-sweep { from{transform:translateX(0)} to{transform:translateX(390%)} }\n@media (prefers-reduced-motion: reduce) { .ai-progress-track span { animation-duration:2.4s; } }\n
+
+
+/* Live AI generation feedback */
+.ai-live-progress { margin: 10px 0 12px; padding: 10px 12px; border: 1px solid #365a66; border-radius: 11px; background: #142b36; }
+.ai-progress-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; color:#eaf4f6; }
+.ai-progress-head strong { font-size:13px; font-weight:700; }
+.ai-progress-head span { color:#9fb8c1; font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ai-progress-track { position:relative; height:5px; overflow:hidden; border-radius:999px; background:#203f4c; }
+.ai-progress-track span { position:absolute; inset:0 auto 0 -35%; width:35%; border-radius:inherit; background:linear-gradient(90deg,transparent,#70c3bb,transparent); animation:ai-progress-sweep 1.15s ease-in-out infinite; }
+.ai-live-progress small { display:block; margin-top:7px; color:#9fb8c1; line-height:1.35; }
+@keyframes ai-progress-sweep { from{transform:translateX(0)} to{transform:translateX(390%)} }
+@media (prefers-reduced-motion: reduce) { .ai-progress-track span { animation-duration:2.4s; } }
+
 /* Per-generation AI quality selector */
 .ai-quality-field { margin: 12px 0 10px; padding: 0; border: 0; }
 .ai-quality-field legend { margin-bottom: 7px; font-weight: 700; color: #d7e4e9; }

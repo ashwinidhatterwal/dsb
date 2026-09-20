@@ -154,9 +154,6 @@ function quickSizePickerElement() {
   overlay.addEventListener('click', e => {
     if (e.target === overlay || e.target.closest('.quick-size-close')) closeQuickSizePicker();
   });
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && overlay.classList.contains('open')) closeQuickSizePicker();
-  });
   return overlay;
 }
 function closeQuickSizePicker() {
@@ -164,6 +161,7 @@ function closeQuickSizePicker() {
   if (!overlay) return;
   overlay.classList.remove('open');
   document.body.classList.remove('quick-size-open');
+  closeDialogFocus($('.quick-size-sheet', overlay));
 }
 function openQuickSizePicker(product, card, list) {
   const overlay = quickSizePickerElement();
@@ -203,7 +201,8 @@ function openQuickSizePicker(product, card, list) {
   });
   overlay.classList.add('open');
   document.body.classList.add('quick-size-open');
-  requestAnimationFrame(() => options.querySelector('.quick-size-option')?.focus({ preventScroll:true }));
+  openDialogFocus($('.quick-size-sheet', overlay), closeQuickSizePicker);
+  options.querySelector('.quick-size-option')?.focus({ preventScroll:true });
 }
 
 async function handleCardAdd(product, delta, card, list) {
