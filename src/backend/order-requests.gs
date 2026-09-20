@@ -29,6 +29,11 @@ function findCustomerOrder_(orderId, phone) {
 function canCustomerRequestCancellation_(status) {
   return ['Pending', 'Confirmed', 'Packed'].indexOf(String(status || 'Pending')) >= 0;
 }
+function hasPendingCancellationRequest_(orderId) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ORDER_REQUESTS_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return false;
+  return rowsAsObjects_(sheet).some(r => String(r.orderid || '') === String(orderId || '') && String(r.type || '') === 'cancel' && String(r.status || 'Pending') === 'Pending');
+}
 function publicOrderRequests_(orderId) {
   let rows = [];
   try { rows = rowsAsObjects_(orderRequestSheet_()); } catch (_) { return []; }
@@ -86,10 +91,30 @@ function resolveOrderRequest_(body, actor) {
     const sheet = orderRequestSheet_(), heads = headers_(sheet), row = findRow_(sheet, 'requestid', id);
     if (!row) throw new Error('Order request not found.');
     const statusCol = heads.indexOf('status') + 1, noteCol = heads.indexOf('resolutionnote') + 1, updatedCol = heads.indexOf('updatedat') + 1;
-    if (statusCol < 1 || noteCol < 1 || updatedCol < 1) throw new Error('Order request sheet is incomplete.');
+    const typeCol = heads.indexOf('type') + 1, orderCol = heads.indexOf('orderid') + 1;
+    if ([statusCol, noteCol, updatedCol, typeCol, orderCol].some(col => col < 1)) throw new Error('Order request sheet is incomplete.');
+    const currentRequestStatus = String(sheet.getRange(row, statusCol).getValue() || 'Pending');
+    if (currentRequestStatus !== 'Pending') return { success: true, requestId: id, status: currentRequestStatus, alreadyHandled: true };
+    const requestType = String(sheet.getRange(row, typeCol).getValue() || 'support');
+    const orderId = String(sheet.getRange(row, orderCol).getValue() || '').trim();
+    let autoCancelled = false;
+    if (requestType === 'cancel' && status === 'Resolved') {
+      const orderSheet = getSheet_(ORDERS_SHEET), orderHeads = headers_(orderSheet), orderRow = findRow_(orderSheet, 'orderid', orderId);
+      if (!orderRow) throw new Error('The linked order no longer exists.');
+      const orderStatusCol = orderHeads.indexOf('status') + 1;
+      if (orderStatusCol < 1) throw new Error('Order status column is missing.');
+      const currentOrderStatus = String(orderSheet.getRange(orderRow, orderStatusCol).getValue() || 'Pending');
+      if (currentOrderStatus !== 'Cancelled') {
+        if (!canCustomerRequestCancellation_(currentOrderStatus)) throw new Error('This order can no longer be cancelled because it is ' + currentOrderStatus + '. Reject the request or contact the customer.');
+        updateOrderStatusUnlocked_(orderId, 'Cancelled');
+      }
+      autoCancelled = true;
+    }
     sheet.getRange(row, statusCol).setValue(status);
-    sheet.getRange(row, noteCol).setValue(sheetText_((note || status) + ' — ' + actor.name));
+    const defaultNote = requestType === 'cancel' && status === 'Resolved' ? 'Cancellation approved; order cancelled' : status;
+    sheet.getRange(row, noteCol).setValue(sheetText_((note || defaultNote) + ' — ' + actor.name));
     sheet.getRange(row, updatedCol).setValue(new Date());
-    return { success: true, requestId: id, status: status };
+    return { success: true, requestId: id, status: status, orderId: orderId, orderStatus: autoCancelled ? 'Cancelled' : '', autoCancelled: autoCancelled };
   });
 }
+

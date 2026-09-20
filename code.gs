@@ -994,50 +994,54 @@ function getDashboardData() {
   };
   return dashboard;
 }
+function updateOrderStatusUnlocked_(orderId, statusValue) {
+  const id = String(orderId || '').trim(),
+    status = String(statusValue || '').trim();
+  if (!id || ALLOWED_ORDER_STATUSES.indexOf(status) < 0) throw new Error('Invalid order or status.');
+  const sheet = getSheet_(ORDERS_SHEET),
+    heads = headers_(sheet),
+    row = findRow_(sheet, 'orderid', id),
+    col = heads.indexOf('status') + 1;
+  if (!row || col < 1) throw new Error('Order not found or status column missing.');
+  const oldStatus = String(sheet.getRange(row, col).getValue() || 'Pending');
+  const allowedNext = ORDER_STATUS_TRANSITIONS[oldStatus] || [];
+  if (oldStatus !== status && allowedNext.indexOf(status) < 0) throw new Error('Invalid status transition from ' + oldStatus + ' to ' + status + '.');
+  if (oldStatus !== status && status !== 'Cancelled' && hasPendingCancellationRequest_(id)) throw new Error('Handle the pending cancellation request before progressing this order.');
+  if (oldStatus === status) return {
+    success: true,
+    orderId: id,
+    status: status
+  };
+  const stock = statusStockPlan_(id, oldStatus, status);
+  const journal = transactionSheet_(),
+    data = {
+      kind: 'status',
+      orderId: id,
+      oldStatus: oldStatus,
+      newStatus: status,
+      stock: stock
+    };
+  const jr = saveTransaction_(journal, 0, 'STATUS-' + Utilities.getUuid(), 'Pending', data);
+  SpreadsheetApp.flush();
+  try {
+    applyStockPlan_(stock, true);
+    sheet.getRange(row, col).setValue(status);
+    SpreadsheetApp.flush();
+    finishTransaction_(journal, jr, data, true);
+  } catch (err) {
+    const committed = String(sheet.getRange(row, col).getValue()) === status;
+    finishTransaction_(journal, jr, data, committed);
+    if (!committed) throw new Error('Status was not changed. Please retry.');
+  }
+  return {
+    success: true,
+    orderId: id,
+    status: status
+  };
+}
 function updateOrderStatus(orderId, statusValue) {
   return withWriteLock_(function () {
-    const id = String(orderId || '').trim(),
-      status = String(statusValue || '').trim();
-    if (!id || ALLOWED_ORDER_STATUSES.indexOf(status) < 0) throw new Error('Invalid order or status.');
-    const sheet = getSheet_(ORDERS_SHEET),
-      heads = headers_(sheet),
-      row = findRow_(sheet, 'orderid', id),
-      col = heads.indexOf('status') + 1;
-    if (!row || col < 1) throw new Error('Order not found or status column missing.');
-    const oldStatus = String(sheet.getRange(row, col).getValue() || 'Pending');
-    const allowedNext = ORDER_STATUS_TRANSITIONS[oldStatus] || [];
-    if (oldStatus !== status && allowedNext.indexOf(status) < 0) throw new Error('Invalid status transition from ' + oldStatus + ' to ' + status + '.');
-    if (oldStatus === status) return {
-      success: true,
-      orderId: id,
-      status: status
-    };
-    const stock = statusStockPlan_(id, oldStatus, status);
-    const journal = transactionSheet_(),
-      data = {
-        kind: 'status',
-        orderId: id,
-        oldStatus: oldStatus,
-        newStatus: status,
-        stock: stock
-      };
-    const jr = saveTransaction_(journal, 0, 'STATUS-' + Utilities.getUuid(), 'Pending', data);
-    SpreadsheetApp.flush();
-    try {
-      applyStockPlan_(stock, true);
-      sheet.getRange(row, col).setValue(status);
-      SpreadsheetApp.flush();
-      finishTransaction_(journal, jr, data, true);
-    } catch (err) {
-      const committed = String(sheet.getRange(row, col).getValue()) === status;
-      finishTransaction_(journal, jr, data, committed);
-      if (!committed) throw new Error('Status was not changed. Please retry.');
-    }
-    return {
-      success: true,
-      orderId: id,
-      status: status
-    };
+    return updateOrderStatusUnlocked_(orderId, statusValue);
   });
 }
 function getOrderItemQuantities_(orderId) {
@@ -1214,6 +1218,11 @@ function findCustomerOrder_(orderId, phone) {
 function canCustomerRequestCancellation_(status) {
   return ['Pending', 'Confirmed', 'Packed'].indexOf(String(status || 'Pending')) >= 0;
 }
+function hasPendingCancellationRequest_(orderId) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ORDER_REQUESTS_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return false;
+  return rowsAsObjects_(sheet).some(r => String(r.orderid || '') === String(orderId || '') && String(r.type || '') === 'cancel' && String(r.status || 'Pending') === 'Pending');
+}
 function publicOrderRequests_(orderId) {
   let rows = [];
   try { rows = rowsAsObjects_(orderRequestSheet_()); } catch (_) { return []; }
@@ -1271,13 +1280,33 @@ function resolveOrderRequest_(body, actor) {
     const sheet = orderRequestSheet_(), heads = headers_(sheet), row = findRow_(sheet, 'requestid', id);
     if (!row) throw new Error('Order request not found.');
     const statusCol = heads.indexOf('status') + 1, noteCol = heads.indexOf('resolutionnote') + 1, updatedCol = heads.indexOf('updatedat') + 1;
-    if (statusCol < 1 || noteCol < 1 || updatedCol < 1) throw new Error('Order request sheet is incomplete.');
+    const typeCol = heads.indexOf('type') + 1, orderCol = heads.indexOf('orderid') + 1;
+    if ([statusCol, noteCol, updatedCol, typeCol, orderCol].some(col => col < 1)) throw new Error('Order request sheet is incomplete.');
+    const currentRequestStatus = String(sheet.getRange(row, statusCol).getValue() || 'Pending');
+    if (currentRequestStatus !== 'Pending') return { success: true, requestId: id, status: currentRequestStatus, alreadyHandled: true };
+    const requestType = String(sheet.getRange(row, typeCol).getValue() || 'support');
+    const orderId = String(sheet.getRange(row, orderCol).getValue() || '').trim();
+    let autoCancelled = false;
+    if (requestType === 'cancel' && status === 'Resolved') {
+      const orderSheet = getSheet_(ORDERS_SHEET), orderHeads = headers_(orderSheet), orderRow = findRow_(orderSheet, 'orderid', orderId);
+      if (!orderRow) throw new Error('The linked order no longer exists.');
+      const orderStatusCol = orderHeads.indexOf('status') + 1;
+      if (orderStatusCol < 1) throw new Error('Order status column is missing.');
+      const currentOrderStatus = String(orderSheet.getRange(orderRow, orderStatusCol).getValue() || 'Pending');
+      if (currentOrderStatus !== 'Cancelled') {
+        if (!canCustomerRequestCancellation_(currentOrderStatus)) throw new Error('This order can no longer be cancelled because it is ' + currentOrderStatus + '. Reject the request or contact the customer.');
+        updateOrderStatusUnlocked_(orderId, 'Cancelled');
+      }
+      autoCancelled = true;
+    }
     sheet.getRange(row, statusCol).setValue(status);
-    sheet.getRange(row, noteCol).setValue(sheetText_((note || status) + ' — ' + actor.name));
+    const defaultNote = requestType === 'cancel' && status === 'Resolved' ? 'Cancellation approved; order cancelled' : status;
+    sheet.getRange(row, noteCol).setValue(sheetText_((note || defaultNote) + ' — ' + actor.name));
     sheet.getRange(row, updatedCol).setValue(new Date());
-    return { success: true, requestId: id, status: status };
+    return { success: true, requestId: id, status: status, orderId: orderId, orderStatus: autoCancelled ? 'Cancelled' : '', autoCancelled: autoCancelled };
   });
 }
+
 
 /* checkout responsibilities. Bundled into code.gs by scripts/build.mjs. */
 function getCheckoutConfig_() {
@@ -3351,7 +3380,7 @@ function dispatchAdmin_(body, actor) {
   const action = String(body.action || '');
   assertAdminPermission_(actor, action);
   if (action === 'adminSession') return {
-    version: 15,
+    version: 16,
     name: actor.name,
     role: actor.role
   };

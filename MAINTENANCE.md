@@ -165,3 +165,6 @@ Regression command for this layer: `node scripts/check-level1.mjs`.
 - `track-order.js` sends Order ID + phone by POST; only the non-sensitive Order ID may appear in the page query string for prefill.
 - Storefront track buttons link to the page instead of embedding duplicated tracking overlays.
 - Customer cancellation/support requests remain proposals for admin review; they never directly mutate order status or inventory.
+
+## Orders workflow
+Order status lifecycle rules live in `src/backend/config.gs` and stock-safe status writes live in `src/backend/orders.gs`. Customer cancellation/support requests live in `src/backend/order-requests.gs`. Keep cancellation approval routed through `resolveOrderRequest_()` so approving a cancellation also cancels the order through the same stock-safe status path. The admin order UI is rendered in `admin.js`; payment controls remain isolated in `admin-workspace.js`.

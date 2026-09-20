@@ -18,4 +18,10 @@ assert(core.includes('track-order.html?orderId=') && !core.includes('function op
 assert(drawer.includes('goToTrackOrder(orderId)'), 'Order confirmation must open dedicated tracker');
 assert(orders.includes('Invalid status transition from') && orders.includes('orderRequestsByOrderIds_'), 'Order lifecycle/request admin feed missing');
 assert(admin.includes('ORDER_STATUS_TRANSITIONS_CLIENT') && admin.includes('orderRequestsHtml') && admin.includes('resolveOrderRequest'), 'Admin Level 3 controls missing');
+
+assert(requests.includes("requestType === 'cancel' && status === 'Resolved'") && requests.includes("updateOrderStatusUnlocked_(orderId, 'Cancelled')"), 'Approving a cancellation request must cancel the order in the same admin action');
+assert(orders.includes('function updateOrderStatusUnlocked_') && orders.includes('return updateOrderStatusUnlocked_(orderId, statusValue)'), 'Order status core must be reusable by request resolution without nested locks');
+assert(admin.includes('orderLifecycleHtml') && admin.includes('orderStatusActionsHtml') && admin.includes('Approve & cancel order'), 'Admin orders should use explicit lifecycle/actions and clear cancellation approval');
+assert(!admin.includes('data-role="statusSelect"') && !admin.includes('function orderStatusOptions'), 'Confusing status dropdown should be removed');
+assert(requests.includes('hasPendingCancellationRequest_') && orders.includes('Handle the pending cancellation request before progressing this order.'), 'Pending cancellation must block forward order progress');
 console.log('PASS: dedicated order tracking, POST privacy, support/cancellation requests, admin handling and status lifecycle.');

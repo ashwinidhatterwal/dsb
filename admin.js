@@ -80,25 +80,54 @@ const ORDER_STATUS_TRANSITIONS_CLIENT = {
   Fulfilled: [],
   Cancelled: ['Pending']
 };
-function orderStatusOptions(current) {
-  const statuses = [current, ...(ORDER_STATUS_TRANSITIONS_CLIENT[current] || [])];
-  return [...new Set(statuses)].map(st => `<option value="${escapeHtml(st)}" ${st === current ? 'selected' : ''}>${escapeHtml(st)}</option>`).join('');
+function orderLifecycleHtml(current) {
+  const stages = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Delivered', 'Fulfilled'];
+  if (current === 'Cancelled') {
+    return `<div class="order-flow cancelled-flow"><span class="order-flow-step is-current">Cancelled</span></div>`;
+  }
+  const currentIndex = stages.indexOf(current);
+  return `<div class="order-flow" aria-label="Order progress">${stages.map((stage, index) => {
+    const state = index < currentIndex ? 'is-done' : index === currentIndex ? 'is-current' : 'is-next';
+    return `<span class="order-flow-step ${state}">${escapeHtml(stage)}</span>`;
+  }).join('<span class="order-flow-arrow" aria-hidden="true">→</span>')}</div>`;
+}
+function orderStatusActionsHtml(current, hasPendingCancellation) {
+  if (hasPendingCancellation) return '<p class="order-workflow-blocked">Handle the pending cancellation request before progressing this order.</p>';
+  const next = ORDER_STATUS_TRANSITIONS_CLIENT[current] || [];
+  const progress = next.find(status => status !== 'Cancelled');
+  const canCancel = next.includes('Cancelled');
+  if (!progress && !canCancel) {
+    return current === 'Fulfilled'
+      ? '<p class="order-workflow-done">Order completed. No further status action is required.</p>'
+      : '<p class="order-workflow-done">No status actions are available.</p>';
+  }
+  return `<div class="order-status-actions">
+    ${progress ? `<button type="button" class="primary-btn order-next-action" data-order-status="${escapeHtml(progress)}">${current === 'Cancelled' ? 'Reopen as Pending' : 'Move to ' + escapeHtml(progress)}</button>` : ''}
+    ${canCancel ? '<button type="button" class="ghost-btn order-cancel-action" data-order-status="Cancelled">Cancel order</button>' : ''}
+  </div>`;
 }
 function orderRequestsHtml(order) {
   const requests = Array.isArray(order.requests) ? order.requests : [];
-  if (!requests.length) return '';
+  if (!requests.length) return '<p class="order-empty-note">No customer requests.</p>';
   return requests.map(r => {
     const pending = String(r.status || 'Pending') === 'Pending';
-    const typeLabel = r.type === 'cancel' ? 'Cancellation request' : 'Support request';
-    return `<div class="order-request-box" data-request-id="${escapeHtml(r.requestId)}"><strong>${escapeHtml(typeLabel)} · ${escapeHtml(r.status || 'Pending')}</strong>${r.message ? `<div>${escapeHtml(r.message)}</div>` : ''}<div class="hint">${escapeHtml(formatDateTime(r.date))}${r.resolutionNote ? ' · ' + escapeHtml(r.resolutionNote) : ''}</div>${pending ? `<div class="order-request-actions"><input type="text" maxlength="500" placeholder="Resolution note (optional)" aria-label="Resolution note"><button type="button" class="ghost-btn" data-request-action="Resolved">Mark handled</button><button type="button" class="ghost-btn" data-request-action="Rejected">Reject</button></div>` : ''}</div>`;
+    const isCancel = r.type === 'cancel';
+    const typeLabel = isCancel ? 'Cancellation request' : 'Support request';
+    const approveLabel = isCancel ? 'Approve & cancel order' : 'Mark handled';
+    return `<div class="order-request-box ${isCancel ? 'is-cancellation' : ''}" data-request-id="${escapeHtml(r.requestId)}">
+      <div class="order-request-heading"><strong>${escapeHtml(typeLabel)}</strong><span class="request-state ${escapeHtml(String(r.status || 'Pending').toLowerCase())}">${escapeHtml(r.status || 'Pending')}</span></div>
+      ${r.message ? `<div class="order-request-message">${escapeHtml(r.message)}</div>` : ''}
+      <div class="hint">${escapeHtml(formatDateTime(r.date))}${r.resolutionNote ? ' · ' + escapeHtml(r.resolutionNote) : ''}</div>
+      ${pending ? `<div class="order-request-actions"><input type="text" maxlength="500" placeholder="Resolution note (optional)" aria-label="Resolution note"><button type="button" class="${isCancel ? 'primary-btn' : 'ghost-btn'}" data-request-action="Resolved">${approveLabel}</button><button type="button" class="ghost-btn order-request-reject" data-request-action="Rejected">Reject request</button></div>` : ''}
+    </div>`;
   }).join('');
 }
 async function resolveOrderRequest(requestId, requestStatus, resolutionNote) {
   const res = await adminFetch(API_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({key:ADMIN_KEY, action:'resolveOrderRequest', requestId, requestStatus, resolutionNote})});
   const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  showToast('Customer request updated');
-  await loadOrders();
+  if (data.error || data.success === false) throw new Error(data.error || 'Customer request was not updated.');
+  showToast(data.autoCancelled ? 'Cancellation approved — order cancelled and stock restored' : 'Customer request updated');
+  await Promise.all([loadOrders(), loadDashboard(), data.autoCancelled ? loadProducts(false) : Promise.resolve()]);
 }
 
 async function adminFetch(url, options = {}) {
@@ -159,7 +188,7 @@ async function loadProducts(refreshRelated = true) {
   try {
     if (!ADMIN_PROFILE) {
       const profile = await adminRead('adminSession');
-      if (profile.version !== 15) throw new Error('Deploy the new code.gs version before opening this admin update.');
+      if (profile.version !== 16) throw new Error('Deploy the new code.gs version before opening this admin update.');
       ADMIN_PROFILE = profile;
       applyStaffRole();
       offerSavedDraft();
@@ -275,7 +304,7 @@ function renderOrderList() {
   list = list.slice().sort((a, b) => {
     if (sortMode === 'date-asc') return new Date(a.date) - new Date(b.date);
     if (sortMode === 'name-asc') return String(a.customername || '').localeCompare(String(b.customername || ''));
-    return new Date(b.date) - new Date(a.date); // date-desc default
+    return new Date(b.date) - new Date(a.date);
   });
   const filterKey = JSON.stringify([q, statusFilter, sortMode]);
   if (filterKey !== orderFilterKey) {
@@ -294,55 +323,65 @@ function renderOrderList() {
   wrap.innerHTML = list.map(o => {
     const st = o.status || 'Pending';
     const pillClass = st.toLowerCase();
+    const requestCount = Array.isArray(o.requests) ? o.requests.filter(r => String(r.status || 'Pending') === 'Pending').length : 0;
+    const hasPendingCancellation = Array.isArray(o.requests) && o.requests.some(r => r.type === 'cancel' && String(r.status || 'Pending') === 'Pending');
     return `
-    <div class="orow" data-id="${escapeHtml(o.orderid)}">
-      <div class="ohead">
-        <span class="oid">${escapeHtml(o.orderid)}</span>
-        <span class="odate">${escapeHtml(formatDateTime(o.date))}</span>
-      </div>
-      <div class="ocust">${escapeHtml(o.customername) || '(no name)'}</div>
-      <div class="ophone">${escapeHtml(o.phone)}${o.paymentmethod ? ` • ${escapeHtml(o.paymentmethod)}` : ''}</div>
-      ${o.address ? `<div class="oaddress">${escapeHtml(o.address)}</div>` : ''}
-      <div class="oitems">${escapeHtml(o.items)}</div>
-      ${orderPriceBreakdownHtml(o)}
-      <div class="ofoot">
+    <article class="orow order-card" data-id="${escapeHtml(o.orderid)}">
+      <header class="order-card-head">
+        <div><span class="oid">${escapeHtml(o.orderid)}</span><div class="odate">${escapeHtml(formatDateTime(o.date))}</div></div>
+        <div class="order-head-badges"><span class="status-pill ${escapeHtml(pillClass)}">${escapeHtml(st)}</span>${requestCount ? `<span class="order-request-count">${requestCount} request${requestCount === 1 ? '' : 's'}</span>` : ''}</div>
+      </header>
 
-        <span class="status-pill ${escapeHtml(pillClass)}">${escapeHtml(st)}</span>
-      </div>
-      ${orderRequestsHtml(o)}
-      <div class="order-controls" style="margin-top:8px;">
-        <select data-role="statusSelect">${orderStatusOptions(st)}</select>
-        <button class="ghost-btn" data-role="saveStatus">Update</button>
-      </div>
-      <div class="order-lifecycle-note">Next valid step only. Cancellation is available before shipping.</div>
-    </div>`;
+      <section class="order-summary-panel">
+        <div class="order-customer-block"><span class="order-section-label">Customer</span><strong class="ocust">${escapeHtml(o.customername) || '(no name)'}</strong><div class="ophone">${escapeHtml(o.phone)}${o.paymentmethod ? ` • ${escapeHtml(o.paymentmethod)}` : ''}</div>${o.address ? `<div class="oaddress">${escapeHtml(o.address)}</div>` : ''}</div>
+        <div class="order-total-block"><span class="order-section-label">Order total</span><strong>₹${(Number(o.total) || 0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</strong><span>${escapeHtml(o.paymentmethod || 'Payment method not recorded')}</span></div>
+      </section>
+
+      <details class="order-detail-section" open>
+        <summary>Items & price breakdown</summary>
+        <div class="order-detail-body"><div class="oitems">${escapeHtml(o.items)}</div>${orderPriceBreakdownHtml(o)}</div>
+      </details>
+
+      <section class="order-request-section ${hasPendingCancellation ? 'has-pending-cancellation' : ''}">
+        <div class="order-section-title"><div><span class="order-section-label">Customer requests</span><strong>Cancellation & support</strong></div></div>
+        ${orderRequestsHtml(o)}
+      </section>
+
+      <section class="order-workflow-panel">
+        <div class="order-section-title"><div><span class="order-section-label">Order progress</span><strong>What happens next</strong></div></div>
+        ${orderLifecycleHtml(st)}
+        ${orderStatusActionsHtml(st, hasPendingCancellation)}
+        <p class="order-lifecycle-note">Only valid next steps are actionable. This protects stock and order history from accidental status jumps.</p>
+      </section>
+
+      <section class="order-payment-slot" aria-label="Payment verification"></section>
+    </article>`;
   }).join('');
   if (pageCount > 1) {
     wrap.insertAdjacentHTML('beforeend', `<nav class="order-pagination" aria-label="Order pages"><button class="ghost-btn" data-order-page="prev" ${orderPage === 0 ? 'disabled' : ''}>Previous</button><span>Page ${orderPage + 1} of ${pageCount} · ${filteredCount} orders</span><button class="ghost-btn" data-order-page="next" ${orderPage === pageCount - 1 ? 'disabled' : ''}>Next</button></nav>`);
-    $('[data-order-page="prev"]', wrap).onclick = () => {
-      orderPage--;
-      loadOrders();
-    };
-    $('[data-order-page="next"]', wrap).onclick = () => {
-      orderPage++;
-      loadOrders();
-    };
+    $('[data-order-page="prev"]', wrap).onclick = () => { orderPage--; loadOrders(); };
+    $('[data-order-page="next"]', wrap).onclick = () => { orderPage++; loadOrders(); };
   }
   $$('.orow', wrap).forEach(row => {
     const orderId = row.dataset.id;
-    $('[data-role="saveStatus"]', row).addEventListener('click', () => {
-      const newStatus = $('[data-role="statusSelect"]', row).value;
-      updateOrderStatus(orderId, newStatus);
-    });
+    $$('[data-order-status]', row).forEach(button => button.addEventListener('click', () => {
+      const newStatus = button.dataset.orderStatus;
+      const prompt = newStatus === 'Cancelled' ? 'Cancel this order? Stock will be restored according to the existing order transaction logic.' : `Move this order to ${newStatus}?`;
+      if (confirm(prompt)) updateOrderStatus(orderId, newStatus);
+    }));
     $$('[data-request-action]', row).forEach(button => button.addEventListener('click', async () => {
       const box = button.closest('[data-request-id]');
       const note = $('input', box)?.value || '';
+      const isApproveCancellation = box.classList.contains('is-cancellation') && button.dataset.requestAction === 'Resolved';
+      if (isApproveCancellation && !confirm('Approve this cancellation request? The order will be cancelled immediately and stock will be restored.')) return;
       $$('button,input', box).forEach(el => el.disabled = true);
       try { await resolveOrderRequest(box.dataset.requestId, button.dataset.requestAction, note); }
       catch (err) { alert('Could not update request: ' + err.message); $$('button,input', box).forEach(el => el.disabled = false); }
     }));
+    if (ADMIN_PROFILE?.role === 'viewer') $$('[data-order-status],[data-request-action]', row).forEach(el => el.disabled = true);
   });
 }
+
 async function updateOrderStatus(orderId, newStatus) {
   if (pendingOrderUpdates.has(orderId)) return;
   pendingOrderUpdates.add(orderId);

@@ -136,50 +136,54 @@ function getDashboardData() {
   };
   return dashboard;
 }
+function updateOrderStatusUnlocked_(orderId, statusValue) {
+  const id = String(orderId || '').trim(),
+    status = String(statusValue || '').trim();
+  if (!id || ALLOWED_ORDER_STATUSES.indexOf(status) < 0) throw new Error('Invalid order or status.');
+  const sheet = getSheet_(ORDERS_SHEET),
+    heads = headers_(sheet),
+    row = findRow_(sheet, 'orderid', id),
+    col = heads.indexOf('status') + 1;
+  if (!row || col < 1) throw new Error('Order not found or status column missing.');
+  const oldStatus = String(sheet.getRange(row, col).getValue() || 'Pending');
+  const allowedNext = ORDER_STATUS_TRANSITIONS[oldStatus] || [];
+  if (oldStatus !== status && allowedNext.indexOf(status) < 0) throw new Error('Invalid status transition from ' + oldStatus + ' to ' + status + '.');
+  if (oldStatus !== status && status !== 'Cancelled' && hasPendingCancellationRequest_(id)) throw new Error('Handle the pending cancellation request before progressing this order.');
+  if (oldStatus === status) return {
+    success: true,
+    orderId: id,
+    status: status
+  };
+  const stock = statusStockPlan_(id, oldStatus, status);
+  const journal = transactionSheet_(),
+    data = {
+      kind: 'status',
+      orderId: id,
+      oldStatus: oldStatus,
+      newStatus: status,
+      stock: stock
+    };
+  const jr = saveTransaction_(journal, 0, 'STATUS-' + Utilities.getUuid(), 'Pending', data);
+  SpreadsheetApp.flush();
+  try {
+    applyStockPlan_(stock, true);
+    sheet.getRange(row, col).setValue(status);
+    SpreadsheetApp.flush();
+    finishTransaction_(journal, jr, data, true);
+  } catch (err) {
+    const committed = String(sheet.getRange(row, col).getValue()) === status;
+    finishTransaction_(journal, jr, data, committed);
+    if (!committed) throw new Error('Status was not changed. Please retry.');
+  }
+  return {
+    success: true,
+    orderId: id,
+    status: status
+  };
+}
 function updateOrderStatus(orderId, statusValue) {
   return withWriteLock_(function () {
-    const id = String(orderId || '').trim(),
-      status = String(statusValue || '').trim();
-    if (!id || ALLOWED_ORDER_STATUSES.indexOf(status) < 0) throw new Error('Invalid order or status.');
-    const sheet = getSheet_(ORDERS_SHEET),
-      heads = headers_(sheet),
-      row = findRow_(sheet, 'orderid', id),
-      col = heads.indexOf('status') + 1;
-    if (!row || col < 1) throw new Error('Order not found or status column missing.');
-    const oldStatus = String(sheet.getRange(row, col).getValue() || 'Pending');
-    const allowedNext = ORDER_STATUS_TRANSITIONS[oldStatus] || [];
-    if (oldStatus !== status && allowedNext.indexOf(status) < 0) throw new Error('Invalid status transition from ' + oldStatus + ' to ' + status + '.');
-    if (oldStatus === status) return {
-      success: true,
-      orderId: id,
-      status: status
-    };
-    const stock = statusStockPlan_(id, oldStatus, status);
-    const journal = transactionSheet_(),
-      data = {
-        kind: 'status',
-        orderId: id,
-        oldStatus: oldStatus,
-        newStatus: status,
-        stock: stock
-      };
-    const jr = saveTransaction_(journal, 0, 'STATUS-' + Utilities.getUuid(), 'Pending', data);
-    SpreadsheetApp.flush();
-    try {
-      applyStockPlan_(stock, true);
-      sheet.getRange(row, col).setValue(status);
-      SpreadsheetApp.flush();
-      finishTransaction_(journal, jr, data, true);
-    } catch (err) {
-      const committed = String(sheet.getRange(row, col).getValue()) === status;
-      finishTransaction_(journal, jr, data, committed);
-      if (!committed) throw new Error('Status was not changed. Please retry.');
-    }
-    return {
-      success: true,
-      orderId: id,
-      status: status
-    };
+    return updateOrderStatusUnlocked_(orderId, statusValue);
   });
 }
 function getOrderItemQuantities_(orderId) {

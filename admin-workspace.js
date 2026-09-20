@@ -151,8 +151,9 @@ function renderPaymentControls() {
     const box = document.createElement('div');
     box.className = 'payment-admin';
     const canVerify = ADMIN_PROFILE?.role === 'admin';
-    box.innerHTML = `<strong>Payment: ${escapeHtml(order.paymentstatus || 'Unverified')}</strong><p class="hint">${escapeHtml(order.paymentreference || 'No manual verification recorded.')}${order.paymentverifiedby ? ' · ' + escapeHtml(order.paymentverifiedby) : ''}</p>${canVerify ? '<div class="payment-fields"><select aria-label="Payment verification status"><option>Unverified</option><option>Received</option><option>Refunded</option></select><input maxlength="120" aria-label="Transaction reference or verification note" placeholder="Transaction reference / verification note"><button type="button" class="ghost-btn">Save verification</button></div><p class="hint">Check bank/cash records first. This does not charge or refund money.</p>' : ''}`;
-    row.appendChild(box);
+    box.innerHTML = `<div class="order-section-title"><div><span class="order-section-label">Payment</span><strong>Verification</strong></div></div><strong>Payment: ${escapeHtml(order.paymentstatus || 'Unverified')}</strong><p class="hint">${escapeHtml(order.paymentreference || 'No manual verification recorded.')}${order.paymentverifiedby ? ' · ' + escapeHtml(order.paymentverifiedby) : ''}</p>${canVerify ? '<div class="payment-fields"><select aria-label="Payment verification status"><option>Unverified</option><option>Received</option><option>Refunded</option></select><input maxlength="120" aria-label="Transaction reference or verification note" placeholder="Transaction reference / verification note"><button type="button" class="ghost-btn">Save verification</button></div><p class="hint">Check bank/cash records first. This does not charge or refund money.</p>' : ''}`;
+    const slot = $('.order-payment-slot', row) || row;
+    slot.appendChild(box);
     if (ADMIN_PROFILE?.role === 'viewer') $$('[data-role]', row).forEach(el => el.disabled = true);
     if (!canVerify) return;
     $('select', box).value = order.paymentstatus || 'Unverified';
