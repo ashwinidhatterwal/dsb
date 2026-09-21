@@ -189,7 +189,7 @@ async function loadProducts(refreshRelated = true) {
   try {
     if (!ADMIN_PROFILE) {
       const profile = await adminRead('adminSession');
-      if (profile.version !== 18) throw new Error('Deploy the new code.gs version before opening this admin update.');
+      if (profile.version !== 19) throw new Error('Deploy the new code.gs version before opening this admin update.');
       ADMIN_PROFILE = profile;
       applyStaffRole();
       offerSavedDraft();
@@ -504,8 +504,8 @@ function renderProductList() {
         <div class="arow-sub">${escapeHtml(p.id)} • ${escapeHtml(p.category)} • ₹${Number(p.price) || 0}${p.stockqty !== undefined && p.stockqty !== null && p.stockqty !== '' ? ` • Qty ${Number(p.stockqty) || 0}` : ''}</div>
       </div>
       <div class="arow-actions">
-        <button data-act="edit">Edit</button>
-        <button data-act="delete" class="danger" aria-label="${p.archived === 'yes' ? 'Restore' : 'Archive'} ${escapeHtml(p.name)}" title="${p.archived === 'yes' ? 'Restore' : 'Archive'}">${p.archived === 'yes' ? 'Restore' : 'Archive'}</button>
+        <button data-act="edit" class="product-icon-action" aria-label="Edit ${escapeHtml(p.name)}" title="Edit">✎</button>
+        <button data-act="delete" class="danger product-icon-action" aria-label="${p.archived === 'yes' ? 'Restore' : 'Archive'} ${escapeHtml(p.name)}" title="${p.archived === 'yes' ? 'Restore' : 'Archive'}">${p.archived === 'yes' ? '↶' : '▣'}</button>
       </div>
     </div>
   `).join('');
@@ -852,10 +852,6 @@ function switchTab(name) {
   if (name === 'archive') loadArchive();
   if (name === 'dashboard' && LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
   if (name === 'analytics' && window.DSBAdminAnalytics) window.DSBAdminAnalytics.load();
-  window.scrollTo({
-    top: 0,
-    behavior: reducedMotion() ? 'instant' : 'smooth'
-  });
 }
 
 document.addEventListener('DOMContentLoaded', () => {

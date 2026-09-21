@@ -858,14 +858,23 @@ function getAnalyticsReport_(options) {
   const currentStart = new Date(now.getTime() - days * 86400000);
   const previousStart = new Date(now.getTime() - days * 2 * 86400000);
   const events = [];
+  let trackingStart = null;
   try {
     const sheet = analyticsSheet_();
     const rows = rowsAsObjects_(sheet);
     rows.forEach(row => {
       const date = new Date(row.date);
-      if (!isNaN(date.getTime()) && date >= previousStart) events.push({ ...row, _date: date });
+      if (isNaN(date.getTime())) return;
+      if (!trackingStart || date < trackingStart) trackingStart = date;
+      if (date >= previousStart) events.push({ ...row, _date: date });
     });
   } catch (_) {}
+  // Orders come from the authoritative Orders sheet, but visitor/session metrics
+  // only exist from the moment storefront analytics was deployed. Do not mix
+  // older orders with newer visitor data or conversion can exceed 100% during
+  // the initial tracking window.
+  const currentOrderStart = trackingStart && trackingStart > currentStart ? trackingStart : currentStart;
+  const previousOrderStart = trackingStart && trackingStart > previousStart ? trackingStart : previousStart;
 
   function period(start, end) {
     const m = analyticsMetricSet_();
@@ -889,8 +898,11 @@ function getAnalyticsReport_(options) {
   const orders = rowsAsObjects_(getSheet_(ORDERS_SHEET));
   orders.forEach(order => {
     const date = new Date(order.date);
-    if (isNaN(date.getTime()) || date < previousStart) return;
-    const target = date >= currentStart ? current : previous;
+    if (isNaN(date.getTime()) || !trackingStart || date < previousOrderStart || date > now) return;
+    let target = null;
+    if (date >= currentStart && date >= currentOrderStart) target = current;
+    else if (date < currentStart && date >= previousOrderStart) target = previous;
+    if (!target) return;
     const status = String(order.status || 'Pending');
     if (status === 'Cancelled') { target.cancelled++; return; }
     target.orders++;
@@ -929,7 +941,7 @@ function getAnalyticsReport_(options) {
   });
   orders.forEach(order => {
     const date = new Date(order.date);
-    if (isNaN(date.getTime()) || date < currentStart || String(order.status || '') === 'Cancelled') return;
+    if (isNaN(date.getTime()) || !trackingStart || date < currentOrderStart || date > now || String(order.status || '') === 'Cancelled') return;
     const slot = seriesMap[analyticsDateKey_(date, tz)];
     if (!slot) return;
     slot.orders++;
@@ -960,7 +972,7 @@ function getAnalyticsReport_(options) {
     orders.forEach(order => { if (String(order.status || '') === 'Cancelled') cancelledOrderIds[String(order.orderid || '').trim()] = true; });
     rowsAsObjects_(getSheet_(ORDER_ITEMS_SHEET)).forEach(item => {
       const date = new Date(item.date);
-      if (isNaN(date.getTime()) || date < currentStart || cancelledOrderIds[String(item.orderid || '').trim()]) return;
+      if (isNaN(date.getTime()) || !trackingStart || date < currentOrderStart || date > now || cancelledOrderIds[String(item.orderid || '').trim()]) return;
       const id = String(item.productid || '').trim();
       if (!id) return;
       if (!productStats[id]) productStats[id] = { id: id, views: 0, adds: 0, sold: 0, revenue: 0 };
@@ -994,7 +1006,7 @@ function getAnalyticsReport_(options) {
   if (!insights.length) insights.push(analyticsInsight_('collecting', 'Analytics is collecting', 'Keep this running for a few days. Insights become more useful once real traffic builds up.', 'neutral', 'visitors'));
 
   const report = {
-    generatedAt: now.toISOString(), days: days, metrics: metrics, series: series, funnel: funnel,
+    generatedAt: now.toISOString(), days: days, trackingSince: trackingStart ? trackingStart.toISOString() : '', metrics: metrics, series: series, funnel: funnel,
     rates: { productToCart: analyticsPct_(current.addToCarts, current.productViews), cartToCheckout: analyticsPct_(current.checkouts, current.addToCarts), checkoutToOrder: analyticsPct_(current.orders, current.checkouts), cancellationRate: analyticsPct_(current.cancelled, current.orders + current.cancelled) },
     sources: breakdown(sourceCounts), devices: breakdown(deviceCounts), pages: breakdown(pageCounts), categories: breakdown(categoryCounts), topProducts: topProducts, insights: insights
   };
@@ -3630,7 +3642,7 @@ function dispatchAdmin_(body, actor) {
   const action = String(body.action || '');
   assertAdminPermission_(actor, action);
   if (action === 'adminSession') return {
-    version: 18,
+    version: 19,
     name: actor.name,
     role: actor.role
   };

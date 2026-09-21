@@ -95,8 +95,10 @@
   }
   function render() {
     renderKpis(); renderChart(); renderFunnel(); renderInsights(); renderProducts(); renderBreakdowns();
-    const d = new Date(report.generatedAt);
-    $a('analyticsFresh').textContent = 'Updated ' + (isNaN(d) ? 'now' : d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
+    const d = new Date(report.generatedAt), started = report.trackingSince ? new Date(report.trackingSince) : null;
+    const updated = 'Updated ' + (isNaN(d) ? 'now' : d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
+    const coverage = started && !isNaN(started) ? ' · tracking since ' + started.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : '';
+    $a('analyticsFresh').textContent = updated + coverage;
   }
   async function load(force) {
     if (loading || !API_URL || !ADMIN_KEY) return;

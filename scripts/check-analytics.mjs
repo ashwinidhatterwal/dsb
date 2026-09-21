@@ -16,9 +16,13 @@ assert(!/safeKeys[^\n]+['\"]phone['\"]/.test(client), 'Phone must never be an an
 assert(!/safeKeys[^\n]+['\"]orderId['\"]/.test(client), 'Order ID must never be an analytics property');
 assert(sourceBackend.includes("sheetText_(analyticsCleanText_"), 'Analytics text must be spreadsheet-formula safe');
 assert(sourceBackend.includes('cancelledOrderIds'), 'Cancelled orders must not count as product sales');
+
+assert(sourceBackend.includes('currentOrderStart') && sourceBackend.includes('trackingStart'), 'Order analytics must align with the actual tracking coverage window');
+assert(sourceBackend.includes('trackingSince:'), 'Analytics report should expose tracking coverage start');
+assert(adminClient.includes('tracking since'), 'Analytics UI should explain when tracking began');
 assert(http.indexOf("body.action === 'analyticsBatch'") < http.indexOf('authenticateAdmin_'), 'Public analytics batch must be routed before admin auth');
 assert(auth.includes("'adminAnalytics'"), 'Analytics report must be admin-readable');
-assert(auth.includes('version: 18'), 'Analytics backend version should be 18');
+assert(auth.includes('version: 19'), 'Analytics backend version should be 19');
 assert(backend.includes('function getAnalyticsReport_'), 'Generated code.gs is missing analytics report');
 
 const context = vm.createContext({ console });

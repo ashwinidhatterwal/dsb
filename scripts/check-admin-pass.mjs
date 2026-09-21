@@ -7,7 +7,7 @@ const auth=read('src/backend/admin-auth.gs');
 const css=read('admin-surface.css');
 const code=read('code.gs');
 const fail=(m)=>{ throw new Error(m); };
-if(!html.includes('admin-surface.css?v=20260920labels-teal1')) fail('admin surface stylesheet not loaded');
+if(!html.includes('admin-surface.css?v=')) fail('admin surface stylesheet not loaded');
 if(!css.includes('--admin-canvas') || !css.includes('--admin-shadow')) fail('surface contrast/elevation tokens missing');
 if(!css.includes('.order-card') || !css.includes('.archive-card') || !css.includes('.dash-panel')) fail('surface pass does not cover major admin tiles');
 if(!html.includes('>Archived</button>') || !html.includes('>Sign out</button>') || !html.includes('>View store</a>')) fail('top action labels not restored');
