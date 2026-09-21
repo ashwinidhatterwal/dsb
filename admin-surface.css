@@ -70,3 +70,8 @@ body{background:linear-gradient(180deg,#eef7f5 0,var(--admin-canvas) 100%)!impor
 /* Product-list edit/archive are intentionally icon-only: these two repeated
    actions are visually familiar and retain accessible labels/tooltips. */
 .arow-actions .product-icon-action{width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important;padding:0!important;display:grid;place-items:center;font-size:21px;line-height:1;font-weight:800}
+
+/* Performance: skip layout/paint work for long off-screen admin lists. */
+@supports (content-visibility:auto){
+  .arow,.order-card,.archive-card{content-visibility:auto;contain-intrinsic-size:auto 180px}
+}

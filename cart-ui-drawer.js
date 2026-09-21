@@ -61,7 +61,7 @@ function renderCartDrawer() {
     qty
   }) => `
             <div class="cart-item" data-id="${escapeHtml(product.id)}">
-              <img src="${escapeHtml(productImageUrl(product.image, 160))}" decoding="async" alt="${escapeHtml(product.name)}">
+              <img src="${escapeHtml(productImageUrl(product.image, 160))}" loading="lazy" decoding="async" alt="${escapeHtml(product.name)}">
               <div class="ci-info">
                 <div class="ci-name">${escapeHtml(product.name)}</div>
                 <div class="ci-id">${product.size ? `<span>Size: ${escapeHtml(product.size)}</span> · ` : ''}${money(product.price)} each</div>

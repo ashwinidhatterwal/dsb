@@ -192,3 +192,19 @@ Storefront analytics is intentionally first-party, anonymous and batched. `store
 Backend analytics lives in `src/backend/analytics.gs`; `code.gs` is generated. The private `AnalyticsEvents` sheet is created automatically on first tracked activity and stores hashed anonymous visitor/session keys. The admin report is rendered by `admin-analytics.js` and `admin-analytics.css` inside the dedicated Analytics view opened from the top-left three-dot menu.
 
 If analytics logic changes, run `node scripts/check-analytics.mjs` plus the full regression suite. Keep collection best-effort: analytics failures must never block cart, checkout, orders, or page navigation.
+
+
+## Step 2 QA hardening (2026-09-21)
+- Analytics queue entries carry stable `qid` values so an in-flight flush cannot overwrite newer queued events.
+- Analytics `Refresh` sends `force: true`; the backend bypasses its short report cache and commerce/event writes invalidate analytics report caches.
+- `Visitor conversion` is based on unique tracked visitors with a completed-order event, never authoritative order count divided by visitors. Orders/revenue remain authoritative from Sheets.
+- Funnel/source/device rates use deduplicated sessions, and product cart rate uses unique viewers who added to cart.
+- Backend/admin API version: 20.
+
+## Performance guardrails
+
+- Keep catalogue/product data on the critical path; defer reviews, offers, analytics flushing and service-worker registration.
+- Informational pages use `info-page.js` so the full cart/checkout UI is loaded only when Cart is opened.
+- Keep storefront images responsive/lazy unless they are the first visible product image.
+- `scripts/check-performance.mjs` enforces initial local JS/CSS budgets and critical-path rules. Run it before publishing performance-related changes.
+- Do not remove `content-visibility` containment from long storefront/admin lists without measuring the replacement.

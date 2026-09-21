@@ -189,7 +189,7 @@ async function loadProducts(refreshRelated = true) {
   try {
     if (!ADMIN_PROFILE) {
       const profile = await adminRead('adminSession');
-      if (profile.version !== 19) throw new Error('Deploy the new code.gs version before opening this admin update.');
+      if (profile.version !== 20) throw new Error('Deploy the new code.gs version before opening this admin update.');
       ADMIN_PROFILE = profile;
       applyStaffRole();
       offerSavedDraft();
@@ -484,7 +484,7 @@ function renderProductList() {
       const top = $('#productsPagerTop');
       top.scrollIntoView({
         block: 'start',
-        behavior: reducedMotion() ? 'instant' : 'smooth'
+        behavior: reducedMotion() ? 'auto' : 'smooth'
       });
       top.querySelector('[aria-current="page"]').focus({
         preventScroll: true
@@ -562,7 +562,7 @@ function fillForm(p) {
   switchTab('add');
   window.scrollTo({
     top: 0,
-    behavior: reducedMotion() ? 'instant' : 'smooth'
+    behavior: reducedMotion() ? 'auto' : 'smooth'
   });
 }
 
@@ -852,6 +852,10 @@ function switchTab(name) {
   if (name === 'archive') loadArchive();
   if (name === 'dashboard' && LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
   if (name === 'analytics' && window.DSBAdminAnalytics) window.DSBAdminAnalytics.load();
+  window.scrollTo({
+    top: 0,
+    behavior: reducedMotion() ? 'auto' : 'smooth'
+  });
 }
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -38,7 +38,7 @@
   function chartValues() {
     const meta = metricMeta[focus];
     if (focus === 'conversion') {
-      return report.series.map(x => ({ label: x.label, value: x.visitors ? x.orders * 100 / x.visitors : 0 }));
+      return report.series.map(x => ({ label: x.label, value: x.visitors ? x.convertedVisitors * 100 / x.visitors : 0 }));
     }
     return report.series.map(x => ({ label: x.label, value: Number(x[meta.series]) || 0 }));
   }
@@ -107,7 +107,7 @@
     $a('analyticsStatus').hidden = false; $a('analyticsContent').hidden = true;
     $a('analyticsStatus').textContent = 'Loading analytics…';
     try {
-      report = await adminRead('adminAnalytics', { days: Number($a('analyticsRange').value) || 30 });
+      report = await adminRead('adminAnalytics', { days: Number($a('analyticsRange').value) || 30, force: !!force });
       if (!report?.metrics) throw new Error('Invalid analytics response');
       $a('analyticsStatus').hidden = true; $a('analyticsContent').hidden = false;
       render();
@@ -126,7 +126,7 @@
   function setFocus(key) {
     if (!metricMeta[key]) return;
     focus = key; renderKpis(); renderChart();
-    $a('analyticsTrendPanel')?.scrollIntoView({ behavior: reducedMotion() ? 'instant' : 'smooth', block: 'nearest' });
+    $a('analyticsTrendPanel')?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
   }
   function bindMenu() {
     const btn = $a('adminMoreBtn'), menu = $a('adminMoreMenu');

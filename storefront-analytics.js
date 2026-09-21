@@ -63,7 +63,7 @@
   function readQueue() {
     try {
       const parsed = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
-      return Array.isArray(parsed) ? parsed.slice(-MAX_QUEUE) : [];
+      return Array.isArray(parsed) ? parsed.slice(-MAX_QUEUE).map(item => ({ ...item, qid: item?.qid || randomId() })) : [];
     } catch (_) { return []; }
   }
   function writeQueue(queue) {
@@ -84,6 +84,9 @@
     if (!queue.length) return;
     flushing = true;
     const chunk = queue.slice(0, FLUSH_SIZE);
+    // Persist queue IDs before sending so events added while this request is in
+    // flight can be preserved instead of being overwritten by an old snapshot.
+    writeQueue(queue);
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -93,7 +96,10 @@
       });
       if (!response.ok) throw new Error('analytics http ' + response.status);
       const data = await response.json();
-      if (data && data.success !== false) writeQueue(queue.slice(chunk.length));
+      if (data && data.success !== false && !data.busy && !data.throttled) {
+        const sent = new Set(chunk.map(item => item.qid));
+        writeQueue(readQueue().filter(item => !sent.has(item.qid)));
+      }
     } catch (_) {
       // Analytics is intentionally best-effort. It must never interrupt shopping.
     } finally {
@@ -108,7 +114,7 @@
       if (typeof window.plausible === 'function') window.plausible(name, { props: data });
       else if (typeof window.gtag === 'function') window.gtag('event', name, data);
       const queue = readQueue();
-      queue.push({ name, ts: new Date().toISOString(), path: location.pathname, trafficSource: trafficSource(), device: deviceType(), props: data });
+      queue.push({ qid: randomId(), name, ts: new Date().toISOString(), path: location.pathname, trafficSource: trafficSource(), device: deviceType(), props: data });
       writeQueue(queue);
       document.dispatchEvent(new CustomEvent('dsb:analytics', { detail: { name, props: data } }));
       if (queue.length >= FLUSH_SIZE) flush(); else scheduleFlush();

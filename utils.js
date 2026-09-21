@@ -162,6 +162,15 @@ function newCheckoutId() {
   const h = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
+function runWhenIdle(task, timeout = 1600) {
+  if (typeof task !== 'function') return;
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => task(), { timeout });
+  } else {
+    setTimeout(task, Math.min(timeout, 900));
+  }
+}
+
 function productImageUrl(src, width) {
   try {
     const url = new URL(src, location.href);

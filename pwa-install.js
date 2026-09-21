@@ -121,9 +121,15 @@
 
   // Register immediately instead of waiting for window.load, then wait for readiness.
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').then(function () {
-      return navigator.serviceWorker.ready;
-    }).catch(function () {});
+    // Registration is non-critical for the first paint. Delay it until the
+    // page has loaded so it cannot compete with catalogue/images on mobile.
+    const registerWorker = function () {
+      const run = function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); };
+      if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 2500 });
+      else setTimeout(run, 900);
+    };
+    if (document.readyState === 'complete') registerWorker();
+    else window.addEventListener('load', registerWorker, { once: true });
   }
 
   // Offer the slim dismissible prompt on the first visit, once per tab session.

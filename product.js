@@ -40,9 +40,9 @@ async function init() {
     return;
   }
   try {
-    // Ratings are optional decoration; they must never prevent the actual
-    // product from loading if an older cached shared script is present.
-    const reviewsPromise = typeof loadReviewSummaries === 'function' ? loadReviewSummaries().catch(() => ({})) : Promise.resolve({});
+    // Product/catalog data is critical. Cross-product rating summaries are
+    // decoration and are deferred so they cannot contend with the first
+    // product request on a cold mobile connection.
     await loadAllProducts();
     const product = ALL_PRODUCTS.find(p => String(p.id).trim() === id);
     if (!product) {
@@ -61,8 +61,10 @@ async function init() {
     renderRelated(product);
     renderRecentlyViewedOnProduct(product);
     loadReviews(product.id);
-    reviewsPromise.then(() => {
-      if (CURRENT_PRODUCT && CURRENT_PRODUCT.id === product.id) updateVisibleRatings();
+    if (typeof loadReviewSummaries === 'function') runWhenIdle(() => {
+      loadReviewSummaries().then(() => {
+        if (CURRENT_PRODUCT && CURRENT_PRODUCT.id === product.id) updateVisibleRatings();
+      }).catch(() => {});
     });
   } catch (err) {
     console.error('Product page failed to initialise', err);
@@ -304,7 +306,7 @@ function bindGallerySwipe() {
   track.setAttribute('aria-label', 'Product photos. Use left and right arrow keys.');
   const goTo = i => track.scrollTo({
     left: Math.max(0, Math.min(slides.length - 1, i)) * track.clientWidth,
-    behavior: prefersReducedMotion() ? 'instant' : 'smooth'
+    behavior: prefersReducedMotion() ? 'auto' : 'smooth'
   });
   dots.forEach((dot, i) => dot.addEventListener('click', () => goTo(i)));
   track.addEventListener('keydown', e => {

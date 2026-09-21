@@ -1,5 +1,7 @@
 // Installation support only. Product, stock, checkout and page requests stay
-// network-backed; do not download an unused precache or imply offline checkout.
+// network-backed; the service worker deliberately does not proxy normal GETs.
+// A no-op fetch listener preserves installability without adding a fetch()
+// promise hop to every same-origin request.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
@@ -8,7 +10,4 @@ self.addEventListener('activate', event => {
     await self.clients.claim();
   })());
 });
-self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
-  if (new URL(event.request.url).origin === self.location.origin) event.respondWith(fetch(event.request));
-});
+self.addEventListener('fetch', () => {});

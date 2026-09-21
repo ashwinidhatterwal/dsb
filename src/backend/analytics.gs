@@ -72,6 +72,7 @@ function recordAnalyticsBatch_(body) {
   try {
     const sheet = analyticsSheet_();
     sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    invalidateAnalyticsCaches_();
   } finally {
     lock.releaseLock();
   }
@@ -98,7 +99,7 @@ function getAnalyticsReport_(options) {
   const daysRaw = Number(options.days) || 30;
   const days = [7, 30, 90].indexOf(daysRaw) >= 0 ? daysRaw : 30;
   const cacheKey = ANALYTICS_REPORT_CACHE_KEY + ':' + days;
-  const cached = cacheGetJson_(cacheKey);
+  const cached = options.force ? null : cacheGetJson_(cacheKey);
   if (cached) return cached;
   const now = new Date();
   const tz = Session.getScriptTimeZone();
@@ -125,18 +126,32 @@ function getAnalyticsReport_(options) {
 
   function period(start, end) {
     const m = analyticsMetricSet_();
-    const visitors = {}, sessions = {};
+    const visitors = {}, sessions = {}, convertedVisitors = {}, cartSessions = {}, checkoutSessions = {}, orderSessions = {};
     events.forEach(row => {
       if (row._date < start || row._date >= end) return;
       if (row.visitor) visitors[row.visitor] = true;
       if (row.session) sessions[row.session] = true;
       if (row.event === 'page_view') m.pageViews++;
       if (row.event === 'product_view') m.productViews++;
-      if (row.event === 'add_to_cart') m.addToCarts++;
-      if (row.event === 'begin_checkout') m.checkouts++;
+      if (row.event === 'add_to_cart') {
+        m.addToCarts++;
+        if (row.session) cartSessions[row.session] = true;
+      }
+      if (row.event === 'begin_checkout') {
+        m.checkouts++;
+        if (row.session) checkoutSessions[row.session] = true;
+      }
+      if (row.event === 'order_completed') {
+        if (row.visitor) convertedVisitors[row.visitor] = true;
+        if (row.session) orderSessions[row.session] = true;
+      }
     });
     m.visitors = Object.keys(visitors).length;
     m.sessions = Object.keys(sessions).length;
+    m.convertedVisitors = Object.keys(convertedVisitors).length;
+    m.cartSessions = Object.keys(cartSessions).length;
+    m.checkoutSessions = Object.keys(checkoutSessions).length;
+    m.orderSessions = Object.keys(orderSessions).length;
     return m;
   }
   const current = period(currentStart, new Date(now.getTime() + 1000));
@@ -166,14 +181,14 @@ function getAnalyticsReport_(options) {
     checkouts: { value: current.checkouts, delta: analyticsDelta_(current.checkouts, previous.checkouts) },
     orders: { value: current.orders, delta: analyticsDelta_(current.orders, previous.orders) },
     revenue: { value: current.revenue, delta: analyticsDelta_(current.revenue, previous.revenue) },
-    conversion: { value: analyticsPct_(current.orders, current.visitors), delta: analyticsDelta_(analyticsPct_(current.orders, current.visitors), analyticsPct_(previous.orders, previous.visitors)) }
+    conversion: { value: analyticsPct_(current.convertedVisitors, current.visitors), delta: analyticsDelta_(analyticsPct_(current.convertedVisitors, current.visitors), analyticsPct_(previous.convertedVisitors, previous.visitors)) }
   };
 
   const seriesMap = {};
   for (let i = days - 1; i >= 0; i--) {
     const date = new Date(now.getTime() - i * 86400000);
     const key = analyticsDateKey_(date, tz);
-    seriesMap[key] = { key: key, label: Utilities.formatDate(date, tz, days <= 7 ? 'EEE' : 'dd MMM'), visitors: {}, sessions: {}, pageViews: 0, productViews: 0, addToCarts: 0, checkouts: 0, orders: 0, revenue: 0 };
+    seriesMap[key] = { key: key, label: Utilities.formatDate(date, tz, days <= 7 ? 'EEE' : 'dd MMM'), visitors: {}, sessions: {}, convertedVisitors: {}, pageViews: 0, productViews: 0, addToCarts: 0, checkouts: 0, orders: 0, revenue: 0 };
   }
   events.forEach(row => {
     if (row._date < currentStart) return;
@@ -185,6 +200,7 @@ function getAnalyticsReport_(options) {
     if (row.event === 'product_view') slot.productViews++;
     if (row.event === 'add_to_cart') slot.addToCarts++;
     if (row.event === 'begin_checkout') slot.checkouts++;
+    if (row.event === 'order_completed' && row.visitor) slot.convertedVisitors[row.visitor] = true;
   });
   orders.forEach(order => {
     const date = new Date(order.date);
@@ -196,24 +212,37 @@ function getAnalyticsReport_(options) {
   });
   const series = Object.keys(seriesMap).sort().map(key => {
     const x = seriesMap[key];
-    return { key: x.key, label: x.label, visitors: Object.keys(x.visitors).length, sessions: Object.keys(x.sessions).length, pageViews: x.pageViews, productViews: x.productViews, addToCarts: x.addToCarts, checkouts: x.checkouts, orders: x.orders, revenue: roundMoney_(x.revenue) };
+    return { key: x.key, label: x.label, visitors: Object.keys(x.visitors).length, sessions: Object.keys(x.sessions).length, convertedVisitors: Object.keys(x.convertedVisitors).length, pageViews: x.pageViews, productViews: x.productViews, addToCarts: x.addToCarts, checkouts: x.checkouts, orders: x.orders, revenue: roundMoney_(x.revenue) };
   });
 
-  const sourceCounts = {}, deviceCounts = {}, pageCounts = {}, categoryCounts = {}, productStats = {};
+  const sourceSessions = {}, deviceSessions = {}, pageCounts = {}, categoryCounts = {}, productStats = {};
   events.forEach(row => {
     if (row._date < currentStart) return;
     if (row.event === 'page_view') {
-      const source = String(row.source || 'Direct'); sourceCounts[source] = (sourceCounts[source] || 0) + 1;
-      const device = String(row.device || 'Unknown'); deviceCounts[device] = (deviceCounts[device] || 0) + 1;
+      const source = String(row.source || 'Direct'), device = String(row.device || 'Unknown');
+      if (!sourceSessions[source]) sourceSessions[source] = {};
+      if (!deviceSessions[device]) deviceSessions[device] = {};
+      if (row.session) {
+        sourceSessions[source][row.session] = true;
+        deviceSessions[device][row.session] = true;
+      }
       const path = String(row.path || '/'); pageCounts[path] = (pageCounts[path] || 0) + 1;
     }
     if (row.event === 'product_view' && row.category) categoryCounts[row.category] = (categoryCounts[row.category] || 0) + 1;
     const id = String(row.productid || '').trim();
     if (!id) return;
-    if (!productStats[id]) productStats[id] = { id: id, views: 0, adds: 0, sold: 0, revenue: 0 };
-    if (row.event === 'product_view') productStats[id].views++;
-    if (row.event === 'add_to_cart') productStats[id].adds++;
+    if (!productStats[id]) productStats[id] = { id: id, views: 0, adds: 0, sold: 0, revenue: 0, viewVisitors: {}, addVisitors: {} };
+    if (row.event === 'product_view') {
+      productStats[id].views++;
+      if (row.visitor) productStats[id].viewVisitors[row.visitor] = true;
+    }
+    if (row.event === 'add_to_cart') {
+      productStats[id].adds++;
+      if (row.visitor) productStats[id].addVisitors[row.visitor] = true;
+    }
   });
+  const sourceCounts = Object.fromEntries(Object.entries(sourceSessions).map(([name, sessions]) => [name, Object.keys(sessions).length]));
+  const deviceCounts = Object.fromEntries(Object.entries(deviceSessions).map(([name, sessions]) => [name, Object.keys(sessions).length]));
   try {
     const cancelledOrderIds = {};
     orders.forEach(order => { if (String(order.status || '') === 'Cancelled') cancelledOrderIds[String(order.orderid || '').trim()] = true; });
@@ -222,7 +251,7 @@ function getAnalyticsReport_(options) {
       if (isNaN(date.getTime()) || !trackingStart || date < currentOrderStart || date > now || cancelledOrderIds[String(item.orderid || '').trim()]) return;
       const id = String(item.productid || '').trim();
       if (!id) return;
-      if (!productStats[id]) productStats[id] = { id: id, views: 0, adds: 0, sold: 0, revenue: 0 };
+      if (!productStats[id]) productStats[id] = { id: id, views: 0, adds: 0, sold: 0, revenue: 0, viewVisitors: {}, addVisitors: {} };
       const qty = Math.max(0, safeNumber_(item.qty, 0));
       productStats[id].sold += qty;
       productStats[id].revenue += Math.max(0, safeNumber_(item.linerevenue, safeNumber_(item.unitprice, 0) * qty));
@@ -231,16 +260,17 @@ function getAnalyticsReport_(options) {
   const productNames = {};
   try { rowsAsObjects_(getSheet_(PRODUCTS_SHEET)).forEach(p => productNames[String(p.id || '')] = String(p.name || p.id || '')); } catch (_) {}
   const topProducts = Object.keys(productStats).map(id => {
-    const p = productStats[id];
-    return { id: id, name: productNames[id] || id, views: p.views, adds: p.adds, cartRate: analyticsPct_(p.adds, p.views), sold: p.sold, revenue: roundMoney_(p.revenue), score: p.views + p.adds * 3 + p.sold * 6 };
+    const p = productStats[id], viewers = Object.keys(p.viewVisitors || {}), adders = p.addVisitors || {};
+    const viewerAdds = viewers.reduce((count, visitor) => count + (adders[visitor] ? 1 : 0), 0);
+    return { id: id, name: productNames[id] || id, views: p.views, adds: p.adds, cartRate: analyticsPct_(viewerAdds, viewers.length), sold: p.sold, revenue: roundMoney_(p.revenue), score: p.views + p.adds * 3 + p.sold * 6 };
   }).sort((a, b) => b.score - a.score || b.revenue - a.revenue).slice(0, 12);
   const breakdown = map => Object.keys(map).map(name => ({ name: name, value: map[name] })).sort((a, b) => b.value - a.value).slice(0, 10);
 
   const funnel = [
-    { key: 'productViews', label: 'Product views', value: current.productViews },
-    { key: 'addToCarts', label: 'Added to cart', value: current.addToCarts },
-    { key: 'checkouts', label: 'Checkout', value: current.checkouts },
-    { key: 'orders', label: 'Orders', value: current.orders }
+    { key: 'sessions', label: 'Sessions', value: current.sessions },
+    { key: 'addToCarts', label: 'Cart sessions', value: current.cartSessions },
+    { key: 'checkouts', label: 'Checkout sessions', value: current.checkoutSessions },
+    { key: 'conversion', label: 'Completed sessions', value: current.orderSessions }
   ];
   const insights = [];
   const mobile = Number(deviceCounts.Mobile || 0), totalDevice = Object.values(deviceCounts).reduce((a, b) => a + b, 0);
@@ -254,7 +284,7 @@ function getAnalyticsReport_(options) {
 
   const report = {
     generatedAt: now.toISOString(), days: days, trackingSince: trackingStart ? trackingStart.toISOString() : '', metrics: metrics, series: series, funnel: funnel,
-    rates: { productToCart: analyticsPct_(current.addToCarts, current.productViews), cartToCheckout: analyticsPct_(current.checkouts, current.addToCarts), checkoutToOrder: analyticsPct_(current.orders, current.checkouts), cancellationRate: analyticsPct_(current.cancelled, current.orders + current.cancelled) },
+    rates: { sessionToCart: analyticsPct_(current.cartSessions, current.sessions), cartToCheckout: analyticsPct_(current.checkoutSessions, current.cartSessions), checkoutToOrder: analyticsPct_(current.orderSessions, current.checkoutSessions), cancellationRate: analyticsPct_(current.cancelled, current.orders + current.cancelled) },
     sources: breakdown(sourceCounts), devices: breakdown(deviceCounts), pages: breakdown(pageCounts), categories: breakdown(categoryCounts), topProducts: topProducts, insights: insights
   };
   cachePutJson_(cacheKey, report, ANALYTICS_REPORT_CACHE_TTL);

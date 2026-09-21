@@ -53,10 +53,14 @@ function cacheRemove_(key) {
     cache.removeAll(keys);
   } catch (_) {/* Checkout always validates inventory directly from the sheet. */}
 }
+function invalidateAnalyticsCaches_() {
+  [7, 30, 90].forEach(days => cacheRemove_(ANALYTICS_REPORT_CACHE_KEY + ':' + days));
+}
 function invalidatePublicCaches_() {
   cacheRemove_(CATALOG_CACHE_KEY);
   cacheRemove_(REVIEWS_CACHE_KEY);
   cacheRemove_(REVIEW_SUMMARY_CACHE_KEY);
   cacheRemove_(PROMOS_CACHE_KEY);
   cacheRemove_(DASHBOARD_CACHE_KEY);
+  invalidateAnalyticsCaches_();
 }

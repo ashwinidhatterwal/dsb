@@ -462,6 +462,12 @@ a{
   color: var(--indigo-soft);
   font-family: var(--font-utility);
 }
+
+/* Performance: large storefront grids can contain hundreds of products over
+   a session. Let the browser skip off-screen card layout/paint work. */
+@supports (content-visibility:auto){
+  .grid>.card{content-visibility:auto;contain-intrinsic-size:auto 360px}
+}
 /* ---------- Overlays (cart drawer, search) ---------- */
 .overlay{
   position:fixed;

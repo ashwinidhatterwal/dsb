@@ -34,7 +34,7 @@
 
 <!-- ===== Slim sticky bar: search + cart ONLY ===== -->
 <div class="stickybar solid" id="stickyBar">
-  <a class="brandmark" href="index.html"><img class="glyph" src="icon-192.png" alt="Suhag Bhandar"><span class="hide-sm">Suhag Bhandar</span></a>
+  <a class="brandmark" href="index.html"><img class="glyph" src="favicon-96.png" width="48" height="48" decoding="async" alt="Suhag Bhandar"><span class="hide-sm">Suhag Bhandar</span></a>
   <button class="searchwrap text-left" id="searchTrigger" >
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     <span class="search-placeholder">Search the shop…</span>
@@ -125,26 +125,12 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="config.js?v=20260914checkout"></script>
-<script src="storefront-analytics.js?v=20260921analytics1"></script>
+<script src="storefront-analytics.js?v=20260921step2qa1"></script>
 <script src="i18n.js?v=20260914checkout"></script>
 <script src="utils.js?v=20260914checkout"></script>
 <script src="cart.js?v=20260914checkout"></script>
-<script src="seo.js?v=20260914checkout"></script>
 <script src="products-data.js?v=20260914checkout"></script>
-<script src="render-helpers.js?v=20260918quickadd"></script>
-<script src="cart-ui-core.js?v=20260920trackpage"></script>
-<script src="cart-ui-drawer.js?v=20260918maintain"></script>
-<script src="cart-ui-checkout.js?v=20260918maintain"></script>
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    $('#searchTrigger').addEventListener('click', () => { location.href = 'index.html?search=1'; });
-    $('#cartTrigger').addEventListener('click', openCart);
-    $('#cartOverlay').addEventListener('click', (e) => { if (e.target.id === 'cartOverlay') closeCart(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCart(); });
-    updateCartBadge();
-    initWhatsAppFloat();
-  });
-</script>
+<script src="info-page.js?v=20260921perf1"></script>
 <script src="pwa-install.js?v=20260914checkout" defer></script>
 </body>
 </html>

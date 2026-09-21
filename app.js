@@ -27,9 +27,9 @@ function renderSkeletonGrid(container, count) {
   `).join('');
 }
 async function loadProductsForShop() {
-  // Products drive the whole page and shouldn't wait on reviews; review
-  // summaries are fetched in parallel and just re-drawn in once they land.
-  const reviewsPromise = loadReviewSummaries();
+  // Catalogue data is the critical request. Reviews and offers are useful but
+  // non-critical, so do not let them compete with the product request on a
+  // cold mobile connection / Apps Script startup.
   try {
     await loadAllProducts();
   } catch (err) {
@@ -45,10 +45,12 @@ async function loadProductsForShop() {
   renderCategoryRail();
   renderGrid();
   renderHomeCarousels();
-  reviewsPromise.then(() => {
-    updateVisibleRatings();
-    const rail = $('#popularPicksRail');
-    if (rail && !rail.dataset.engaged && rail.scrollLeft === 0) renderCarousel('popularPicksSection', 'popularPicksRail', popularProducts(10));
+  runWhenIdle(() => {
+    loadReviewSummaries().then(() => {
+      updateVisibleRatings();
+      const rail = $('#popularPicksRail');
+      if (rail && !rail.dataset.engaged && rail.scrollLeft === 0) renderCarousel('popularPicksSection', 'popularPicksRail', popularProducts(10));
+    });
   });
   if ($('#searchOverlay')?.classList.contains('open')) renderSearchResults();
   initScrollReveal();
@@ -367,7 +369,7 @@ function initUI() {
         event.preventDefault();
         rail.scrollBy({
           left: (event.key === 'ArrowRight' ? 1 : -1) * rail.clientWidth * .8,
-          behavior: prefersReducedMotion() ? 'instant' : 'smooth'
+          behavior: prefersReducedMotion() ? 'auto' : 'smooth'
         });
       }
     });
@@ -446,16 +448,17 @@ document.addEventListener('dsb:catalogchange', () => {
     const next = Array.from(document.querySelectorAll('#productGrid .card')).find(c => c.dataset.id === id);
     if (next) window.scrollBy({
       top: next.getBoundingClientRect().top - top,
-      behavior: 'instant'
+      behavior: 'auto'
     });
   });
 });
 
 // Offers load independently of the catalogue and never delay shopping.
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
   if (!CONFIG.SHEET_API_URL) return;
-  try {
-    const promos = await loadPublicPromos();
+  runWhenIdle(async () => {
+    try {
+      const promos = await loadPublicPromos();
     if (!Array.isArray(promos) || !promos.length) return;
     const section = document.createElement('section');
     section.className = 'shop-offers';
@@ -472,5 +475,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         showToast('Use code ' + b.dataset.offer + ' at checkout');
       }
     });
-  } catch (_) {}
+    } catch (_) {}
+  }, 2200);
 });
