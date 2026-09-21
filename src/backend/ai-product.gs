@@ -12,11 +12,9 @@
  */
 function generateAiProductDraft_(body, actor) {
   const startedAt = Date.now();
-  const config = aiProviderConfig_();
-  const requestedReasoningEffort = sanitizeAiReasoningEffort_(body && body.reasoningEffort);
+  const config = aiProviderConfig_(body && body.modelConfigId);
+  const requestedReasoningEffort = sanitizeAiReasoningEffort_(body && body.reasoningEffort, config.supportedEfforts);
   if (requestedReasoningEffort) config.reasoningEffort = requestedReasoningEffort;
-  const requestedModel = sanitizeAiRequestedModel_(body && body.requestedModel);
-  if (requestedModel && config.isGemini) config.model = requestedModel;
   rateLimit_('ai-product:' + String(actor && actor.name || 'admin'), 30, 3600);
 
   const imageUrl = String(body.imageUrl || '').trim();
@@ -32,6 +30,7 @@ function generateAiProductDraft_(body, actor) {
   const imageUrls = [];
   if (imageUrl) imageUrls.push(imageUrl);
   referenceUrls.forEach(function(url) { imageUrls.push(url); });
+  if (imageUrls.length && config.vision === false) throw new Error('The selected AI model is configured without vision support. Choose a vision-capable model or remove the photos.');
 
   const result = config.apiType === 'chat_completions'
     ? callAiChatCompletions_(config, prompt, imageUrls)
@@ -55,51 +54,54 @@ function generateAiProductDraft_(body, actor) {
   };
 }
 
-function sanitizeAiReasoningEffort_(value) {
+function sanitizeAiReasoningEffort_(value, supported) {
   const effort = String(value || '').trim().toLowerCase();
-  return /^(low|medium|high)$/.test(effort) ? effort : '';
+  if (AI_EFFORT_VALUES.indexOf(effort) === -1) return '';
+  if (Array.isArray(supported) && supported.length && supported.indexOf(effort) === -1) return '';
+  return effort;
 }
 
-function sanitizeAiRequestedModel_(value) {
-  const model = String(value || '').trim().toLowerCase();
-  const allowed = ['gemini-3.8-flash', 'gemini-3-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
-  return allowed.indexOf(model) !== -1 ? model : '';
-}
+function aiProviderConfig_(modelConfigId) {
+  const selected = aiConfiguredProvider_(modelConfigId);
+  if (selected) return selected;
 
-function aiProviderConfig_() {
+  const configured = aiPublicModels_();
+  if (modelConfigId && modelConfigId !== 'legacy') throw new Error('The selected AI model is no longer available. Refresh AI configuration.');
+  if (!modelConfigId && configured.length && configured[0].configId !== 'legacy') {
+    const first = aiConfiguredProvider_(configured[0].configId);
+    if (first) return first;
+  }
+
+  // Backward-compatible fallback for existing deployments that still use the
+  // original Script Properties instead of the new AI Configuration page.
   const apiKey = String(secret_('AI_API_KEY', secret_('OPENAI_API_KEY', '')) || '').trim();
-  if (!apiKey) throw new Error('AI autofill is not configured. Add AI_API_KEY (or OPENAI_API_KEY) in Apps Script > Project settings > Script properties.');
-
+  if (!apiKey) throw new Error('AI is not configured. Add a connection in Admin → AI Configuration.');
   const baseUrl = String(secret_('AI_BASE_URL', 'https://api.openai.com/v1') || '').trim().replace(/\/+$/, '');
   if (!/^https:\/\//i.test(baseUrl)) throw new Error('AI_BASE_URL must be an HTTPS URL.');
-
   const model = String(secret_('AI_MODEL', secret_('OPENAI_MODEL', 'gpt-5.6-luna')) || '').trim();
-  if (!model) throw new Error('AI_MODEL is empty. Set a model id in Apps Script Script Properties.');
-
-  let apiType = String(secret_('AI_API_TYPE', 'responses') || '').trim().toLowerCase().replace(/[ -]+/g, '_');
-  if (['chat', 'chat_completion', 'chatcompletion', 'chat_completions'].includes(apiType)) apiType = 'chat_completions';
-  if (['response', 'responses'].includes(apiType)) apiType = 'responses';
-  if (!['responses', 'chat_completions'].includes(apiType)) throw new Error('AI_API_TYPE must be "responses" or "chat_completions".');
-
+  if (!model) throw new Error('AI_MODEL is empty.');
+  const apiType = aiNormalizeApiType_(secret_('AI_API_TYPE', 'responses'));
   const detailRaw = String(secret_('AI_IMAGE_DETAIL', 'low') || 'low').trim().toLowerCase();
   const imageDetail = /^(low|high|auto)$/.test(detailRaw) ? detailRaw : 'low';
   const tokenRaw = Number(secret_('AI_MAX_OUTPUT_TOKENS', '5000'));
   const maxOutputTokens = Number.isFinite(tokenRaw) ? Math.max(700, Math.min(5000, Math.floor(tokenRaw))) : 5000;
-  const endpoint = aiEndpoint_(baseUrl, apiType);
   const isGemini = aiIsGeminiBaseUrl_(baseUrl);
   const reasoningRaw = String(secret_('AI_REASONING_EFFORT', isGemini ? 'low' : '') || '').trim().toLowerCase();
-  const reasoningEffort = /^(none|minimal|low|medium|high)$/.test(reasoningRaw) ? reasoningRaw : '';
   return {
     apiKey: apiKey,
     baseUrl: baseUrl,
-    endpoint: endpoint,
+    endpoint: aiEndpoint_(baseUrl, apiType),
     model: model,
     apiType: apiType,
     providerLabel: aiProviderLabel_(baseUrl),
     imageDetail: imageDetail,
     maxOutputTokens: maxOutputTokens,
     isGemini: isGemini,
-    reasoningEffort: reasoningEffort
+    reasoningEffort: AI_EFFORT_VALUES.indexOf(reasoningRaw) !== -1 ? reasoningRaw : '',
+    modelConfigId: 'legacy',
+    modelLabel: model,
+    supportedEfforts: ['low','medium','high'],
+    vision: true
   };
 }
 
@@ -133,7 +135,15 @@ function callAiResponses_(config, prompt, imageUrls) {
     input: [{ role: 'user', content: content }],
     text: { format: { type: 'json_schema', name: 'dsb_product_draft', strict: true, schema: aiProductSchema_() } }
   };
-  const data = aiFetchJson_(config, payload);
+  if (config.reasoningEffort && config.reasoningEffort !== 'none') payload.reasoning = { effort: config.reasoningEffort };
+  let data;
+  try { data = aiFetchJson_(config, payload); }
+  catch (err) {
+    const message = String(err && err.message || '');
+    if (!payload.reasoning || !/reasoning|effort|unsupported|unknown parameter|invalid parameter|HTTP\s*400/i.test(message)) throw err;
+    delete payload.reasoning;
+    data = aiFetchJson_(config, payload);
+  }
   const outputText = extractOpenAiOutputText_(data);
   if (!outputText) throw new Error('AI generation returned no product draft.');
   return { outputText: outputText };
@@ -171,10 +181,10 @@ function callAiChatCompletions_(config, prompt, imageUrls) {
         schema: aiProductSchema_()
       }
     };
-    if (config.reasoningEffort) payload.reasoning_effort = config.reasoningEffort;
   } else {
     payload.response_format = { type: 'json_object' };
   }
+  if (config.reasoningEffort && config.reasoningEffort !== 'none') payload.reasoning_effort = config.reasoningEffort;
 
   const cache = CacheService.getScriptCache();
   const key = aiCapabilityKey_(config, schemaMode);
@@ -186,9 +196,9 @@ function callAiChatCompletions_(config, prompt, imageUrls) {
     data = aiFetchJson_(config, payload);
   } catch (err) {
     const message = String(err && err.message || '');
-    const structuredProblem = /response_format|json_object|json_schema|schema|unsupported|unknown parameter|invalid parameter/i.test(message);
-    const geminiBadRequest = config.isGemini && /HTTP\s*400|INVALID_ARGUMENT|bad request/i.test(message);
-    if (structuredUnsupported || (!structuredProblem && !geminiBadRequest)) throw err;
+    const structuredProblem = /response_format|json_object|json_schema|schema|reasoning_effort|effort|unsupported|unknown parameter|invalid parameter/i.test(message);
+    const compatibilityBadRequest = /HTTP\s*400|INVALID_ARGUMENT|bad request/i.test(message);
+    if (structuredUnsupported || (!structuredProblem && !compatibilityBadRequest)) throw err;
 
     // Compatibility fallback: retry once with the smallest documented Gemini/OpenAI
     // payload. This avoids trapping users on a model-specific 400 while keeping the
@@ -196,7 +206,7 @@ function callAiChatCompletions_(config, prompt, imageUrls) {
     // remains the authoritative server-side validator.
     cache.put(key, 'unsupported', 21600);
     delete payload.response_format;
-    if (config.isGemini) delete payload.reasoning_effort;
+    delete payload.reasoning_effort;
     data = aiFetchJson_(config, payload);
   }
 

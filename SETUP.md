@@ -217,3 +217,16 @@ No manual sheet creation is required. The first customer support/cancellation re
 Deploy the current `code.gs` to enable the Admin Analytics view. No extra provider account is required. The backend creates a hidden `AnalyticsEvents` sheet automatically after the first storefront event batch. Analytics starts from deployment time; it cannot reconstruct historical visitor behaviour from before tracking was enabled.
 
 Collection is lightweight and anonymous: events are batched in the browser and include storefront behaviour such as page/product views, cart adds, checkout starts, delivery checks and completed orders. Customer names, phone numbers, addresses and order IDs are not sent to analytics.
+
+## AI configuration
+
+The admin panel now includes **⋮ → AI configuration**. This is the preferred way to manage AI providers.
+
+- Add any number of OpenAI-compatible API connections.
+- Each connection stores its own HTTPS base URL, API type (`chat_completions` or `responses`) and API key.
+- Add one or more models under each connection and choose which effort levels and vision support each model exposes.
+- Use **Test connection** before saving or after changing a provider/model.
+- DSB AI and Product AI automatically use the enabled models from this page; each remembers its own last model and effort selection.
+- API keys are stored only in Apps Script Script Properties under internal `AI_CONN_KEY_*` properties. The browser receives only a `hasApiKey` flag, never the stored key.
+
+Existing `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL` and `AI_API_TYPE` Script Properties remain supported as a legacy fallback until at least one enabled connection is configured.

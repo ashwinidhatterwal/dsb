@@ -189,10 +189,11 @@ async function loadProducts(refreshRelated = true) {
   try {
     if (!ADMIN_PROFILE) {
       const profile = await adminRead('adminSession');
-      if (profile.version !== 20) throw new Error('Deploy the new code.gs version before opening this admin update.');
+      if (profile.version !== 21) throw new Error('Deploy the new code.gs version before opening this admin update.');
       ADMIN_PROFILE = profile;
       applyStaffRole();
       offerSavedDraft();
+      window.DSBAIConfig?.loadModels?.().catch(() => {});
     }
     const options = {
       query: $('#filterInput').value.trim(),
@@ -852,6 +853,7 @@ function switchTab(name) {
   if (name === 'archive') loadArchive();
   if (name === 'dashboard' && LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
   if (name === 'analytics' && window.DSBAdminAnalytics) window.DSBAdminAnalytics.load();
+  if (name === 'ai-config' && window.DSBAIConfig) window.DSBAIConfig.loadPage();
   window.scrollTo({
     top: 0,
     behavior: reducedMotion() ? 'auto' : 'smooth'

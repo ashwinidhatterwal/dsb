@@ -14,6 +14,7 @@
     "src/backend/checkout.gs",
     "src/backend/transactions.gs",
     "src/backend/telegram.gs",
+    "src/backend/ai-config.gs",
     "src/backend/ai-product.gs",
     "src/backend/ai-admin-media.gs",
     "src/backend/ai-admin-context.gs",

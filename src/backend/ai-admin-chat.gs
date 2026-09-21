@@ -35,10 +35,8 @@ function generateAiAdminChat_(body, actor) {
   }
   const context = buildAiAdminContext_(message, intent, { products: products, target: target, sessionState: sessionState });
 
-  const config = aiProviderConfig_();
-  const requestedModel = sanitizeAiRequestedModel_(body && body.requestedModel);
-  const requestedReasoningEffort = sanitizeAiReasoningEffort_(body && body.reasoningEffort);
-  if (requestedModel && config.isGemini) config.model = requestedModel;
+  const config = aiProviderConfig_(body && body.modelConfigId);
+  const requestedReasoningEffort = sanitizeAiReasoningEffort_(body && body.reasoningEffort, config.supportedEfforts);
   if (requestedReasoningEffort) config.reasoningEffort = requestedReasoningEffort;
   config.maxOutputTokens = Math.min(config.maxOutputTokens, 2200);
 
@@ -124,6 +122,7 @@ function aiAdminChatPrompt_(message, history, context, actor, imageCount) {
 
 function callAiAdminChatProvider_(config, prompt, imageUrls) {
   imageUrls = sanitizeAiAdminImageUrls_(imageUrls);
+  if (imageUrls.length && config.vision === false) throw new Error('The selected AI model is configured without vision support. Choose a vision-capable model or remove the attached photos.');
   if (config.apiType === 'chat_completions') {
     const content = [{ type: 'text', text: prompt }];
     imageUrls.forEach(function(url) {
@@ -138,7 +137,7 @@ function callAiAdminChatProvider_(config, prompt, imageUrls) {
       max_tokens: config.maxOutputTokens,
       response_format: { type: 'json_object' }
     };
-    if (config.isGemini && config.reasoningEffort) payload.reasoning_effort = config.reasoningEffort;
+    if (config.reasoningEffort && config.reasoningEffort !== 'none') payload.reasoning_effort = config.reasoningEffort;
     let data;
     try {
       data = aiFetchJson_(config, payload);
@@ -169,7 +168,15 @@ function callAiAdminChatProvider_(config, prompt, imageUrls) {
     input: [{ role: 'user', content: responseContent }],
     text: { format: { type: 'json_object' } }
   };
-  const data = aiFetchJson_(config, payload);
+  if (config.reasoningEffort && config.reasoningEffort !== 'none') payload.reasoning = { effort: config.reasoningEffort };
+  let data;
+  try { data = aiFetchJson_(config, payload); }
+  catch (err) {
+    const message = String(err && err.message || '');
+    if (!payload.reasoning || !/reasoning|effort|unsupported|unknown parameter|invalid parameter|HTTP\s*400/i.test(message)) throw err;
+    delete payload.reasoning;
+    data = aiFetchJson_(config, payload);
+  }
   const text = extractOpenAiOutputText_(data);
   if (!text) throw new Error('AI chat returned no reply.');
   return text;

@@ -103,6 +103,8 @@ function applyStaffRole() {
   const profile = ADMIN_PROFILE;
   if (!profile) return;
   $('.live-pill').textContent = profile.name + ' · ' + profile.role;
+  const aiConfigMenu = $('#aiConfigMenuItem');
+  if (aiConfigMenu) aiConfigMenu.hidden = profile.role !== 'admin';
   if (profile.role === 'viewer') {
     $$('[data-tab="add"]').forEach(el => el.hidden = true);
     $('#tab-add').querySelectorAll('button,input,select,textarea').forEach(el => el.disabled = true);

@@ -34,8 +34,8 @@ assert(analytics.includes('viewerAdds') && analytics.includes('viewVisitors'), '
 assert(adminClient.includes('x.convertedVisitors * 100 / x.visitors'), 'Conversion trend must use converting visitors');
 
 // Version/cache busting so deployed clients actually receive QA fixes.
-assert(admin.includes('profile.version !== 20'), 'Admin must require backend version 20');
-assert(auth.includes('version: 20'), 'Backend must report version 20');
+assert(admin.includes('profile.version !== 21'), 'Admin must require backend version 21');
+assert(auth.includes('version: 21'), 'Backend must report version 21');
 assert(html.includes('admin.js?v=20260921step2qa1'), 'Admin JS cache bust missing');
 assert(html.includes('admin-analytics.js?v=20260921step2qa1'), 'Analytics admin cache bust missing');
 console.log('PASS: Step 2 analytics reliability, metric integrity, cache freshness and version sync.');

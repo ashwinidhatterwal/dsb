@@ -499,8 +499,8 @@
           history,
           sessionState: collectAiSessionState(),
           productDraft,
-          requestedModel: qs('#adminAiModel')?.value || '',
-          reasoningEffort: qs('#adminAiQuality')?.value || 'low',
+          modelConfigId: qs('#adminAiModel')?.value || '',
+          reasoningEffort: qs('#adminAiQuality')?.value || '',
           imageUrls
         }),
         timeoutMs: 120000

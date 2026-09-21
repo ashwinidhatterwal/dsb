@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const backend = fs.readFileSync('src/backend/ai-product.gs', 'utf8');
+const backend = fs.readFileSync('src/backend/ai-config.gs', 'utf8') + '\n' + fs.readFileSync('src/backend/ai-product.gs', 'utf8');
 const auth = fs.readFileSync('src/backend/admin-auth.gs', 'utf8');
 const html = fs.readFileSync('admin.html', 'utf8');
 const client = fs.readFileSync('admin-ai.js', 'utf8');
@@ -88,25 +88,22 @@ assert(backend.includes("type: 'json_schema'") && backend.includes('config.isGem
 assert(backend.includes('reasoning_effort'), 'Gemini low reasoning-effort optimization is missing');
 
 
-assert(html.includes('name="aiQuality"') && html.includes('value="low"') && html.includes('value="medium"') && html.includes('value="high"'), 'AI Fast/Better/Best selector is missing');
+assert(html.includes('id="aiFillModel"') && html.includes('id="aiFillEffort"'), 'Product AI model/effort dropdowns are missing');
 assert(client.includes('selectedReasoningEffort') && client.includes('reasoningEffort'), 'AI client does not send per-request reasoning effort');
 assert.equal(context.sanitizeAiReasoningEffort_('LOW'), 'low');
 assert.equal(context.sanitizeAiReasoningEffort_('medium'), 'medium');
 assert.equal(context.sanitizeAiReasoningEffort_('high'), 'high');
 assert.equal(context.sanitizeAiReasoningEffort_('extreme'), '');
-
-
-assert(html.includes('name="aiModel"') && html.includes('gemini-3.8-flash') && html.includes('gemini-3-flash') && html.includes('gemini-3.6-flash') && html.includes('gemini-3.5-flash-lite'), 'Gemini model selector is missing');
-assert(client.includes('selectedAiModel') && client.includes('requestedModel'), 'AI client does not send the selected model');
-assert.equal(context.sanitizeAiRequestedModel_('GEMINI-3.8-FLASH'), 'gemini-3.8-flash');
-assert.equal(context.sanitizeAiRequestedModel_('gemini-3.5-flash-lite'), 'gemini-3.5-flash-lite');
-assert.equal(context.sanitizeAiRequestedModel_('not-allowed'), '');
-assert(backend.includes('requestedModel && config.isGemini'), 'Per-request Gemini model override is not gated to Gemini');
+assert(client.includes('selectedAiModelConfigId') && client.includes('modelConfigId'), 'AI client does not send the selected model configuration');
+assert(backend.includes('aiConfiguredProvider_') && backend.includes('AI_CONNECTIONS_JSON_V1'), 'Multi-connection AI routing is missing');
+assert(backend.includes('AI_CONN_KEY_'), 'AI connection keys must be stored separately from metadata');
+assert(backend.includes('supportedEfforts'), 'Per-model effort capabilities are missing');
+assert(backend.includes('compatibilityBadRequest'), 'Provider compatibility fallback is missing');
 
 console.log('AI product autofill checks passed.');
 
 assert(backend.includes("if (!config.isGemini && config.imageDetail) image.detail = config.imageDetail"), 'Gemini image payload must omit unsupported detail hint');
-assert(backend.includes('geminiBadRequest'), 'Gemini HTTP 400 compatibility fallback is missing');
+assert(backend.includes('compatibilityBadRequest'), 'HTTP 400 compatibility fallback is missing');
 
 for (const value of [null, undefined, '', '  ', false]) {
   const unknown = context.cleanAiDraft_({price:value,mrp:value,costprice:value,stockqty:value});
