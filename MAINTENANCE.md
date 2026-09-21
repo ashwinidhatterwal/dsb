@@ -174,6 +174,21 @@ The admin Orders list now renders compact summary cards by default. Keep the col
 
 ## Admin surface + action pass (2026-09-20)
 
-- `admin-surface.css` is the final, small visual hierarchy layer for the admin workspace. Keep card/canvas contrast, elevation, and shared icon-button sizing there instead of adding more overrides to `admin-theme.css`.
-- Symbol-first admin actions use `.icon-btn` / `.icon-action` with mandatory `aria-label` and `title`. Keep text on ambiguous or destructive multi-step actions where a symbol alone would be unclear.
+- `admin-surface.css` is the final, small teal visual-hierarchy layer for the admin workspace. Keep canvas/card contrast, elevation, and compact action sizing there instead of adding more overrides to `admin-theme.css`.
+- Admin actions use short text labels by default. Keep icons only where the surrounding navigation makes their meaning obvious; destructive or workflow actions should remain explicit.
 - Permanent deletion from Archived products uses the explicit `deleteArchivedProduct` admin action and the existing `deleteProduct()` backend guard. The backend still refuses deletion unless the product is archived and its revision matches.
+
+## Cleanup checkpoint (2026-09-20)
+
+- `code.gs`, `style.css`, and `admin-chat.js` are generated artifacts. Edit their source modules and run `node scripts/build.mjs`; do not hand-maintain generated output.
+- Two unused private backend helpers (`invalidateDashboardCache_` and `newOrderId_`) were removed after repository-wide reference checks. Telegram setup/test entry points are intentionally retained because they are invoked manually from Apps Script rather than from application code.
+- Cleanup should stay conservative: remove code only when references and regressions prove it is dead. Avoid reorganizing CSS solely for aesthetics because cascade order is part of storefront/admin behavior.
+
+
+## Analytics (Step 1)
+
+Storefront analytics is intentionally first-party, anonymous and batched. `storefront-analytics.js` queues a small set of commerce events and sends up to 12 at a time to the existing Apps Script endpoint. It does not collect customer names, phone numbers, addresses, order IDs, or raw search text.
+
+Backend analytics lives in `src/backend/analytics.gs`; `code.gs` is generated. The private `AnalyticsEvents` sheet is created automatically on first tracked activity and stores hashed anonymous visitor/session keys. The admin report is rendered by `admin-analytics.js` and `admin-analytics.css` inside the dedicated Analytics view opened from the top-left three-dot menu.
+
+If analytics logic changes, run `node scripts/check-analytics.mjs` plus the full regression suite. Keep collection best-effort: analytics failures must never block cart, checkout, orders, or page navigation.

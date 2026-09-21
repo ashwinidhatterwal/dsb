@@ -940,9 +940,9 @@ body.admin-ai-open{overflow:hidden}.admin-ai-drawer{z-index:1001!important;top:4
 .admin-ai-draft-photo{display:block;width:100px;height:100px;object-fit:contain;border-radius:12px;background:#fff;margin:10px 0 16px}.admin-ai-proposal-actions{padding:12px 0 4px;background:transparent}
 @media(max-width:700px){.admin-ai-drawer{top:2dvh;right:50%;width:96vw;height:96dvh;max-height:none;border-radius:18px;transform:translate(50%,12px)}.admin-ai-drawer.open{transform:translateX(50%)}.admin-ai-editor-grid{grid-template-columns:1fr}.admin-ai-drawer [data-ai-edit]{font-size:16px}.admin-ai-change{grid-template-columns:1fr}.admin-ai-change label{grid-column:auto}}
 
-/* ===== 2026-09-20 admin recovery + light professional palette =====
-   Keep the AI as a non-blocking workspace drawer. The previous full-screen
-   modal/backdrop override made the dashboard inaccessible. */
+/* ===== Stable light admin base =====
+   This is the structural base theme. admin-surface.css is the final teal
+   presentation layer. Keep the AI as a non-blocking workspace drawer. */
 :root{
   color-scheme:light;
   --bg:#f4f7fb;

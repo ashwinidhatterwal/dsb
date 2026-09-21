@@ -49,6 +49,7 @@ const ORDERS_SHEET = 'Orders';
 const PROMOS_SHEET = 'Promos';
 const ORDER_ITEMS_SHEET = 'OrderItems';
 const ORDER_REQUESTS_SHEET = 'OrderRequests';
+const ANALYTICS_SHEET = 'AnalyticsEvents';
 const PROMO_CUSTOMERS_SHEET = 'PromoCustomers';
 const CATALOG_CACHE_KEY = 'dsb.catalog.v4';
 const JOURNAL_SHEET = 'OrderTransactions';
@@ -62,6 +63,10 @@ const PROMOS_CACHE_KEY = 'dsb.promos.v1';
 const PROMOS_CACHE_TTL = 60; // seconds
 const DASHBOARD_CACHE_KEY = 'dsb.adminDashboard.v1';
 const DASHBOARD_CACHE_TTL = 20; // seconds
+const ANALYTICS_REPORT_CACHE_KEY = 'dsb.analyticsReport.v1';
+const ANALYTICS_REPORT_CACHE_TTL = 60; // seconds
+const ANALYTICS_BATCH_MAX = 20;
+const ANALYTICS_EVENTS = ['page_view','product_view','search','category_view','filter_change','add_to_cart','begin_checkout','order_completed','delivery_estimate','review_submitted'];
 const ALLOWED_PAYMENT_METHODS = ['Cash on Delivery', 'UPI'];
 
 // Checkout fee settings. Edit these three values whenever your policy changes.

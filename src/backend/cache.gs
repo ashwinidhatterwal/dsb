@@ -60,6 +60,3 @@ function invalidatePublicCaches_() {
   cacheRemove_(PROMOS_CACHE_KEY);
   cacheRemove_(DASHBOARD_CACHE_KEY);
 }
-function invalidateDashboardCache_() {
-  cacheRemove_(DASHBOARD_CACHE_KEY);
-}

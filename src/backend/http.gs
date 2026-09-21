@@ -43,6 +43,7 @@ function doPost(e) {
     const body = JSON.parse(e.postData.contents);
     if (body.action === 'quoteOrder') return jsonResponse(quoteOrder(body.order || {}));
     if (body.action === 'orderResult') return jsonResponse(orderResult(body.requestId, body.phone));
+    if (body.action === 'analyticsBatch') return jsonResponse(recordAnalyticsBatch_(body));
 
     // Public actions — no admin key needed, customers use these from the site.
     if (body.action === 'addReview') {

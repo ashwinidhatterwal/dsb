@@ -210,3 +210,10 @@ Automated tests cover original photo URL assignment, full generated fields, phot
 
 ## Level 3 order requests
 No manual sheet creation is required. The first customer support/cancellation request creates an `OrderRequests` tab automatically. Keep it private with the rest of the backend spreadsheet. Customer tracking verifies Order ID + checkout phone and public requests never directly change order status or stock.
+
+
+## Analytics
+
+Deploy the current `code.gs` to enable the Admin Analytics view. No extra provider account is required. The backend creates a hidden `AnalyticsEvents` sheet automatically after the first storefront event batch. Analytics starts from deployment time; it cannot reconstruct historical visitor behaviour from before tracking was enabled.
+
+Collection is lightweight and anonymous: events are batched in the browser and include storefront behaviour such as page/product views, cart adds, checkout starts, delivery checks and completed orders. Customer names, phone numbers, addresses and order IDs are not sent to analytics.

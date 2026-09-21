@@ -198,10 +198,6 @@ function getOrderSheets_() {
     orderHeads: orderHeads
   };
 }
-function newOrderId_() {
-  // Non-sequential IDs prevent easy enumeration during public tracking.
-  return 'ORD-' + Utilities.getUuid().replace(/-/g, '').slice(0, 10).toUpperCase();
-}
 function buildValidatedOrderItems_(itemsDetail, productData) {
   const heads = productData[0].map(h => String(h).trim().toLowerCase());
   const idCol = heads.indexOf('id');

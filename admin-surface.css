@@ -15,7 +15,7 @@ html,body{background:var(--admin-canvas)!important}
 body{background:linear-gradient(180deg,#eef7f5 0,var(--admin-canvas) 100%)!important}
 .admin-main{background:transparent}
 
-/* Restore readable labelled actions. Icons may remain inside navigation where context is obvious. */
+/* Readable labelled actions. Icons remain only where surrounding context is obvious. */
 .icon-btn,.icon-action{width:auto!important;min-width:0!important;height:auto!important;min-height:38px!important;padding:8px 12px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;border-radius:10px!important;font-size:13px!important;line-height:1.15!important;flex:0 0 auto!important;white-space:nowrap}
 .top-actions .icon-btn{width:auto!important;min-width:0!important;height:auto!important;min-height:38px!important}
 .top-actions{gap:8px!important}

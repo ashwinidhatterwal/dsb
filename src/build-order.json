@@ -7,6 +7,7 @@
     "src/backend/products.gs",
     "src/backend/reviews.gs",
     "src/backend/delivery.gs",
+    "src/backend/analytics.gs",
     "src/backend/promos.gs",
     "src/backend/orders.gs",
     "src/backend/order-requests.gs",

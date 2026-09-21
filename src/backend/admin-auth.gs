@@ -19,7 +19,7 @@ function authenticateAdmin_(key) {
   };
 }
 function assertAdminPermission_(actor, action) {
-  const reads = ['adminSession', 'adminProducts', 'adminProductsPage', 'adminOrders', 'adminDashboard', 'aiAdminChat'];
+  const reads = ['adminSession', 'adminProducts', 'adminProductsPage', 'adminOrders', 'adminDashboard', 'adminAnalytics', 'aiAdminChat'];
   const edits = ['add', 'update', 'archiveProduct', 'updateOrderStatus', 'resolveOrderRequest', 'aiProductDraft'];
   if (actor.role === 'admin' || reads.includes(action) || actor.role === 'editor' && edits.includes(action)) return;
   throw new Error('Your staff role does not allow this action.');
@@ -28,7 +28,7 @@ function dispatchAdmin_(body, actor) {
   const action = String(body.action || '');
   assertAdminPermission_(actor, action);
   if (action === 'adminSession') return {
-    version: 17,
+    version: 18,
     name: actor.name,
     role: actor.role
   };
@@ -36,6 +36,7 @@ function dispatchAdmin_(body, actor) {
   if (action === 'adminProductsPage') return adminProductsPage_(body.options || {});
   if (action === 'adminOrders') return getAllOrders(body.options);
   if (action === 'adminDashboard') return getDashboardData();
+  if (action === 'adminAnalytics') return getAnalyticsReport_(body.options || {});
   if (action === 'aiProductDraft') return generateAiProductDraft_(body, actor);
   if (action === 'aiAdminChat') return generateAiAdminChat_(body, actor);
   if (action === 'add') return addProduct(body.product || {}, body.requestId);
