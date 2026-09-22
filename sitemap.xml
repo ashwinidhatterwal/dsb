@@ -1553,6 +1553,14 @@
     <image:image><image:loc>https://res.cloudinary.com/malfl6xv/image/upload/v1789995177/tmo5u11r9xy2s2f1wkla.jpg</image:loc></image:image>
   </url>
   <url>
+    <loc>https://suhagbhandar.in/products/p-4453422d30323630.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <image:image><image:loc>https://res.cloudinary.com/malfl6xv/image/upload/v1790065287/apesljdhqnmirjpknfpw.jpg</image:loc></image:image>
+    <image:image><image:loc>https://res.cloudinary.com/malfl6xv/image/upload/v1790065313/j1vcneezsy4nrtfkiyip.jpg</image:loc></image:image>
+    <image:image><image:loc>https://res.cloudinary.com/malfl6xv/image/upload/v1790065323/dj0o3yi5juwpqvraedhn.jpg</image:loc></image:image>
+  </url>
+  <url>
     <loc>https://suhagbhandar.in/categories/personal-care-506572736f6e616c2043617265.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -2449,6 +2457,11 @@
   </url>
   <url>
     <loc>https://suhagbhandar.in/hi/products/p-4453422d30323539.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://suhagbhandar.in/hi/products/p-4453422d30323630.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
