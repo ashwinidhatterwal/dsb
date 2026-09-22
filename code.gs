@@ -63,7 +63,7 @@ const PROMOS_CACHE_KEY = 'dsb.promos.v1';
 const PROMOS_CACHE_TTL = 60; // seconds
 const DASHBOARD_CACHE_KEY = 'dsb.adminDashboard.v1';
 const DASHBOARD_CACHE_TTL = 20; // seconds
-const ANALYTICS_REPORT_CACHE_KEY = 'dsb.analyticsReport.v1';
+const ANALYTICS_REPORT_CACHE_KEY = 'dsb.analyticsReport.v2';
 const ANALYTICS_REPORT_CACHE_TTL = 60; // seconds
 const ANALYTICS_BATCH_MAX = 20;
 const ANALYTICS_EVENTS = ['page_view','product_view','search','category_view','filter_change','add_to_cart','begin_checkout','order_completed','delivery_estimate','review_submitted'];
@@ -944,25 +944,45 @@ function analyticsInsight_(id, title, text, tone, focus) {
 function analyticsBreakdown_(map, limit) {
   return Object.keys(map).map(name => ({ name: name, value: map[name] })).sort((a, b) => b.value - a.value).slice(0, limit || 10);
 }
+// Calendar arithmetic is performed on date keys, then parsed in the shop timezone.
+// This keeps local-midnight boundaries correct even across daylight-saving changes.
+function analyticsDayOffset_(key, offset) {
+  const date = new Date(key + 'T12:00:00Z');
+  date.setUTCDate(date.getUTCDate() + offset);
+  return date.toISOString().slice(0, 10);
+}
+function analyticsOverlap_(left, right) {
+  return Object.keys(left).reduce((count, key) => count + (right[key] ? 1 : 0), 0);
+}
 function getAnalyticsReport_(options) {
   options = options || {};
   const daysRaw = Number(options.days) || 30;
   const days = [7, 30, 90].indexOf(daysRaw) >= 0 ? daysRaw : 30;
   const cacheKey = ANALYTICS_REPORT_CACHE_KEY + ':' + days;
-  const cached = options.force ? null : cacheGetJson_(cacheKey);
+  const cached = options.force ? null : cacheGetChunkedJson_(cacheKey);
   if (cached) return cached;
 
   const now = new Date();
   const tz = Session.getScriptTimeZone();
-  const currentStart = new Date(now.getTime() - days * 86400000);
-  const previousStart = new Date(now.getTime() - days * 2 * 86400000);
+  const today = analyticsDateKey_(now, tz);
+  const currentDay = analyticsDayOffset_(today, 1 - days);
+  const currentStart = Utilities.parseDate(currentDay, tz, 'yyyy-MM-dd');
+  const previousStart = Utilities.parseDate(analyticsDayOffset_(currentDay, -days), tz, 'yyyy-MM-dd');
+  const resetAt = analyticsResetAt_();
+  const orders = rowsAsObjects_(getSheet_(ORDERS_SHEET));
   const events = [];
-  let trackingStart = analyticsResetAt_();
+  let trackingStart = resetAt;
+  // An attributed order proves tracking existed even if all browser events were lost.
+  orders.forEach(order => {
+    if (resetAt || (!order.analyticsvisitor && !order.analyticssession)) return;
+    const date = new Date(order.date);
+    if (!isNaN(date.getTime()) && date <= now && (!trackingStart || date < trackingStart)) trackingStart = date;
+  });
   try {
     rowsAsObjects_(analyticsSheet_()).forEach(row => {
       const date = new Date(row.date);
-      if (isNaN(date.getTime())) return;
-      if (!trackingStart || date < trackingStart) trackingStart = date;
+      if (isNaN(date.getTime()) || date > now || (resetAt && date < resetAt)) return;
+      if (!trackingStart || (!resetAt && date < trackingStart)) trackingStart = date;
       if (date >= previousStart) events.push({ ...row, _date: date });
     });
   } catch (_) {}
@@ -996,10 +1016,6 @@ function getAnalyticsReport_(options) {
         m.checkouts++;
         if (row.session) checkoutSessions[row.session] = true;
       }
-      if (row.event === 'order_completed') {
-        if (row.visitor) convertedVisitors[row.visitor] = true;
-        if (row.session) orderSessions[row.session] = true;
-      }
     });
     m.visitors = Object.keys(visitors).length;
     m.sessions = Object.keys(sessions).length;
@@ -1012,13 +1028,16 @@ function getAnalyticsReport_(options) {
     // repair a browser event that was lost after checkout succeeded.
     m._convertedVisitors = convertedVisitors;
     m._orderSessions = orderSessions;
+    m._visitors = visitors;
+    m._sessions = sessions;
+    m._productViewSessions = productViewSessions;
+    m._cartSessions = cartSessions;
+    m._checkoutSessions = checkoutSessions;
     return m;
   }
 
   const current = period(currentStart, new Date(now.getTime() + 1000));
   const previous = period(previousStart, currentStart);
-  const orders = rowsAsObjects_(getSheet_(ORDERS_SHEET));
-
   orders.forEach(order => {
     const date = new Date(order.date);
     if (isNaN(date.getTime()) || !trackingStart || date < previousOrderStart || date > now) return;
@@ -1028,11 +1047,14 @@ function getAnalyticsReport_(options) {
     if (!target) return;
     const status = String(order.status || 'Pending');
     const total = Math.max(0, safeNumber_(order.total, 0));
+    const trackedVisitor = String(order.analyticsvisitor || '').trim();
+    const trackedSession = String(order.analyticssession || '').trim();
+    // Recover both the denominator and outcome. Cancelled shoppers remain visitors.
+    if (trackedVisitor) target._visitors[trackedVisitor] = true;
+    if (trackedSession) target._sessions[trackedSession] = true;
     if (status === 'Cancelled') { target.cancelled++; return; }
     target.orders++;
     target.revenue += total;
-    const trackedVisitor = String(order.analyticsvisitor || '').trim();
-    const trackedSession = String(order.analyticssession || '').trim();
     if (trackedVisitor && target._convertedVisitors) target._convertedVisitors[trackedVisitor] = true;
     if (trackedSession && target._orderSessions) target._orderSessions[trackedSession] = true;
     if (COMPLETED_STATUSES.indexOf(status) >= 0) {
@@ -1043,8 +1065,13 @@ function getAnalyticsReport_(options) {
   [current, previous].forEach(target => {
     target.convertedVisitors = Object.keys(target._convertedVisitors || {}).length;
     target.orderSessions = Object.keys(target._orderSessions || {}).length;
-    delete target._convertedVisitors;
-    delete target._orderSessions;
+    target.visitors = Object.keys(target._visitors).length;
+    target.sessions = Object.keys(target._sessions).length;
+    // These are same-period overlaps, not an assumed ordered funnel.
+    target.productCartSessions = analyticsOverlap_(target._productViewSessions, target._cartSessions);
+    target.cartCheckoutSessions = analyticsOverlap_(target._cartSessions, target._checkoutSessions);
+    target.checkoutOrderSessions = analyticsOverlap_(target._checkoutSessions, target._orderSessions);
+    ['_convertedVisitors','_orderSessions','_visitors','_sessions','_productViewSessions','_cartSessions','_checkoutSessions'].forEach(key => delete target[key]);
   });
   ['revenue', 'deliveredRevenue'].forEach(key => {
     current[key] = roundMoney_(current[key]);
@@ -1080,8 +1107,8 @@ function getAnalyticsReport_(options) {
 
   const seriesMap = {};
   for (let i = days - 1; i >= 0; i--) {
-    const date = new Date(now.getTime() - i * 86400000);
-    const key = analyticsDateKey_(date, tz);
+    const key = analyticsDayOffset_(today, -i);
+    const date = Utilities.parseDate(key, tz, 'yyyy-MM-dd');
     seriesMap[key] = {
       key: key, label: Utilities.formatDate(date, tz, days <= 7 ? 'EEE' : 'dd MMM'),
       visitors: {}, sessions: {}, convertedVisitors: {}, productViewSessions: {}, cartSessions: {}, checkoutSessions: {}, orderSessions: {},
@@ -1098,22 +1125,21 @@ function getAnalyticsReport_(options) {
     if (row.event === 'product_view') { slot.productViews++; if (row.session) slot.productViewSessions[row.session] = true; }
     if (row.event === 'add_to_cart') { slot.addToCarts++; if (row.session) slot.cartSessions[row.session] = true; }
     if (row.event === 'begin_checkout') { slot.checkouts++; if (row.session) slot.checkoutSessions[row.session] = true; }
-    if (row.event === 'order_completed') {
-      if (row.visitor) slot.convertedVisitors[row.visitor] = true;
-      if (row.session) slot.orderSessions[row.session] = true;
-    }
   });
   orders.forEach(order => {
     const date = new Date(order.date);
     const status = String(order.status || '');
-    if (isNaN(date.getTime()) || !trackingStart || date < currentOrderStart || date > now || status === 'Cancelled') return;
+    if (isNaN(date.getTime()) || !trackingStart || date < currentOrderStart || date > now) return;
     const slot = seriesMap[analyticsDateKey_(date, tz)];
     if (!slot) return;
     const total = Math.max(0, safeNumber_(order.total, 0));
-    slot.orders++;
-    slot.revenue += total;
     const trackedVisitor = String(order.analyticsvisitor || '').trim();
     const trackedSession = String(order.analyticssession || '').trim();
+    if (trackedVisitor) slot.visitors[trackedVisitor] = true;
+    if (trackedSession) slot.sessions[trackedSession] = true;
+    if (status === 'Cancelled') return;
+    slot.orders++;
+    slot.revenue += total;
     if (trackedVisitor) slot.convertedVisitors[trackedVisitor] = true;
     if (trackedSession) slot.orderSessions[trackedSession] = true;
     if (COMPLETED_STATUSES.indexOf(status) >= 0) {
@@ -1152,7 +1178,6 @@ function getAnalyticsReport_(options) {
       if (!state.landing && row.event === 'page_view') state.landing = String(row.path || '/');
       if (row.event === 'add_to_cart') state.cart = true;
       if (row.event === 'begin_checkout') state.checkout = true;
-      if (row.event === 'order_completed') { state.order = true; state.orderValue += Math.max(0, safeNumber_(row.value, 0)); }
     }
     if (row.event === 'page_view') {
       const path = String(row.path || '/');
@@ -1172,20 +1197,23 @@ function getAnalyticsReport_(options) {
     }
   });
 
-  // Prefer authoritative order rows for order attribution when the checkout was
-  // created by analytics v3. Browser order_completed remains a fallback for older orders.
+  // Only Orders can establish order counts, value and conversion. Legacy orders
+  // without attribution still count in KPIs but cannot be assigned to a campaign.
   const attributedOrders = {};
   orders.forEach(order => {
     const date = new Date(order.date);
     const status = String(order.status || 'Pending');
     const session = String(order.analyticssession || '').trim();
-    if (!session || isNaN(date.getTime()) || date < currentOrderStart || date > now || status === 'Cancelled') return;
+    if (!session || !trackingStart || isNaN(date.getTime()) || date < currentOrderStart || date > now) return;
     const a = attributedOrders[session] || (attributedOrders[session] = {
-      orderValue: 0, source: String(order.analyticssource || 'Direct'), medium: String(order.analyticsmedium || ''),
+      orders: 0, orderValue: 0, source: String(order.analyticssource || 'Direct'), medium: String(order.analyticsmedium || ''),
       campaign: String(order.analyticscampaign || ''), content: String(order.analyticscontent || ''),
       landing: String(order.analyticslanding || '/'), first: date
     });
-    a.orderValue += Math.max(0, safeNumber_(order.total, 0));
+    if (status !== 'Cancelled') {
+      a.orders++;
+      a.orderValue += Math.max(0, safeNumber_(order.total, 0));
+    }
     if (date < a.first) a.first = date;
   });
   Object.keys(attributedOrders).forEach(session => {
@@ -1199,7 +1227,8 @@ function getAnalyticsReport_(options) {
     if (!state.campaign) state.campaign = a.campaign;
     if (!state.content) state.content = a.content;
     if (!state.landing) state.landing = a.landing;
-    state.order = true;
+    state.orders = a.orders;
+    state.order = a.orders > 0;
     state.orderValue = roundMoney_(a.orderValue);
   });
 
@@ -1209,15 +1238,15 @@ function getAnalyticsReport_(options) {
     sourceCounts[s.source || 'Direct'] = (sourceCounts[s.source || 'Direct'] || 0) + 1;
     deviceCounts[s.device || 'Unknown'] = (deviceCounts[s.device || 'Unknown'] || 0) + 1;
     const landing = s.landing || '/';
-    const l = landingStats[landing] || (landingStats[landing] = { name: landing, sessions: 0, carts: 0, orders: 0, orderValue: 0 });
+    const l = landingStats[landing] || (landingStats[landing] = { name: landing, sessions: 0, carts: 0, orders: 0, orderingSessions: 0, orderValue: 0 });
     l.sessions++;
     if (s.cart) l.carts++;
-    if (s.order) { l.orders++; l.orderValue += s.orderValue; }
+    if (s.order) { l.orders += s.orders; l.orderingSessions++; l.orderValue += s.orderValue; }
     if (s.campaign) {
       const key = [s.source || 'Direct', s.medium || 'unknown', s.campaign, s.content || ''].filter(Boolean).join(' / ');
-      const c = campaignStats[key] || (campaignStats[key] = { name: key, sessions: 0, orders: 0, orderValue: 0 });
+      const c = campaignStats[key] || (campaignStats[key] = { name: key, sessions: 0, orders: 0, orderingSessions: 0, orderValue: 0 });
       c.sessions++;
-      if (s.order) { c.orders++; c.orderValue += s.orderValue; }
+      if (s.order) { c.orders += s.orders; c.orderingSessions++; c.orderValue += s.orderValue; }
     }
   });
 
@@ -1246,7 +1275,7 @@ function getAnalyticsReport_(options) {
 
   const productNames = {};
   try { rowsAsObjects_(getSheet_(PRODUCTS_SHEET)).forEach(p => productNames[String(p.id || '')] = String(p.name || p.id || '')); } catch (_) {}
-  const topProducts = Object.keys(productStats).map(id => {
+  const allProductStats = Object.keys(productStats).map(id => {
     const p = productStats[id], viewers = Object.keys(p.viewVisitors || {}), adders = p.addVisitors || {};
     const viewerAdds = viewers.reduce((count, visitor) => count + (adders[visitor] ? 1 : 0), 0);
     const cartRate = analyticsPct_(viewerAdds, viewers.length);
@@ -1267,15 +1296,33 @@ function getAnalyticsReport_(options) {
       revenuePerViewer: viewers.length ? roundMoney_(p.revenue / viewers.length) : 0,
       opportunityLabel: opportunityLabel, opportunityScore: roundMoney_(opportunityScore)
     };
-  }).sort((a, b) => b.opportunityScore - a.opportunityScore || b.views - a.views).slice(0, 20);
+  });
+  // Bound the response while ranking the complete product population for every
+  // supported sort. Send compact IDs; each displayed product is serialized once.
+  const comparators = {
+    opportunity: (a,b) => b.opportunityScore - a.opportunityScore || b.views - a.views,
+    views: (a,b) => b.views - a.views,
+    cartRate: (a,b) => b.cartRate - a.cartRate || b.uniqueViewers - a.uniqueViewers,
+    sold: (a,b) => b.sold - a.sold,
+    revenue: (a,b) => b.revenue - a.revenue,
+    revenuePerViewer: (a,b) => b.revenuePerViewer - a.revenuePerViewer
+  };
+  const productRankings = {}, rankedIds = new Set();
+  Object.keys(comparators).forEach(key => {
+    productRankings[key] = allProductStats.slice().sort((a,b) => comparators[key](a,b) || a.id.localeCompare(b.id)).slice(0,20).map(p => p.id);
+    productRankings[key].forEach(id => rankedIds.add(id));
+  });
+  const productRankingRows = allProductStats.filter(p => rankedIds.has(p.id));
+  const productsById = new Map(productRankingRows.map(p => [p.id, p]));
+  const topProducts = productRankings.opportunity.map(id => productsById.get(id));
 
   const landingPages = Object.values(landingStats).map(x => ({
     name: x.name, sessions: x.sessions, carts: x.carts, orders: x.orders,
-    orderValue: roundMoney_(x.orderValue), conversion: analyticsPct_(x.orders, x.sessions)
+    orderingSessions: x.orderingSessions, orderValue: roundMoney_(x.orderValue), conversion: analyticsPct_(x.orderingSessions, x.sessions)
   })).sort((a, b) => b.sessions - a.sessions || b.orders - a.orders).slice(0, 10);
   const campaigns = Object.values(campaignStats).map(x => ({
     name: x.name, sessions: x.sessions, orders: x.orders,
-    orderValue: roundMoney_(x.orderValue), conversion: analyticsPct_(x.orders, x.sessions)
+    orderingSessions: x.orderingSessions, orderValue: roundMoney_(x.orderValue), conversion: analyticsPct_(x.orderingSessions, x.sessions)
   })).sort((a, b) => b.sessions - a.sessions || b.orders - a.orders).slice(0, 10);
 
   const funnel = [
@@ -1289,32 +1336,32 @@ function getAnalyticsReport_(options) {
   const insights = [];
   const mobile = Number(deviceCounts.Mobile || 0), totalDevice = Object.values(deviceCounts).reduce((a, b) => a + b, 0);
   if (totalDevice && mobile / totalDevice >= .65) insights.push(analyticsInsight_('mobile-first', 'Mobile is your storefront', Math.round(mobile * 100 / totalDevice) + '% of tracked sessions are on mobile.', 'info', 'visitors'));
-  if (current.productViewSessions >= 20 && analyticsPct_(current.cartSessions, current.productViewSessions) < 12) insights.push(analyticsInsight_('product-interest', 'Product interest is not becoming carts', analyticsPct_(current.cartSessions, current.productViewSessions) + '% of product-view sessions reached the cart.', 'warn', 'funnelCart'));
-  if (current.checkoutSessions >= 5 && analyticsPct_(current.orderSessions, current.checkoutSessions) < 55) insights.push(analyticsInsight_('checkout-drop', 'Checkout drop-off is visible', analyticsPct_(current.orderSessions, current.checkoutSessions) + '% of checkout sessions became orders.', 'warn', 'funnelCheckout'));
+  if (current.productViewSessions >= 20 && analyticsPct_(current.productCartSessions, current.productViewSessions) < 12) insights.push(analyticsInsight_('product-interest', 'Few product-view sessions include cart activity', analyticsPct_(current.productCartSessions, current.productViewSessions) + '% of product-view sessions also included a cart add.', 'warn', 'funnelCart'));
+  if (current.checkoutSessions >= 5 && analyticsPct_(current.checkoutOrderSessions, current.checkoutSessions) < 55) insights.push(analyticsInsight_('checkout-drop', 'Few checkout sessions have a saved order', analyticsPct_(current.checkoutOrderSessions, current.checkoutSessions) + '% of checkout sessions also have a non-cancelled saved order.', 'warn', 'funnelCheckout'));
   if (current.searches >= 10 && current.zeroResultSearches > 0) insights.push(analyticsInsight_('search-gaps', 'Some searches return no products', current.zeroResultSearches + ' of ' + current.searches + ' tracked searches returned zero results.', 'info', 'productViews'));
   if (current.orders >= 5 && currentCancellationRate >= 15) insights.push(analyticsInsight_('cancellations', 'Cancellation rate needs attention', currentCancellationRate + '% of orders in this period were cancelled.', 'warn', 'orders'));
-  const topViewed = topProducts.slice().sort((a, b) => b.views - a.views)[0];
+  const topViewed = productsById.get(productRankings.views[0]);
   if (topViewed && topViewed.views >= 8) insights.push(analyticsInsight_('top-interest', topViewed.name + ' is drawing attention', topViewed.views + ' views · ' + topViewed.adds + ' cart adds · ' + topViewed.sold + ' delivered units.', 'good', 'productViews'));
   const topSource = analyticsBreakdown_(sourceCounts)[0];
   if (topSource && topSource.value >= 3) insights.push(analyticsInsight_('top-source', topSource.name + ' is your top source', topSource.value + ' sessions in this period came from this source.', 'good', 'visitors'));
   if (!insights.length) insights.push(analyticsInsight_('collecting', 'Analytics is collecting', 'Keep this running for a few days. Insights become more useful once real traffic builds up.', 'neutral', 'visitors'));
 
   const report = {
-    generatedAt: now.toISOString(), days: days, trackingSince: trackingStart ? trackingStart.toISOString() : '', comparisonAvailable: comparisonAvailable,
+    generatedAt: now.toISOString(), days: days, timezone: tz, periodStart: currentStart.toISOString(), periodEnd: now.toISOString(), includesPartialToday: true, trackingSince: trackingStart ? trackingStart.toISOString() : '', comparisonAvailable: comparisonAvailable,
     metrics: metrics, series: series, funnel: funnel,
     rates: {
       sessionToProduct: analyticsPct_(current.productViewSessions, current.sessions),
-      productToCart: analyticsPct_(current.cartSessions, current.productViewSessions),
+      productToCart: analyticsPct_(current.productCartSessions, current.productViewSessions),
       sessionToCart: analyticsPct_(current.cartSessions, current.sessions),
-      cartToCheckout: analyticsPct_(current.checkoutSessions, current.cartSessions),
-      checkoutToOrder: analyticsPct_(current.orderSessions, current.checkoutSessions),
+      cartToCheckout: analyticsPct_(current.cartCheckoutSessions, current.cartSessions),
+      checkoutToOrder: analyticsPct_(current.checkoutOrderSessions, current.checkoutSessions),
       cancellationRate: currentCancellationRate,
       deliveryRate: currentDeliveryRate
     },
     searches: { total: current.searches, zeroResults: current.zeroResultSearches, zeroResultRate: analyticsPct_(current.zeroResultSearches, current.searches) },
     sources: analyticsBreakdown_(sourceCounts), devices: analyticsBreakdown_(deviceCounts), pages: analyticsBreakdown_(pageCounts),
     categories: analyticsBreakdown_(categoryCounts), campaigns: campaigns, landingPages: landingPages,
-    topProducts: topProducts, insights: insights
+    topProducts: topProducts, productRankings: productRankings, productRankingRows: productRankingRows, insights: insights
   };
   cachePutJson_(cacheKey, report, ANALYTICS_REPORT_CACHE_TTL);
   return report;
@@ -4086,7 +4133,7 @@ function dispatchAdmin_(body, actor) {
   const action = String(body.action || '');
   assertAdminPermission_(actor, action);
   if (action === 'adminSession') return {
-    version: 22,
+    version: 23,
     name: actor.name,
     role: actor.role
   };

@@ -1,3 +1,46 @@
+# Phase 1 update - analytics correctness
+
+This build is based on `dsb-analytics-v3-resettable-clean.zip`. Keep that ZIP as
+rollback until this phase has been checked on your store. This is Phase 1 only;
+the remaining audit work is listed in MAINTENANCE.md.
+
+## Install this phase
+
+1. Keep a copy of the currently deployed website and Apps Script code.
+2. Upload the contents of this ZIP to the existing repository, including
+   `.github`, `src`, and `scripts`. Wait for the publishing workflow to pass.
+3. Copy the generated root `code.gs` into the existing Apps Script project.
+   Save, then edit the existing web-app deployment to use a new version at the
+   SAME URL. Keep Script Properties (admin key, Telegram and AI settings).
+   Do not paste the individual src/backend files as additional scripts.
+4. Reload the admin page. It expects backend version 23. A version mismatch
+   while only one half is updated is expected; finish both updates and reload.
+5. Check home/product/cart on your phone, including a priced size, English and
+   Hindi, UPI/COD quote totals and the admin Analytics range/sort controls.
+   Use an approved test order if verifying the complete order flow.
+
+No manual Sheet column edits, analytics reset, data deletion, or new trigger is
+required for this phase. Existing Telegram background setup remains in use.
+Analytics counts may change because their definitions are corrected. Orders
+without saved tracking identities cannot be assigned to campaigns. Today is a
+partial calendar day. Checkout-start measurement changed from the final order
+confirmation button to the delivery form, so old/new start rates differ.
+
+## Verification and rollback
+
+Local verification: `node scripts/run-checks.mjs` (build consistency plus all
+18 regression programs). This includes simulated report/admin/GA tests. Live
+Apps Script, actual payment services and browser layout are not certified by
+those tests. No production order or notification was sent during development.
+Customer scripts gain about 1.1 KB of estimated gzip JavaScript/translation
+content on home; no stylesheet or new third-party dependency was added.
+
+To roll back, restore the previous website files AND previous Apps Script
+version at the same URL. Do not delete order rows, analytics rows or Script
+Properties. This phase does not change the stored sheet schema.
+
+---
+
 # Dhatterwal Suhag Bhandar — setup
 
 ## Update an existing shop

@@ -59,7 +59,7 @@ Apps Script functions still share their original global scope. File separation i
 
 ## Safe release checklist
 
-Run the build consistency check, `node scripts/check.mjs`, `node scripts/check-checkout.mjs`, and `node scripts/check-autofill.mjs`. Check the home page at phone and desktop widths, choose a priced size, add/remove cart quantities, and inspect the admin editor before publishing. Local checks do not execute live Google APIs or send orders/notifications.
+Run `node scripts/run-checks.mjs` for build consistency and every regression program. Check the home page at phone and desktop widths, choose a priced size, add/remove cart quantities, and inspect the admin editor before publishing. Local checks do not execute live Google APIs or send orders/notifications.
 
 When changing a deployed asset, update the version query in HTML and the static-page template. Preserve the `.github` publishing workflow, which excludes developer sources from the public website.
 
@@ -197,8 +197,8 @@ If analytics logic changes, run `node scripts/check-analytics.mjs` plus the full
 ## Step 2 QA hardening (2026-09-21)
 - Analytics queue entries carry stable `qid` values so an in-flight flush cannot overwrite newer queued events.
 - Analytics `Refresh` sends `force: true`; the backend bypasses its short report cache and commerce/event writes invalidate analytics report caches.
-- `Visitor conversion` is based on unique tracked visitors with a completed-order event, never authoritative order count divided by visitors. Orders/revenue remain authoritative from Sheets.
-- Funnel/source/device rates use deduplicated sessions, and product cart rate uses unique viewers who added to cart.
+- `Visitor conversion` uses unique visitor identities attached to non-cancelled saved orders; both visitor and session denominators include identities recovered from order records. Orders/revenue remain authoritative from Sheets.
+- Session-stage/source/device metrics use deduplicated sessions. Stage reach uses all sessions; cross-stage rates use intersections rather than claiming an ordered funnel. Product cart rate uses unique viewers who added to cart.
 - Backend/admin API version: 20.
 
 ## Performance guardrails
@@ -231,3 +231,56 @@ When changing analytics, run `node scripts/build.mjs` and all `scripts/check*.mj
 - Funnel values are session-deduped. Funnel buttons use session-series metrics, while event-count metrics remain available in health/trend views.
 - Product analytics distinguishes raw views from unique viewers; "Viewer → cart" is a unique-viewer conversion rate. The Opportunity label is an action hint, not a sales ranking, and the admin can change sort order.
 - Mobile analytics tables switch to card rows below 760px to avoid horizontal overflow. The floating DSB AI button is hidden while Analytics is active on small screens to prevent content overlap.
+
+
+## Phased audit work - Phase 1 (2026-09-22)
+
+Phase 1 is deliberately limited to analytics accuracy, tracking instrumentation,
+privacy copy and release checks. It does not change checkout validation, quote
+signing, stock plans, promo rules, phone normalization, payment verification,
+order recovery, AI behavior, or any stylesheet. Do not call it the completion
+of the full audit.
+
+- Backend/admin API version is 23. Report cache namespace is v2; anonymous
+  visitor/session IDs and event-sheet columns remain compatible with v3.
+- Reports use shop-timezone calendar days including today so far. Recovered
+  order identities contribute to visitor/session denominators, including
+  cancelled shoppers; only non-cancelled orders contribute to conversion.
+- Browser order_completed events are activity only. They cannot establish
+  campaign money or conversion. Legacy orders lacking attribution still count
+  in covered order KPIs but cannot be assigned to a campaign. Existing metric
+  values may decrease because they are now calculated differently; no reset
+  or historical row deletion is required.
+- Campaign orders count actual orders; conversion counts ordering sessions.
+  The activity panel is not a strict sequential funnel. Cross-stage health
+  rates describe same-period session overlap, not causal progression.
+- Product rankings are calculated over all matching activity, then bounded to
+  20 per sort. Compact ranking IDs share a single pool of at most 120 product
+  rows. Chunked report caches are read using the corresponding chunk reader.
+- Checkout-start telemetry now runs when the non-empty cart's delivery form is
+  rendered. Unchanged form rerenders/reopening in the same session/tab are
+  deduplicated; changed cart contents start a new measured attempt. Older
+  checkout events were recorded later, so historical start rates are not
+  directly comparable across this update.
+- Cart events include actual selected-size prices and quantities for GA. These
+  additional GA item fields do not expand the first-party stored schema.
+- English/Hindi privacy paragraphs describe analytics and service providers.
+- `node scripts/run-checks.mjs` runs all checks and stops on any failure. The
+  publishing workflow uses this same entry point. Phase 1 tests execute report
+  outputs, GA hooks, admin DOM wiring, timezone/DST boundaries and cache reads.
+  Mock DOM tests do not establish real browser layout correctness.
+
+Remaining phases, each delivered as a separate build:
+1. Phase 1 (this build): analytics/tracking correctness and privacy copy.
+2. Phase 2: compatible phone/promo identity handling, missing-cost accounting,
+   cancellation-request concurrency, and record migration/recovery tests.
+3. Phase 3: analytics reset/ingestion concurrency, retention/aggregation,
+   reduced repeated Sheet work and operational health/backup procedures.
+4. Phase 4: browser-verified accessibility/UI cleanup and selected shop features
+   such as shipment references, UTM links, optional size stock and reel links.
+   External account configuration must be verified where relevant.
+
+The reset/ingestion race and bounded retry deduplication described in the audit
+remain Phase 3 work. Daily unique visitor counts must not simply be summed to
+produce multi-day unique totals. Never remove raw/recovery history without a
+validated retention/archive plan.

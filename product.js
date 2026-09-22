@@ -447,7 +447,7 @@ function renderPdActions(p) {
       return;
     }
     renderPdActions(p);
-    window.DSBAnalytics?.track('add_to_cart', { productId: p.id, size: selectedSize || '', source: 'product' });
+    window.DSBAnalytics?.track('add_to_cart', { productId: p.id, size: selectedSize || '', unitPrice: variant.price, qty: 1, source: 'product' });
     showToast(`${p.name} added to cart`);
     playAddFlourish($('.pd-slide img'));
   });
@@ -459,7 +459,7 @@ function renderPdActions(p) {
       return;
     }
     renderPdActions(p);
-    window.DSBAnalytics?.track('add_to_cart', { productId: p.id, size: selectedSize || '', source: 'buy-now' });
+    window.DSBAnalytics?.track('add_to_cart', { productId: p.id, size: selectedSize || '', unitPrice: variant.price, qty: 1, source: 'buy-now' });
     playAddFlourish($('.pd-slide img'), {
       openCartAfter: true
     });

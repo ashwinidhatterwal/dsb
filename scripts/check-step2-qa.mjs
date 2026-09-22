@@ -19,7 +19,7 @@ assert(client.includes('SESSION_TTL = 30 * 60 * 1000'), 'Analytics sessions must
 
 // Refresh correctness and cache invalidation.
 assert(adminClient.includes("adminRead('adminAnalytics', { days: Number($a('analyticsRange').value) || 30, force: !!force })"), 'Refresh button must request a forced report');
-assert(analytics.includes('options.force ? null : cacheGetJson_(cacheKey)'), 'Backend must bypass cached analytics when force=true');
+assert(analytics.includes('options.force ? null : cacheGetChunkedJson_(cacheKey)'), 'Backend must bypass cached analytics when force=true');
 assert(cache.includes('function invalidateAnalyticsCaches_()'), 'Analytics report cache needs explicit invalidation');
 assert(analytics.includes('invalidateAnalyticsCaches_();'), 'New analytics events must invalidate analytics reports');
 assert(cache.includes('invalidateAnalyticsCaches_();'), 'Commerce writes must invalidate analytics reports too');
@@ -36,8 +36,8 @@ assert(analytics.includes('viewerAdds') && analytics.includes('viewVisitors'), '
 assert(adminClient.includes('x.convertedVisitors * 100 / x.visitors'), 'Conversion trend must use converting visitors');
 
 // Version/cache busting so deployed clients actually receive QA fixes.
-assert(admin.includes('profile.version !== 22'), 'Admin must require backend version 22');
-assert(auth.includes('version: 22'), 'Backend must report version 22');
-assert(html.includes('admin.js?v=20260921step2qa1'), 'Admin JS cache bust missing');
-assert(html.includes('admin-analytics.js?v=20260922analytics3'), 'Analytics admin cache bust missing');
+assert(admin.includes('profile.version !== 23'), 'Admin must require backend version 23');
+assert(auth.includes('version: 23'), 'Backend must report version 23');
+assert(html.includes('admin.js?v=20260922phase1'), 'Admin JS cache bust missing');
+assert(html.includes('admin-analytics.js?v=20260922phase1'), 'Analytics admin cache bust missing');
 console.log('PASS: Step 2 analytics reliability, metric integrity, cache freshness and version sync.');

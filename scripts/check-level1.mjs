@@ -38,6 +38,6 @@ const app = await read('app.js');
 assert(app.includes("priceFilter === 'under-100'"));
 assert(app.includes("price: priceFilter === 'all' ? '' : priceFilter"));
 const checkout = await read('cart-ui-checkout.js');
-assert(checkout.includes("'begin_checkout'"));
+assert((await read('cart-ui-drawer.js')).includes('DSBAnalytics?.beginCheckout?.'));
 assert(checkout.includes("'order_completed'"));
 console.log('PASS: Level 1 filters, recent products, similarity, assurance information and analytics hooks.');

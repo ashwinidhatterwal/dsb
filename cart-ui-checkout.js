@@ -165,12 +165,6 @@ async function confirmCheckout() {
 }
 async function confirmCheckoutUnlocked() {
   if (checkoutBusy || !checkoutQuote) return;
-  window.DSBAnalytics?.track('begin_checkout', {
-    items: checkoutQuote.order.itemsDetail.length,
-    payment: checkoutQuote.order.paymentMethod,
-    total: Number(checkoutQuote.quote.correctedTotal || 0),
-    cartItems: checkoutQuote.quote.items || []
-  });
   // An uncertain previous attempt must be checked before any new request ID is created.
   try {
     pendingCheckout = JSON.parse(localStorage.getItem(PENDING_CHECKOUT_KEY) || 'null');

@@ -110,13 +110,13 @@
   }
 
   function productById(id) {
-    try { return Array.isArray(window.ALL_PRODUCTS) ? window.ALL_PRODUCTS.find(p => String(p.id) === String(id)) || null : null; }
+    try { return typeof ALL_PRODUCTS !== 'undefined' && Array.isArray(ALL_PRODUCTS) ? ALL_PRODUCTS.find(p => String(p.id) === String(id)) || null : null; }
     catch (_) { return null; }
   }
 
   function gaItem(raw) {
     if (!raw) return null;
-    const id = clean(raw.id || raw.productId, 80);
+    const id = clean(raw.productId || raw.id, 80);
     if (!id) return null;
     const known = productById(id) || {};
     const price = Number(raw.unitPrice ?? raw.price ?? known.price);
@@ -129,6 +129,7 @@
       quantity: qty
     };
     if (Number.isFinite(price) && price > 0) item.price = price;
+    if (raw.size) item.item_variant = clean(raw.size, 40);
     return item;
   }
 
@@ -249,7 +250,24 @@
     track('product_view', { productId: product?.id, productName: product?.name, category: product?.category, subcategory: product?.subcategory, price: Number(product?.price || 0) });
   }
 
-  window.DSBAnalytics = Object.freeze({ track, pageView, productView, flush, context });
+  // Suppress unchanged drawer renders and input changes; a changed cart starts
+  // a new measured attempt.
+  // sessionStorage avoids repeated starts after same-tab navigation. No customer
+  // details are used, and unavailable storage must never prevent checkout.
+  let lastCheckoutStart = '';
+  function beginCheckout(cartItems, payment) {
+    try {
+      if (!Array.isArray(cartItems) || !cartItems.length) return;
+      const signature = JSON.stringify([sessionContext(true).id, cartItems.map(x => [x.productId || x.id, x.size || '', x.qty, x.unitPrice ?? x.price]).sort((a,b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))]);
+      let previous = lastCheckoutStart;
+      try { previous = sessionStorage.getItem('dsb_checkout_start_v1') || previous; } catch (_) {}
+      if (signature === previous) return;
+      lastCheckoutStart = signature;
+      try { sessionStorage.setItem('dsb_checkout_start_v1', signature); } catch (_) {}
+      track('begin_checkout', { items: cartItems.length, payment, cartItems, total: cartItems.reduce((sum,x) => sum + Number(x.unitPrice ?? x.price ?? 0) * Number(x.qty || 1), 0) });
+    } catch (_) {}
+  }
+  window.DSBAnalytics = Object.freeze({ track, pageView, productView, flush, context, beginCheckout });
   document.addEventListener('DOMContentLoaded', pageView, { once: true });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush({ keepalive: true }); });
 })();

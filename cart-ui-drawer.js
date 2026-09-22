@@ -37,6 +37,7 @@ function renderCartDrawer() {
     }
     return;
   }
+  window.DSBAnalytics?.beginCheckout?.(items.map(({ product, qty }) => ({ productId: product.productId || product.id, name: product.name, category: product.category, size: product.size || '', unitPrice: product.price, qty })), checkoutState.paymentMethod);
   const subtotal = CartStore.total();
   const {
     discount,

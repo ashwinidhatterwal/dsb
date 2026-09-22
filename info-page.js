@@ -40,8 +40,8 @@
     if (typeof window.openCart === 'function') return Promise.resolve();
     if (!cartUiPromise) {
       cartUiPromise = loadScript('cart-ui-core.js?v=20260921perf1')
-        .then(() => loadScript('cart-ui-drawer.js?v=20260921perf1'))
-        .then(() => loadScript('cart-ui-checkout.js?v=20260921perf1'))
+        .then(() => loadScript('cart-ui-drawer.js?v=20260922phase1'))
+        .then(() => loadScript('cart-ui-checkout.js?v=20260922phase1'))
         .catch(err => { cartUiPromise = null; throw err; });
     }
     return cartUiPromise;

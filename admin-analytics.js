@@ -97,8 +97,8 @@
   function renderFunnel() {
     const wrap = $a('analyticsFunnel');
     wrap.innerHTML = report.funnel.map((step, i) => {
-      const prior = i ? report.funnel[i - 1].value : 0;
-      const rate = i ? (prior ? percent(step.value * 100 / prior) + ' from previous' : '—') : 'All tracked sessions';
+      const total = report.funnel[0]?.value || 0;
+      const rate = i ? (total ? percent(step.value * 100 / total) + ' of sessions' : '—') : 'All tracked sessions';
       return `<button type="button" class="analytics-funnel-step ${focus === step.key ? 'active' : ''}" data-analytics-focus="${step.key}"><b>${number(step.value)}</b><span>${step.label}</span><span class="analytics-funnel-rate">${rate}</span></button>`;
     }).join('');
   }
@@ -108,6 +108,10 @@
   }
 
   function sortedProducts() {
+    if (report.productRankings && report.productRankingRows) {
+      const byId = new Map(report.productRankingRows.map(p => [p.id, p]));
+      return (report.productRankings[productSort] || report.productRankings.opportunity || []).map(id => byId.get(id)).filter(Boolean);
+    }
     const rows = (report.topProducts || []).slice();
     const by = {
       opportunity: (a,b) => (b.opportunityScore || 0) - (a.opportunityScore || 0) || b.views - a.views,
@@ -149,9 +153,9 @@
       ['Delivered orders', number(m.deliveredOrders?.value)],
       ['Cancellation rate', percent(r.cancellationRate)],
       ['Delivery completion', percent(r.deliveryRate)],
-      ['Product → cart', percent(r.productToCart)],
-      ['Cart → checkout', percent(r.cartToCheckout)],
-      ['Checkout → tracked order', percent(r.checkoutToOrder)],
+      ['Product sessions with cart', percent(r.productToCart)],
+      ['Cart sessions with checkout', percent(r.cartToCheckout)],
+      ['Checkout sessions with order', percent(r.checkoutToOrder)],
       ['Product views', number(m.productViews?.value)]
     ];
     $a('analyticsHealth').innerHTML = entries.map(([label,value]) => `<div class="analytics-health-card"><span>${label}</span><strong>${value}</strong></div>`).join('');
@@ -173,7 +177,7 @@
 
   function performanceTable(rows, empty, includeCart, kind) {
     if (!rows?.length) return `<div class="analytics-status">${empty}</div>`;
-    return `<div class="analytics-table-wrap"><table class="analytics-table analytics-compact-table analytics-mobile-cards"><thead><tr><th>Entry</th><th class="num">Sessions</th>${includeCart ? '<th class="num">Cart</th>' : ''}<th class="num">Tracked orders</th><th class="num">Conv.</th><th class="num">Order value</th></tr></thead><tbody>${rows.map(x => {
+    return `<div class="analytics-table-wrap"><table class="analytics-table analytics-compact-table analytics-mobile-cards"><thead><tr><th>Entry</th><th class="num">Sessions</th>${includeCart ? '<th class="num">Cart</th>' : ''}<th class="num">Tracked orders</th><th class="num" title="Share of sessions with a non-cancelled saved order">Session conv.</th><th class="num">Order value</th></tr></thead><tbody>${rows.map(x => {
       const display = kind === 'campaign' ? { label: String(x.name || 'Campaign'), detail: String(x.name || '') } : friendlyEntry(x.name);
       return `<tr><td data-label="Entry"><span class="analytics-product-name" title="${escapeHtml(display.detail)}">${escapeHtml(display.label)}</span>${display.label !== display.detail ? `<span class="analytics-entry-detail">${escapeHtml(display.detail)}</span>` : ''}</td><td data-label="Sessions" class="num">${number(x.sessions)}</td>${includeCart ? `<td data-label="Cart" class="num">${number(x.carts)}</td>` : ''}<td data-label="Tracked orders" class="num">${number(x.orders)}</td><td data-label="Conversion" class="num">${percent(x.conversion)}</td><td data-label="Order value" class="num">${money(x.orderValue)}</td></tr>`;
     }).join('')}</tbody></table></div>`;
@@ -189,7 +193,7 @@
     const d = new Date(report.generatedAt), started = report.trackingSince ? new Date(report.trackingSince) : null;
     const updated = 'Updated ' + (isNaN(d) ? 'now' : d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
     const coverage = started && !isNaN(started) ? ' · tracking since ' + started.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : '';
-    const compare = report.comparisonAvailable ? '' : ' · comparisons unlock after a full prior period';
+    const compare = (report.comparisonAvailable ? '' : ' · comparisons unlock after a full prior period') + ' · calendar days (' + (report.timezone || 'shop time') + '), today so far';
     $a('analyticsFresh').textContent = updated + coverage + compare;
   }
 
@@ -234,6 +238,8 @@
     if (loading || !API_URL || !ADMIN_KEY) return;
     if (report && !force) { render(); return; }
     loading = true;
+    $a('analyticsRange').disabled = true;
+    $a('analyticsRefresh').disabled = true;
     $a('analyticsStatus').hidden = false; $a('analyticsContent').hidden = true;
     $a('analyticsStatus').textContent = 'Loading analytics…';
     try {
@@ -245,7 +251,7 @@
       render();
     } catch (err) {
       $a('analyticsStatus').textContent = 'Analytics could not load: ' + err.message;
-    } finally { loading = false; }
+    } finally { loading = false; $a('analyticsRange').disabled = false; $a('analyticsRefresh').disabled = false; }
   }
 
   async function openProduct(id) {
