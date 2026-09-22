@@ -37,6 +37,7 @@ function dispatchAdmin_(body, actor) {
   if (action === 'adminOrders') return getAllOrders(body.options);
   if (action === 'adminDashboard') return getDashboardData();
   if (action === 'adminAnalytics') return getAnalyticsReport_(body.options || {});
+  if (action === 'resetAnalytics') return resetAnalytics_(actor);
   if (action === 'aiModels') return aiModelsGet_();
   if (action === 'aiConfigGet') return aiConfigGet_();
   if (action === 'aiConfigSaveConnection') return aiConfigSaveConnection_(body);

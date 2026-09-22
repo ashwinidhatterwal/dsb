@@ -193,6 +193,43 @@
     $a('analyticsFresh').textContent = updated + coverage + compare;
   }
 
+  function clearLocalAnalyticsState() {
+    // Clear this browser's pending analytics state so a test/admin device cannot
+    // replay pre-reset events into the fresh dataset. Other browsers are safely
+    // blocked server-side by the reset timestamp.
+    ['dsb_analytics_queue_v3','dsb_analytics_queue_v2','dsb_analytics_session_v3','dsb_attribution_v3'].forEach(key => {
+      try { localStorage.removeItem(key); } catch (_) {}
+    });
+  }
+
+  async function resetAnalytics() {
+    const btn = $a('analyticsResetConfirm');
+    if (!btn || loading) return;
+    const old = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Resetting…';
+    try {
+      const res = await adminFetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ key: ADMIN_KEY, action: 'resetAnalytics' })
+      });
+      const data = await res.json();
+      if (!data || data.error || data.success === false) throw new Error(data?.error || 'Reset failed');
+      clearLocalAnalyticsState();
+      try { $a('analyticsResetDialog')?.close(); } catch (_) {}
+      report = null;
+      focus = 'visitors';
+      showToast('Analytics reset. Fresh tracking starts now.');
+      await load(true);
+    } catch (err) {
+      showToast('Could not reset analytics: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = old;
+    }
+  }
+
   async function load(force) {
     if (loading || !API_URL || !ADMIN_KEY) return;
     if (report && !force) { render(); return; }
@@ -203,6 +240,8 @@
       report = await adminRead('adminAnalytics', { days: Number($a('analyticsRange').value) || 30, force: !!force });
       if (!report?.metrics) throw new Error('Invalid analytics response');
       $a('analyticsStatus').hidden = true; $a('analyticsContent').hidden = false;
+      const resetZone = $a('analyticsResetZone');
+      if (resetZone) resetZone.hidden = ADMIN_PROFILE?.role !== 'admin';
       render();
     } catch (err) {
       $a('analyticsStatus').textContent = 'Analytics could not load: ' + err.message;
@@ -239,6 +278,14 @@
     $a('analyticsRange')?.addEventListener('change', () => { report = null; load(true); });
     $a('analyticsRefresh')?.addEventListener('click', () => { report = null; load(true); });
     $a('analyticsProductSort')?.addEventListener('change', e => { productSort = e.target.value || 'opportunity'; renderProducts(); });
+    $a('analyticsResetOpen')?.addEventListener('click', () => {
+      if (ADMIN_PROFILE?.role !== 'admin') return showToast('Only the owner/admin can reset analytics.');
+      const dialog = $a('analyticsResetDialog');
+      if (dialog?.showModal) dialog.showModal();
+      else if (confirm('Reset analytics history and start fresh? Orders and products will not be deleted. This cannot be undone.')) resetAnalytics();
+    });
+    $a('analyticsResetConfirm')?.addEventListener('click', resetAnalytics);
+    $a('analyticsResetDialog')?.addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
     $a('tab-analytics')?.addEventListener('click', e => {
       const focusBtn = e.target.closest('[data-analytics-focus]'); if (focusBtn) setFocus(focusBtn.dataset.analyticsFocus);
       const row = e.target.closest('tr[data-product-id]'); if (row) openProduct(row.dataset.productId);

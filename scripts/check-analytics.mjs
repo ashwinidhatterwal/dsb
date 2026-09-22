@@ -34,4 +34,10 @@ const row = context.analyticsEventRow_({ name:'page_view', path:'/x', props:{ tr
 assert.equal(row[9][0], "'", 'Formula-like analytics text must be escaped before Sheets');
 assert.equal(row[10], 'Mobile');
 assert.equal(context.analyticsEventRow_({name:'not_allowed',props:{}},'v','s',new Date()), null);
+
+assert(sourceBackend.includes('function resetAnalytics_('), 'Analytics reset backend action missing');
+assert(sourceBackend.includes("ANALYTICS_RESET_AT"), 'Analytics reset boundary missing');
+assert(adminClient.includes("action: 'resetAnalytics'"), 'Analytics reset admin action missing');
+assert(adminClient.includes('dsb_analytics_queue_v3'), 'Reset should clear this browser analytics queue');
+assert(html.includes('analyticsResetZone') && html.includes('analyticsResetDialog'), 'Analytics reset UI/confirmation missing');
 console.log('PASS: batched anonymous analytics, admin analytics view, privacy guards, formula safety and backend versioning.');

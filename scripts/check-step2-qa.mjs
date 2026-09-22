@@ -39,5 +39,5 @@ assert(adminClient.includes('x.convertedVisitors * 100 / x.visitors'), 'Conversi
 assert(admin.includes('profile.version !== 22'), 'Admin must require backend version 22');
 assert(auth.includes('version: 22'), 'Backend must report version 22');
 assert(html.includes('admin.js?v=20260921step2qa1'), 'Admin JS cache bust missing');
-assert(html.includes('admin-analytics.js?v=20260922analytics2'), 'Analytics admin cache bust missing');
+assert(html.includes('admin-analytics.js?v=20260922analytics3'), 'Analytics admin cache bust missing');
 console.log('PASS: Step 2 analytics reliability, metric integrity, cache freshness and version sync.');

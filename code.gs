@@ -765,6 +765,31 @@ function getDeliveryEstimate_(pinCode) {
    - Orders/real revenue come from authoritative order sheets, not browser events.
    - Analytics writes are best-effort and isolated from checkout locks.
 */
+const ANALYTICS_RESET_AT_PROPERTY = 'ANALYTICS_RESET_AT';
+
+function analyticsResetAt_() {
+  const raw = PropertiesService.getScriptProperties().getProperty(ANALYTICS_RESET_AT_PROPERTY);
+  const date = raw ? new Date(raw) : null;
+  return date && !isNaN(date.getTime()) ? date : null;
+}
+
+function resetAnalytics_(actor) {
+  if (!actor || actor.role !== 'admin') throw new Error('Only the owner/admin can reset analytics.');
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw new Error('Analytics is busy. Please try again in a moment.');
+  try {
+    const resetAt = new Date();
+    const sheet = analyticsSheet_();
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
+    PropertiesService.getScriptProperties().setProperty(ANALYTICS_RESET_AT_PROPERTY, resetAt.toISOString());
+    invalidateAnalyticsCaches_();
+    return { success: true, resetAt: resetAt.toISOString() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function analyticsSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(ANALYTICS_SHEET);
@@ -833,7 +858,14 @@ function recordAnalyticsBatch_(body) {
   try { rateLimit_('analytics:' + fallbackVisitor, 60, 60); } catch (_) { return { success: true, accepted: 0, throttled: true }; }
 
   const now = new Date();
+  const resetAt = analyticsResetAt_();
   const candidates = batch.map(item => {
+    // A reset is a hard data boundary. Ignore events that were queued before it
+    // and arrived later after connectivity returned.
+    if (resetAt && item && item.ts) {
+      const eventDate = new Date(item.ts);
+      if (!isNaN(eventDate.getTime()) && eventDate < resetAt) return null;
+    }
     const visitor = analyticsCleanText_(item && item.visitorId || fallbackVisitor, 100);
     const session = analyticsCleanText_(item && item.sessionId || fallbackSession, 100);
     if (!visitor || !session) return null;
@@ -925,7 +957,7 @@ function getAnalyticsReport_(options) {
   const currentStart = new Date(now.getTime() - days * 86400000);
   const previousStart = new Date(now.getTime() - days * 2 * 86400000);
   const events = [];
-  let trackingStart = null;
+  let trackingStart = analyticsResetAt_();
   try {
     rowsAsObjects_(analyticsSheet_()).forEach(row => {
       const date = new Date(row.date);
@@ -4063,6 +4095,7 @@ function dispatchAdmin_(body, actor) {
   if (action === 'adminOrders') return getAllOrders(body.options);
   if (action === 'adminDashboard') return getDashboardData();
   if (action === 'adminAnalytics') return getAnalyticsReport_(body.options || {});
+  if (action === 'resetAnalytics') return resetAnalytics_(actor);
   if (action === 'aiModels') return aiModelsGet_();
   if (action === 'aiConfigGet') return aiConfigGet_();
   if (action === 'aiConfigSaveConnection') return aiConfigSaveConnection_(body);
