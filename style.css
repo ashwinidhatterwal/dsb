@@ -3070,15 +3070,8 @@ html[lang="hi"] .hero-compact .hero-title{
   display:none;
   min-height:0;
 }
-.related-rail{
-  align-items:stretch;
-}
-/* Equal tile rows without fixed pixel heights or clipping translated content. */
-.grid{
-  grid-auto-rows:1fr;
-  align-items:stretch;
-}
-.grid>.card,.related-rail>.card{
+/* Horizontal rails keep equal-height cards; product grids use natural row heights. */
+.related-rail>.card{
   align-self:stretch;
   height:100%;
   min-width:0;
@@ -3088,10 +3081,6 @@ html[lang="hi"] .hero-compact .hero-title{
 }
 .card .body{
   min-width:0;
-}
-.card .card-actions{
-  min-height:94px;
-  flex-shrink:0;
 }
 /* Keep category and subcategory controls below the measured search bar. */
 #shopMain .cat-rail-outer{
