@@ -1,29 +1,36 @@
-/* DSB Admin Analytics — dedicated analytics view, no charting dependency. */
+/* DSB Admin Analytics — focused ecommerce analytics, no charting dependency. */
 (function () {
   'use strict';
   let report = null;
   let focus = 'visitors';
   let loading = false;
+
   const metricMeta = {
-    visitors: { label: 'Visitors', short: 'Visitors', series: 'visitors', format: 'number' },
-    sessions: { label: 'Sessions', short: 'Sessions', series: 'sessions', format: 'number' },
-    productViews: { label: 'Product views', short: 'Views', series: 'productViews', format: 'number' },
-    addToCarts: { label: 'Added to cart', short: 'Cart adds', series: 'addToCarts', format: 'number' },
-    checkouts: { label: 'Checkout starts', short: 'Checkouts', series: 'checkouts', format: 'number' },
-    orders: { label: 'Orders', short: 'Orders', series: 'orders', format: 'number' },
-    revenue: { label: 'Order value', short: 'Revenue', series: 'revenue', format: 'money' },
-    conversion: { label: 'Visitor conversion', short: 'Conversion', series: null, format: 'percent' }
+    visitors: { label: 'Visitors', series: 'visitors', format: 'number' },
+    sessions: { label: 'Sessions', series: 'sessions', format: 'number' },
+    productViews: { label: 'Product views', series: 'productViews', format: 'number' },
+    addToCarts: { label: 'Added to cart', series: 'addToCarts', format: 'number' },
+    checkouts: { label: 'Checkout starts', series: 'checkouts', format: 'number' },
+    orders: { label: 'Orders placed', series: 'orders', format: 'number' },
+    deliveredOrders: { label: 'Delivered orders', series: 'deliveredOrders', format: 'number' },
+    revenue: { label: 'Placed order value', series: 'revenue', format: 'money' },
+    deliveredRevenue: { label: 'Delivered revenue', series: 'deliveredRevenue', format: 'money' },
+    conversion: { label: 'Visitor conversion', series: null, format: 'percent' }
   };
+
   const $a = id => document.getElementById(id);
   function money(v) { return '₹' + Math.round(Number(v) || 0).toLocaleString('en-IN'); }
   function number(v) { return Math.round(Number(v) || 0).toLocaleString('en-IN'); }
-  function fmt(v, type) { return type === 'money' ? money(v) : type === 'percent' ? (Number(v) || 0).toFixed(1).replace(/\.0$/, '') + '%' : number(v); }
+  function percent(v) { return (Number(v) || 0).toFixed(1).replace(/\.0$/, '') + '%'; }
+  function fmt(v, type) { return type === 'money' ? money(v) : type === 'percent' ? percent(v) : number(v); }
+
   function deltaHtml(value) {
     const n = Number(value) || 0;
     const cls = n > .05 ? 'up' : n < -.05 ? 'down' : 'flat';
     const arrow = n > .05 ? '↑' : n < -.05 ? '↓' : '–';
     return `<span class="analytics-delta ${cls}">${arrow} ${Math.abs(n).toFixed(1).replace(/\.0$/, '')}%</span>`;
   }
+
   function renderKpis() {
     const wrap = $a('analyticsKpis');
     wrap.innerHTML = Object.keys(metricMeta).map(key => {
@@ -35,13 +42,13 @@
       </button>`;
     }).join('');
   }
+
   function chartValues() {
     const meta = metricMeta[focus];
-    if (focus === 'conversion') {
-      return report.series.map(x => ({ label: x.label, value: x.visitors ? x.convertedVisitors * 100 / x.visitors : 0 }));
-    }
+    if (focus === 'conversion') return report.series.map(x => ({ label: x.label, value: x.visitors ? x.convertedVisitors * 100 / x.visitors : 0 }));
     return report.series.map(x => ({ label: x.label, value: Number(x[meta.series]) || 0 }));
   }
+
   function renderChart() {
     const meta = metricMeta[focus], data = chartValues(), wrap = $a('analyticsChart');
     $a('analyticsChartTitle').textContent = meta.label + ' trend';
@@ -68,38 +75,72 @@
     const labels = data.length <= 7 ? data : [data[0], data[Math.floor((data.length-1)/2)], data[data.length-1]];
     $a('analyticsChartLabels').innerHTML = labels.map(x => `<span>${x.label}</span>`).join('');
   }
+
   function renderFunnel() {
     const wrap = $a('analyticsFunnel');
     wrap.innerHTML = report.funnel.map((step, i) => {
       const prior = i ? report.funnel[i - 1].value : 0;
-      const rate = i ? (prior ? (step.value * 100 / prior).toFixed(1).replace(/\.0$/, '') + '% from previous' : '—') : 'Store interest';
+      const rate = i ? (prior ? percent(step.value * 100 / prior) + ' from previous' : '—') : 'All tracked sessions';
       return `<button type="button" class="analytics-funnel-step" data-analytics-focus="${step.key}"><b>${number(step.value)}</b><span>${step.label}</span><span class="analytics-funnel-rate">${rate}</span></button>`;
     }).join('');
   }
+
   function renderInsights() {
     $a('analyticsInsights').innerHTML = report.insights.map(x => `<button type="button" class="analytics-insight ${x.tone || ''}" data-analytics-focus="${x.focus || 'visitors'}"><strong>${escapeHtml(x.title)}</strong><span>${escapeHtml(x.text)}</span></button>`).join('');
   }
+
   function renderProducts() {
     const body = $a('analyticsProducts');
-    if (!report.topProducts.length) { body.innerHTML = '<tr><td colspan="6" class="analytics-status">No product activity yet.</td></tr>'; return; }
+    if (!report.topProducts.length) { body.innerHTML = '<tr><td colspan="7" class="analytics-status">No product activity yet.</td></tr>'; return; }
     body.innerHTML = report.topProducts.map(p => `<tr data-product-id="${escapeHtml(p.id)}" title="Open product editor">
-      <td><span class="analytics-product-name">${escapeHtml(p.name)}</span><span class="analytics-product-id">${escapeHtml(p.id)}</span></td><td class="num">${number(p.views)}</td><td class="num">${number(p.adds)}</td><td class="num">${fmt(p.cartRate,'percent')}</td><td class="num">${number(p.sold)}</td><td class="num">${money(p.revenue)}</td></tr>`).join('');
+      <td><span class="analytics-product-name">${escapeHtml(p.name)}</span><span class="analytics-product-id">${escapeHtml(p.id)}</span></td>
+      <td class="num">${number(p.views)}</td><td class="num">${number(p.adds)}</td><td class="num">${percent(p.cartRate)}</td>
+      <td class="num">${number(p.sold)}</td><td class="num">${money(p.revenue)}</td><td class="num">${money(p.revenuePerView)}</td></tr>`).join('');
   }
+
   function breakdownHtml(title, rows) {
     if (!rows?.length) return `<div class="analytics-breakdown"><h4>${title}</h4><p class="hint">No data yet.</p></div>`;
     const max = Math.max(...rows.map(x => Number(x.value) || 0), 1);
     return `<div class="analytics-breakdown"><h4>${title}</h4>${rows.slice(0,6).map(x => `<div class="analytics-break-row"><span>${escapeHtml(x.name)}</span><b>${number(x.value)}</b><div class="analytics-break-bar"><i style="width:${Math.max(3,(Number(x.value)||0)*100/max)}%"></i></div></div>`).join('')}</div>`;
   }
+
   function renderBreakdowns() {
-    $a('analyticsBreakdowns').innerHTML = breakdownHtml('Traffic sources', report.sources) + breakdownHtml('Devices', report.devices) + breakdownHtml('Categories', report.categories);
+    const search = report.searches || {};
+    const searchHtml = `<div class="analytics-breakdown"><h4>Store search</h4><div class="analytics-health-inline"><span><b>${number(search.total)}</b> searches</span><span><b>${number(search.zeroResults)}</b> no results</span><span><b>${percent(search.zeroResultRate)}</b> zero-result rate</span></div></div>`;
+    $a('analyticsBreakdowns').innerHTML = breakdownHtml('Traffic sources', report.sources) + breakdownHtml('Devices', report.devices) + breakdownHtml('Categories', report.categories) + searchHtml;
   }
+
+  function renderHealth() {
+    const m = report.metrics, r = report.rates || {};
+    const entries = [
+      ['Average order value', money(m.aov?.value)],
+      ['Cancellation rate', percent(r.cancellationRate)],
+      ['Delivery completion', percent(r.deliveryRate)],
+      ['Product → cart', percent(r.productToCart)],
+      ['Cart → checkout', percent(r.cartToCheckout)],
+      ['Checkout → order', percent(r.checkoutToOrder)]
+    ];
+    $a('analyticsHealth').innerHTML = entries.map(([label,value]) => `<div class="analytics-health-card"><span>${label}</span><strong>${value}</strong></div>`).join('');
+  }
+
+  function performanceTable(rows, empty, includeCart) {
+    if (!rows?.length) return `<div class="analytics-status">${empty}</div>`;
+    return `<div class="analytics-table-wrap"><table class="analytics-table analytics-compact-table"><thead><tr><th>Entry</th><th class="num">Sessions</th>${includeCart ? '<th class="num">Cart</th>' : ''}<th class="num">Orders</th><th class="num">Conv.</th><th class="num">Order value</th></tr></thead><tbody>${rows.map(x => `<tr><td><span class="analytics-product-name">${escapeHtml(x.name)}</span></td><td class="num">${number(x.sessions)}</td>${includeCart ? `<td class="num">${number(x.carts)}</td>` : ''}<td class="num">${number(x.orders)}</td><td class="num">${percent(x.conversion)}</td><td class="num">${money(x.orderValue)}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  function renderAcquisition() {
+    $a('analyticsLanding').innerHTML = performanceTable(report.landingPages, 'No landing-page data yet.', true);
+    $a('analyticsCampaigns').innerHTML = performanceTable(report.campaigns, 'No UTM campaigns tracked yet.', false);
+  }
+
   function render() {
-    renderKpis(); renderChart(); renderFunnel(); renderInsights(); renderProducts(); renderBreakdowns();
+    renderKpis(); renderChart(); renderFunnel(); renderInsights(); renderProducts(); renderBreakdowns(); renderHealth(); renderAcquisition();
     const d = new Date(report.generatedAt), started = report.trackingSince ? new Date(report.trackingSince) : null;
     const updated = 'Updated ' + (isNaN(d) ? 'now' : d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
     const coverage = started && !isNaN(started) ? ' · tracking since ' + started.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : '';
     $a('analyticsFresh').textContent = updated + coverage;
   }
+
   async function load(force) {
     if (loading || !API_URL || !ADMIN_KEY) return;
     if (report && !force) { render(); return; }
@@ -115,6 +156,7 @@
       $a('analyticsStatus').textContent = 'Analytics could not load: ' + err.message;
     } finally { loading = false; }
   }
+
   async function openProduct(id) {
     try {
       const data = await adminRead('adminProductsPage', { query: id, sort: 'id-asc', archived: false, page: 0 });
@@ -123,11 +165,13 @@
       fillForm(product);
     } catch (err) { showToast('Could not open product: ' + err.message); }
   }
+
   function setFocus(key) {
     if (!metricMeta[key]) return;
     focus = key; renderKpis(); renderChart();
     $a('analyticsTrendPanel')?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
   }
+
   function bindMenu() {
     const btn = $a('adminMoreBtn'), menu = $a('adminMoreMenu');
     if (!btn || !menu) return;
@@ -137,6 +181,7 @@
     document.addEventListener('click', e => { if (!menu.hidden && !e.target.closest('.admin-more-wrap')) close(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
   }
+
   document.addEventListener('DOMContentLoaded', () => {
     bindMenu();
     $a('analyticsRange')?.addEventListener('change', () => { report = null; load(true); });
@@ -146,5 +191,6 @@
       const row = e.target.closest('tr[data-product-id]'); if (row) openProduct(row.dataset.productId);
     });
   });
+
   window.DSBAdminAnalytics = Object.freeze({ load, setFocus });
 })();

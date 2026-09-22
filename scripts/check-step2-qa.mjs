@@ -28,14 +28,14 @@ assert(analytics.includes('convertedVisitors'), 'Conversion must count unique tr
 assert(analytics.includes('analyticsPct_(current.convertedVisitors, current.visitors)'), 'Conversion must not be orders / visitors');
 assert(analytics.includes("{ key: 'sessions', label: 'Sessions', value: current.sessions }"), 'Funnel must start from sessions');
 assert(analytics.includes("label: 'Cart sessions'"), 'Funnel cart stage must be session-deduped');
-assert(analytics.includes("label: 'Completed sessions'"), 'Funnel completion must use tracked completed sessions');
-assert(analytics.includes('sourceSessions') && analytics.includes('deviceSessions'), 'Source/device breakdowns should count sessions, not page views');
+assert(analytics.includes("label: 'Order sessions'"), 'Funnel completion must use tracked order sessions');
+assert(analytics.includes('sessionState') && analytics.includes('sourceCounts') && analytics.includes('deviceCounts'), 'Source/device breakdowns should count sessions, not page views');
 assert(analytics.includes('viewerAdds') && analytics.includes('viewVisitors'), 'Product cart rate should use unique viewers who added');
 assert(adminClient.includes('x.convertedVisitors * 100 / x.visitors'), 'Conversion trend must use converting visitors');
 
 // Version/cache busting so deployed clients actually receive QA fixes.
-assert(admin.includes('profile.version !== 21'), 'Admin must require backend version 21');
-assert(auth.includes('version: 21'), 'Backend must report version 21');
+assert(admin.includes('profile.version !== 22'), 'Admin must require backend version 22');
+assert(auth.includes('version: 22'), 'Backend must report version 22');
 assert(html.includes('admin.js?v=20260921step2qa1'), 'Admin JS cache bust missing');
-assert(html.includes('admin-analytics.js?v=20260921step2qa1'), 'Analytics admin cache bust missing');
+assert(html.includes('admin-analytics.js?v=20260922analytics1'), 'Analytics admin cache bust missing');
 console.log('PASS: Step 2 analytics reliability, metric integrity, cache freshness and version sync.');

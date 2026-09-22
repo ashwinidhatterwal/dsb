@@ -22,3 +22,8 @@
    tab element itself, so its base padding would otherwise override admin-tab's
    mobile safe-area padding and clip the final Audience rows. */
 @media(max-width:900px){.analytics-page{padding-bottom:calc(120px + env(safe-area-inset-bottom))}}
+
+/* Analytics v2: compact commerce health + acquisition views. */
+.analytics-health{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}.analytics-health-card{border:1px solid #d4e3e0;background:#f8fbfa;border-radius:12px;padding:10px}.analytics-health-card span{display:block;color:#71837f;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:800}.analytics-health-card strong{display:block;color:#214e47;font-size:18px;margin-top:5px}.analytics-health-inline{display:flex;flex-wrap:wrap;gap:7px}.analytics-health-inline span{padding:6px 8px;border-radius:9px;background:#eef6f4;color:#607671;font-size:10px}.analytics-health-inline b{color:#275b53}.analytics-acquisition{margin-top:14px}.analytics-compact-table td:first-child{min-width:150px}.analytics-compact-table .analytics-product-name{max-width:260px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:1100px){.analytics-health{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.analytics-health{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-funnel{grid-template-columns:repeat(2,1fr)}}

@@ -208,3 +208,16 @@ If analytics logic changes, run `node scripts/check-analytics.mjs` plus the full
 - Keep storefront images responsive/lazy unless they are the first visible product image.
 - `scripts/check-performance.mjs` enforces initial local JS/CSS budgets and critical-path rules. Run it before publishing performance-related changes.
 - Do not remove `content-visibility` containment from long storefront/admin lists without measuring the replacement.
+
+
+## Analytics architecture
+
+Analytics is intentionally split into three small layers so future changes stay easy to reason about:
+
+- `storefront-analytics.js` — anonymous browser events, session attribution, batching, and GA4 ecommerce mapping. Keep this file PII-free and never make analytics block checkout.
+- `src/backend/analytics.gs` — first-party event storage, report aggregation, authoritative order/revenue calculations, and automatic AnalyticsEvents schema upgrades. Edit this source file, then run `node scripts/build.mjs`; do not hand-edit the generated analytics copy inside `code.gs`.
+- `admin-analytics.js` + `admin-analytics.css` — presentation only. Business calculations belong in the backend report, not duplicated in the browser.
+
+Keep event volume low: track shopping decisions (view product, add to cart, checkout, order), not scrolls, hovers, animations, or every tap. UTM source/medium/campaign/content is captured once per session. Raw customer search text, names, phone numbers, addresses, and order IDs are not written to the first-party analytics sheet. The Google purchase event may receive the transaction ID for Google Ads/GA4 deduplication, but it is not persisted in `AnalyticsEvents`.
+
+When changing analytics, run `node scripts/build.mjs` and all `scripts/check*.mjs` tests before packaging. If the analytics/admin API response shape changes, bump the admin backend version in both `src/backend/admin-auth.gs` and `admin.js` together.

@@ -165,7 +165,12 @@ async function confirmCheckout() {
 }
 async function confirmCheckoutUnlocked() {
   if (checkoutBusy || !checkoutQuote) return;
-  window.DSBAnalytics?.track('begin_checkout', { items: checkoutQuote.order.itemsDetail.length, payment: checkoutQuote.order.paymentMethod });
+  window.DSBAnalytics?.track('begin_checkout', {
+    items: checkoutQuote.order.itemsDetail.length,
+    payment: checkoutQuote.order.paymentMethod,
+    total: Number(checkoutQuote.quote.correctedTotal || 0),
+    cartItems: checkoutQuote.quote.items || []
+  });
   // An uncertain previous attempt must be checked before any new request ID is created.
   try {
     pendingCheckout = JSON.parse(localStorage.getItem(PENDING_CHECKOUT_KEY) || 'null');
@@ -317,7 +322,13 @@ async function completeCheckout(data, order) {
     sessionStorage.removeItem(CATALOG_SESSION_KEY);
   } catch (_) {}
   updateCartBadge();
-  window.DSBAnalytics?.track('order_completed', { total: Number(data.correctedTotal || 0), items: order.itemsDetail.length, payment: order.paymentMethod });
+  window.DSBAnalytics?.track('order_completed', {
+    transactionId: data.orderId,
+    total: Number(data.correctedTotal || 0),
+    items: order.itemsDetail.length,
+    payment: order.paymentMethod,
+    cartItems: data.items || []
+  });
   document.dispatchEvent(new CustomEvent('dsb:ordercomplete'));
   // The receipt is already stored locally. Move checkout out of the cart drawer
   // into a dedicated confirmation page without customer data in the URL.

@@ -28,7 +28,7 @@ function dispatchAdmin_(body, actor) {
   const action = String(body.action || '');
   assertAdminPermission_(actor, action);
   if (action === 'adminSession') return {
-    version: 21,
+    version: 22,
     name: actor.name,
     role: actor.role
   };

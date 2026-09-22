@@ -22,7 +22,7 @@ assert(sourceBackend.includes('trackingSince:'), 'Analytics report should expose
 assert(adminClient.includes('tracking since'), 'Analytics UI should explain when tracking began');
 assert(http.indexOf("body.action === 'analyticsBatch'") < http.indexOf('authenticateAdmin_'), 'Public analytics batch must be routed before admin auth');
 assert(auth.includes("'adminAnalytics'"), 'Analytics report must be admin-readable');
-assert(auth.includes('version: 21'), 'Analytics backend version should be 20');
+assert(auth.includes('version: 22'), 'Analytics backend version should be 22');
 assert(backend.includes('function getAnalyticsReport_'), 'Generated code.gs is missing analytics report');
 assert(adminClient.includes('force: !!force'), 'Analytics Refresh must request a fresh backend report');
 assert(sourceBackend.includes('options.force ? null : cacheGetJson_'), 'Forced analytics refresh must bypass report cache');

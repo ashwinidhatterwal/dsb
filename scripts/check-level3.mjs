@@ -2,7 +2,7 @@ import fs from 'node:fs';
 function read(name){return fs.readFileSync(new URL('../'+name, import.meta.url),'utf8')}
 function assert(ok,msg){if(!ok) throw new Error(msg)}
 const requests=read('src/backend/order-requests.gs'), http=read('src/backend/http.gs'), orders=read('src/backend/orders.gs');
-const core=read('cart-ui-core.js'), drawer=read('cart-ui-drawer.js'), admin=read('admin.js'), page=read('track-order.html'), track=read('track-order.js');
+const core=read('cart-ui-core.js'), checkout=read('cart-ui-checkout.js'), thank=read('thank-you.js'), admin=read('admin.js'), page=read('track-order.html'), track=read('track-order.js');
 new Function(track);
 for (const name of ['index.html','catalog.html','about.html','privacy.html','product.html','returns.html','contact.html']) {
   const html=read(name);
@@ -15,7 +15,7 @@ assert(!http.includes("e.parameter.orderId") && !http.includes("e.parameter.phon
 assert(track.includes("method: 'POST'") && track.includes("action: 'trackOrder'") && !track.includes('?action=trackOrder&orderId='), 'Dedicated tracker must use POST');
 assert(page.includes('id="trackPageForm"') && page.includes('track-order.js'), 'Dedicated tracking page missing');
 assert(core.includes('track-order.html?orderId=') && !core.includes('function openTrackOrder'), 'Cart core should navigate to dedicated tracker only');
-assert(drawer.includes('goToTrackOrder(orderId)'), 'Order confirmation must open dedicated tracker');
+assert(checkout.includes("window.location.assign('thank-you.html')") && thank.includes('track-order.html?orderId='), 'Order confirmation must open Thank You page with dedicated tracker link');
 assert(orders.includes('Invalid status transition from') && orders.includes('orderRequestsByOrderIds_'), 'Order lifecycle/request admin feed missing');
 assert(admin.includes('ORDER_STATUS_TRANSITIONS_CLIENT') && admin.includes('orderRequestsHtml') && admin.includes('resolveOrderRequest'), 'Admin Level 3 controls missing');
 
