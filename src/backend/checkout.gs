@@ -7,6 +7,23 @@ function getCheckoutConfig_() {
     codCharge: Math.max(0, safeNumber_(COD_CHARGE, 0))
   };
 }
+
+function normalizeOrderAnalytics_(value) {
+  const a = value && typeof value === 'object' ? value : {};
+  const clean = (v, max) => sheetText_(String(v || '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, max || 100));
+  const visitor = String(a.visitorId || '').trim();
+  const session = String(a.sessionId || '').trim();
+  return {
+    analyticssession: session ? hashText_('session:' + session).slice(0, 32) : '',
+    analyticsvisitor: visitor ? hashText_('visitor:' + visitor).slice(0, 32) : '',
+    analyticssource: clean(a.source, 100),
+    analyticsmedium: clean(a.medium, 60),
+    analyticscampaign: clean(a.campaign, 100),
+    analyticscontent: clean(a.content, 100),
+    analyticslanding: clean(a.landing, 160)
+  };
+}
+
 function addOrder(o) {
   const result = withWriteLock_(function () {
     const order = normalizeAndValidateOrder_(o || {});
@@ -30,7 +47,7 @@ function addOrder(o) {
         replayed: true
       });
     }
-    const sheets = getOrderSheets_(),
+    const sheets = getOrderSheets_(true),
       quoted = priceOrder_(order, sheets);
     if (!quoted.ok) return Object.assign({
       code: 'validation_failed'
@@ -46,6 +63,7 @@ function addOrder(o) {
     const id = 'ORD-' + hashText_(o.requestId).slice(0, 16).toUpperCase(),
       now = new Date();
     const q = quoted.quote;
+    const analytics = normalizeOrderAnalytics_(o.analyticsContext);
     const record = {
       orderid: id,
       date: now,
@@ -59,7 +77,11 @@ function addOrder(o) {
       codcharge: q.codCharge,
       items: quoted.priced.summary,
       total: q.correctedTotal,
-      status: 'Pending'
+      status: 'Pending',
+      analyticssession: analytics.analyticssession, analyticsvisitor: analytics.analyticsvisitor,
+      analyticssource: analytics.analyticssource, analyticsmedium: analytics.analyticsmedium,
+      analyticscampaign: analytics.analyticscampaign, analyticscontent: analytics.analyticscontent,
+      analyticslanding: analytics.analyticslanding
     };
     const result = Object.assign({}, q, {
       success: true,
@@ -184,17 +206,19 @@ function normalizeAndValidateOrder_(o) {
     itemsDetail: itemsDetail
   };
 }
-function getOrderSheets_() {
+function getOrderSheets_(ensureAnalytics) {
   const productSheet = getSheet_(PRODUCTS_SHEET);
   const productData = productSheet.getDataRange().getValues();
   const productHeads = productData[0].map(h => String(h).trim().toLowerCase());
-  const orderHeads = headers_(getSheet_(ORDERS_SHEET));
+  const orders = getSheet_(ORDERS_SHEET);
+  if (ensureAnalytics) ['analyticsSession','analyticsVisitor','analyticsSource','analyticsMedium','analyticsCampaign','analyticsContent','analyticsLanding'].forEach(name => ensureColumn_(orders, name));
+  const orderHeads = headers_(orders);
   if (['orderid', 'date', 'customername', 'phone', 'address', 'paymentmethod', 'promocode', 'discount', 'items', 'total', 'status'].some(h => orderHeads.indexOf(h) < 0)) throw new Error('Orders sheet is missing required columns. Ask the shop to check setup.');
   return {
     productSheet: productSheet,
     productHeads: productHeads,
     productData: productData,
-    orders: getSheet_(ORDERS_SHEET),
+    orders: orders,
     orderHeads: orderHeads
   };
 }

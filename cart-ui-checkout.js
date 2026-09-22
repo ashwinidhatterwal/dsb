@@ -190,7 +190,8 @@ async function confirmCheckoutUnlocked() {
     requestId: newCheckoutId(),
     order: checkoutQuote.order,
     quoteToken: checkoutQuote.quote.quoteToken,
-    expectedQuote: checkoutQuote.quote
+    expectedQuote: checkoutQuote.quote,
+    analytics: window.DSBAnalytics?.context?.() || null
   };
   try {
     localStorage.setItem(PENDING_CHECKOUT_KEY, JSON.stringify(pendingCheckout));
@@ -212,7 +213,8 @@ async function sendPendingCheckout() {
         ...p.order,
         requestId: p.requestId,
         quoteToken: p.quoteToken,
-        expectedQuote: p.expectedQuote
+        expectedQuote: p.expectedQuote,
+        analyticsContext: p.analytics || null
       }
     });
     if (data.success === true && data.orderId) {

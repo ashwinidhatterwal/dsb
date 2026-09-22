@@ -277,7 +277,8 @@ function closeSearch() {
   $('#searchOverlay').classList.remove('open');
   closeDialogFocus($('#searchOverlay'));
 }
-function renderSearchResults() {
+let lastTrackedSearch = '';
+function renderSearchResults(trackSearch) {
   const q = searchQuery.trim().toLowerCase();
   if (!q) {
     $('#searchSentinel').style.display = 'none';
@@ -286,7 +287,13 @@ function renderSearchResults() {
   }
   const list = ALL_PRODUCTS.filter(p => p.searchText.includes(q) && (!inStockOnly || !isOutOfStock(p)));
   searchPager.reset(list, `No results for "${escapeHtml(searchQuery)}"`);
-  window.DSBAnalytics?.track('search', { query: searchQuery.slice(0, 80), results: list.length });
+  // Search analytics records the completed paused query only, not each keystroke
+  // or UI re-render. Raw query text is intentionally not sent to first-party analytics.
+  const signature = `${q}|${list.length}`;
+  if (trackSearch && q.length >= 2 && signature !== lastTrackedSearch) {
+    lastTrackedSearch = signature;
+    window.DSBAnalytics?.track('search', { results: list.length });
+  }
 }
 
 /* ---------------- Wire up static UI ---------------- */
@@ -322,7 +329,7 @@ function initUI() {
   $('#searchInput2').addEventListener('input', e => {
     searchQuery = e.target.value;
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(renderSearchResults, 120);
+    searchTimer = setTimeout(() => renderSearchResults(true), 650);
   });
   if (new URLSearchParams(location.search).get('search') === '1') openSearch();
   $('#cartTrigger').addEventListener('click', openCart);

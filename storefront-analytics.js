@@ -6,16 +6,20 @@
    - First-party events are deliberately small and PII-free.
    - Google receives standard ecommerce events where useful.
    - Analytics is best-effort and must never block shopping/checkout.
-   - Campaign attribution is captured once per session, not on every URL change.
+   - A rolling 30-minute session is shared across tabs.
+   - Every queued event carries its own visitor/session identity so shared
+     localStorage queues cannot mis-attribute events between tabs.
    ========================================================= */
 (function () {
   'use strict';
 
   const ALLOWED = new Set(['page_view','product_view','search','category_view','filter_change','add_to_cart','begin_checkout','order_completed','delivery_estimate','review_submitted']);
-  const QUEUE_KEY = 'dsb_analytics_queue_v2';
+  const QUEUE_KEY = 'dsb_analytics_queue_v3';
+  const LEGACY_QUEUE_KEY = 'dsb_analytics_queue_v2';
   const VISITOR_KEY = 'dsb_anon_visitor_v1';
-  const SESSION_KEY = 'dsb_anon_session_v1';
-  const ATTRIBUTION_KEY = 'dsb_attribution_v2';
+  const SESSION_STATE_KEY = 'dsb_analytics_session_v3';
+  const ATTRIBUTION_KEY = 'dsb_attribution_v3';
+  const SESSION_TTL = 30 * 60 * 1000;
   const MAX_QUEUE = 60;
   const FLUSH_SIZE = 12;
   const FLUSH_DELAY = 8000;
@@ -36,16 +40,33 @@
   }
 
   const visitorId = storageId(localStorage, VISITOR_KEY);
-  const sessionId = storageId(sessionStorage, SESSION_KEY);
 
   function clean(value, max) {
     return String(value || '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, max || 100);
   }
 
-  function attribution() {
+  function sessionContext(touch) {
+    const now = Date.now();
     try {
-      const saved = JSON.parse(sessionStorage.getItem(ATTRIBUTION_KEY) || 'null');
-      if (saved && saved.source) return saved;
+      let state = JSON.parse(localStorage.getItem(SESSION_STATE_KEY) || 'null');
+      if (!state || !state.id || !Number.isFinite(Number(state.lastActivity)) || now - Number(state.lastActivity) > SESSION_TTL) {
+        state = { id: randomId(), startedAt: now, lastActivity: now };
+        localStorage.setItem(SESSION_STATE_KEY, JSON.stringify(state));
+        try { localStorage.removeItem(ATTRIBUTION_KEY); } catch (_) {}
+      } else if (touch !== false && now - Number(state.lastActivity) > 1000) {
+        state.lastActivity = now;
+        localStorage.setItem(SESSION_STATE_KEY, JSON.stringify(state));
+      }
+      return state;
+    } catch (_) {
+      return { id: randomId(), startedAt: now, lastActivity: now };
+    }
+  }
+
+  function attribution(sessionId) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(ATTRIBUTION_KEY) || 'null');
+      if (saved && saved.sessionId === sessionId && saved.value?.source) return saved.value;
 
       const params = new URLSearchParams(location.search);
       const utmSource = clean(params.get('utm_source'), 80);
@@ -65,7 +86,7 @@
         content: utmContent,
         landing: clean(location.pathname || '/', 160)
       };
-      sessionStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(value));
+      localStorage.setItem(ATTRIBUTION_KEY, JSON.stringify({ sessionId, value }));
       return value;
     } catch (_) {
       return { source: 'Direct', medium: 'direct', campaign: '', content: '', landing: clean(location.pathname || '/', 160) };
@@ -89,9 +110,8 @@
   }
 
   function productById(id) {
-    try {
-      return Array.isArray(window.ALL_PRODUCTS) ? window.ALL_PRODUCTS.find(p => String(p.id) === String(id)) || null : null;
-    } catch (_) { return null; }
+    try { return Array.isArray(window.ALL_PRODUCTS) ? window.ALL_PRODUCTS.find(p => String(p.id) === String(id)) || null : null; }
+    catch (_) { return null; }
   }
 
   function gaItem(raw) {
@@ -112,59 +132,47 @@
     return item;
   }
 
-  function gaItems(rawItems) {
-    return (Array.isArray(rawItems) ? rawItems : []).map(gaItem).filter(Boolean).slice(0, 50);
-  }
+  function gaItems(rawItems) { return (Array.isArray(rawItems) ? rawItems : []).map(gaItem).filter(Boolean).slice(0, 50); }
 
   function sendGoogleEvent(name, rawProps) {
     if (typeof window.gtag !== 'function') return;
     try {
-      // gtag('config', ...) already sends the page_view. Do not duplicate it.
       if (name === 'page_view') return;
       if (name === 'product_view') {
-        const item = gaItem(rawProps);
-        if (!item) return;
+        const item = gaItem(rawProps); if (!item) return;
         const payload = { currency: CURRENCY, items: [item] };
         if (Number.isFinite(item.price)) payload.value = item.price;
-        window.gtag('event', 'view_item', payload);
-        return;
+        window.gtag('event', 'view_item', payload); return;
       }
       if (name === 'add_to_cart') {
-        const item = gaItem(rawProps);
-        if (!item) return;
+        const item = gaItem(rawProps); if (!item) return;
         const payload = { currency: CURRENCY, items: [item] };
         if (Number.isFinite(item.price)) payload.value = item.price * (item.quantity || 1);
-        window.gtag('event', 'add_to_cart', payload);
-        return;
+        window.gtag('event', 'add_to_cart', payload); return;
       }
       if (name === 'begin_checkout') {
-        const items = gaItems(rawProps?.cartItems);
-        const payload = { currency: CURRENCY, items };
-        const total = Number(rawProps?.total);
-        if (Number.isFinite(total) && total >= 0) payload.value = total;
-        window.gtag('event', 'begin_checkout', payload);
-        return;
+        const items = gaItems(rawProps?.cartItems), payload = { currency: CURRENCY, items };
+        const total = Number(rawProps?.total); if (Number.isFinite(total) && total >= 0) payload.value = total;
+        window.gtag('event', 'begin_checkout', payload); return;
       }
       if (name === 'order_completed') {
         const items = gaItems(rawProps?.cartItems);
-        const payload = {
-          transaction_id: clean(rawProps?.transactionId, 100),
-          currency: CURRENCY,
-          value: Math.max(0, Number(rawProps?.total) || 0),
-          items
-        };
-        window.gtag('event', 'purchase', payload);
+        window.gtag('event', 'purchase', { transaction_id: clean(rawProps?.transactionId, 100), currency: CURRENCY, value: Math.max(0, Number(rawProps?.total) || 0), items });
         return;
       }
-      // Keep other useful storefront interactions as lightweight custom events.
       window.gtag('event', name, cleanProps(rawProps));
     } catch (_) {}
   }
 
   function readQueue() {
     try {
-      const parsed = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
-      return Array.isArray(parsed) ? parsed.slice(-MAX_QUEUE).map(item => ({ ...item, qid: item?.qid || randomId() })) : [];
+      let parsed = JSON.parse(localStorage.getItem(QUEUE_KEY) || 'null');
+      if (!Array.isArray(parsed)) {
+        parsed = JSON.parse(localStorage.getItem(LEGACY_QUEUE_KEY) || '[]');
+        if (Array.isArray(parsed) && parsed.length) localStorage.removeItem(LEGACY_QUEUE_KEY);
+      }
+      if (!Array.isArray(parsed)) return [];
+      return parsed.slice(-MAX_QUEUE).map(item => ({ ...item, qid: item?.qid || randomId() }));
     } catch (_) { return []; }
   }
 
@@ -183,18 +191,17 @@
 
   async function flush(options) {
     if (flushing) return;
-    const url = endpoint();
-    if (!url) return;
-    const queue = readQueue();
-    if (!queue.length) return;
+    const url = endpoint(); if (!url) return;
+    const queue = readQueue(); if (!queue.length) return;
     flushing = true;
     const chunk = queue.slice(0, FLUSH_SIZE);
     writeQueue(queue);
     try {
+      const activeSession = sessionContext(false);
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'analyticsBatch', visitorId, sessionId, events: chunk }),
+        body: JSON.stringify({ action: 'analyticsBatch', visitorId, sessionId: activeSession.id, events: chunk }),
         keepalive: !!options?.keepalive
       });
       if (!response.ok) throw new Error('analytics http ' + response.status);
@@ -216,20 +223,14 @@
     try {
       sendGoogleEvent(name, props || {});
       const data = cleanProps(props);
-      const attr = attribution();
+      const session = sessionContext(true);
+      const attr = attribution(session.id);
       const queue = readQueue();
       queue.push({
-        qid: randomId(),
-        name,
-        ts: new Date().toISOString(),
-        path: location.pathname,
-        trafficSource: attr.source,
-        trafficMedium: attr.medium,
-        trafficCampaign: attr.campaign,
-        trafficContent: attr.content,
-        landing: attr.landing,
-        device: deviceType(),
-        props: data
+        qid: randomId(), visitorId, sessionId: session.id,
+        name, ts: new Date().toISOString(), path: location.pathname,
+        trafficSource: attr.source, trafficMedium: attr.medium, trafficCampaign: attr.campaign,
+        trafficContent: attr.content, landing: attr.landing, device: deviceType(), props: data
       });
       writeQueue(queue);
       document.dispatchEvent(new CustomEvent('dsb:analytics', { detail: { name, props: data } }));
@@ -237,21 +238,18 @@
     } catch (_) {}
   }
 
-  function pageView() {
-    track('page_view', { path: location.pathname, trafficSource: attribution().source, device: deviceType() });
+  function context() {
+    const session = sessionContext(true);
+    const attr = attribution(session.id);
+    return { visitorId, sessionId: session.id, source: attr.source, medium: attr.medium, campaign: attr.campaign, content: attr.content, landing: attr.landing };
   }
 
+  function pageView() { track('page_view', { path: location.pathname, device: deviceType() }); }
   function productView(product) {
-    track('product_view', {
-      productId: product?.id,
-      productName: product?.name,
-      category: product?.category,
-      subcategory: product?.subcategory,
-      price: Number(product?.price || 0)
-    });
+    track('product_view', { productId: product?.id, productName: product?.name, category: product?.category, subcategory: product?.subcategory, price: Number(product?.price || 0) });
   }
 
-  window.DSBAnalytics = Object.freeze({ track, pageView, productView, flush });
+  window.DSBAnalytics = Object.freeze({ track, pageView, productView, flush, context });
   document.addEventListener('DOMContentLoaded', pageView, { once: true });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush({ keepalive: true }); });
 })();

@@ -46,11 +46,12 @@ assert(api, 'Analytics API should initialize');
 for (let i = 0; i < 12; i++) api.track('page_view', { path: '/p' + i });
 // The 12th event starts a flush whose fetch is intentionally held open.
 api.track('add_to_cart', { productId: 'DSB-TEST' });
-let queued = JSON.parse(localStorage.getItem('dsb_analytics_queue_v2'));
+let queued = JSON.parse(localStorage.getItem('dsb_analytics_queue_v3'));
 assert.equal(queued.length, 13, 'New event should be queued while prior batch is in flight');
+assert(queued.every(x => x.visitorId && x.sessionId && x.qid), 'Each event must carry its own anonymous visitor/session identity and retry id');
 resolveFetch({ ok: true, async json(){ return { success: true, accepted: 12 }; } });
 await Promise.resolve(); await Promise.resolve(); await new Promise(r => setTimeout(r, 0));
-queued = JSON.parse(localStorage.getItem('dsb_analytics_queue_v2'));
+queued = JSON.parse(localStorage.getItem('dsb_analytics_queue_v3'));
 assert.equal(queued.length, 1, 'Successful flush must preserve event added during the request');
 assert.equal(queued[0].name, 'add_to_cart');
 console.log('PASS: analytics in-flight flush preserves newly queued events.');
