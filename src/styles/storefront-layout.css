@@ -236,20 +236,6 @@ html[lang="hi"] .hero-compact .hero-title{
   line-height:1.4;
   padding-block:2px;
 }
-.upi-qr{
-  width:180px;
-  max-width:100%;
-  min-height:180px;
-  margin:12px auto;
-  background:white;
-  color:#201b3d;
-  font-size:14px;
-}
-.upi-qr svg{
-  display:block;
-  width:100%;
-  height:auto;
-}
 /* Stable card actions: Add and quantity occupy the same row, with Buy Now below. */
 .card .card-actions{
   display:grid;

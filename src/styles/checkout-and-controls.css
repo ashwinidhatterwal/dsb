@@ -84,7 +84,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   min-height:40px;
   flex:1;
 }
-.cart-drawer > .checkout-review,.cart-drawer > .order-confirm{
+.cart-drawer > .checkout-review{
   flex:1 1 auto;
   min-height:0;
   overflow-y:auto;

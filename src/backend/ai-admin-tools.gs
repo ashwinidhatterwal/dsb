@@ -1,7 +1,7 @@
 /* Generic, read-first tools used by DSB Admin AI. The model chooses a tool;
  * Apps Script only validates and executes bounded backend operations. */
 
-var AI_ADMIN_TOOL_LIMITS_ = { products: 50, productDetails: 12, visionProducts: 8, orders: 30, toolSteps: 3 };
+var AI_ADMIN_TOOL_LIMITS_ = { products: 50, productDetails: 12, visionProducts: 8, enrichProducts: 2, orders: 30, toolSteps: 3 };
 
 function aiAdminTagList_(value) {
   return String(value || '').split(',').map(function(x) { return x.trim(); }).filter(Boolean);
@@ -40,6 +40,36 @@ function aiAdminToolProductRow_(p, includeDescriptions, includeImages) {
   out.archived = isArchived_(p);
   out.tagCount = aiAdminTagList_(p.tags).length;
   return out;
+}
+
+
+function aiAdminCatalogSummary_(rows) {
+  const issues = {
+    missingImage: [], missingDescription: [], missingHindiDescription: [], missingCategory: [],
+    missingSubcategory: [], missingMaterial: [], missingBrand: [], lowTags: [], outOfStock: [], lowStock: []
+  };
+  const nameGroups = {};
+  rows.forEach(function(p) {
+    const id = String(p.id || '');
+    if (!String(p.image || '').trim()) issues.missingImage.push(id);
+    if (!String(p.description || '').trim()) issues.missingDescription.push(id);
+    if (!String(p.descriptionhindi || '').trim()) issues.missingHindiDescription.push(id);
+    if (!String(p.category || '').trim()) issues.missingCategory.push(id);
+    if (!String(p.subcategory || '').trim()) issues.missingSubcategory.push(id);
+    if (!String(p.material || '').trim()) issues.missingMaterial.push(id);
+    if (!String(p.brand || '').trim()) issues.missingBrand.push(id);
+    if (aiAdminTagList_(p.tags).length <= 2) issues.lowTags.push(id);
+    const qty = Number(p.stockqty);
+    const stock = String(p.stock || '').trim().toLowerCase();
+    if (stock === 'out of stock' || stock === 'out-of-stock' || stock === 'outofstock' || (Number.isFinite(qty) && qty <= 0)) issues.outOfStock.push(id);
+    else if (Number.isFinite(qty) && qty > 0 && qty <= 3) issues.lowStock.push(id);
+    const key = aiAdminNormalizeName_(p.name);
+    if (key) (nameGroups[key] || (nameGroups[key] = [])).push(id);
+  });
+  const exactDuplicateNames = Object.keys(nameGroups).map(function(name) { return { name:name, ids:nameGroups[name] }; }).filter(function(g) { return g.ids.length > 1; }).slice(0, 20);
+  const compact = {};
+  Object.keys(issues).forEach(function(key) { compact[key] = { count:issues[key].length, sampleIds:issues[key].slice(0, 12) }; });
+  return { totalProducts:rows.length, issues:compact, exactDuplicateNames:exactDuplicateNames };
 }
 
 function aiAdminQueryProducts_(args) {
@@ -82,6 +112,8 @@ function aiAdminQueryProducts_(args) {
   const stockStatus = String(args.stockStatus || '').trim().toLowerCase();
   if (stockStatus) rows = rows.filter(function(p) { return String(p.stock || '').trim().toLowerCase() === stockStatus; });
 
+  if (args.summary === true) return aiAdminCatalogSummary_(rows);
+
   if (args.similarNames === true) {
     const source = rows.slice(0, 250);
     const pairs = [];
@@ -115,6 +147,38 @@ function aiAdminGetProducts_(args) {
   return { products: products.map(function(p) { return aiAdminToolProductRow_(p, true, args.includeImages !== false); }) };
 }
 
+function aiAdminAnalyzeOneProduct_(p, instruction, body, actor, onlyEmpty) {
+  try {
+    const gallery = String(p.images || '').split(',').map(function(x) { return x.trim(); }).filter(Boolean).slice(0, 4);
+    const existing = {
+      name:p.name,namehindi:p.namehindi,category:p.category,subcategory:p.subcategory,price:p.price,mrp:p.mrp,costprice:p.costprice,
+      description:p.description,stock:p.stock,stockqty:p.stockqty,brand:p.brand,material:p.material,packsize:p.packsize,
+      specifications:p.specifications,gtin:p.gtin,descriptionhindi:p.descriptionhindi,sizes:p.sizes,sizeprices:p.sizeprices,tags:p.tags,
+      hasSizes:!!String(p.sizes || '').trim()
+    };
+    const generated = generateAiProductDraft_({
+      imageUrl: aiAdminOptimizedImageUrl_(String(p.image || '').trim()),
+      referenceUrls: gallery.map(aiAdminOptimizedImageUrl_),
+      existing: existing,
+      notes: 'Admin AI analysis for ' + p.id + ' — ' + p.name + '. Instruction: ' + instruction + '\nPreserve confirmed existing facts. Use product photos as evidence. Do not infer price, MRP, cost, stock, quantity, GTIN, exact sizes, size prices, certification, or health claims unless the instruction explicitly asks to modify a known existing value. Unknown facts must be null.',
+      modelConfigId: body && body.modelConfigId,
+      reasoningEffort: body && body.reasoningEffort
+    }, actor);
+    const raw = generated && generated.draft || {};
+    ['sizes','tags'].forEach(function(key) { if (Array.isArray(raw[key])) raw[key] = raw[key].join(', '); });
+    const patch = sanitizeAiAdminProductPatch_(raw);
+    ['price','mrp','costprice','stock','stockqty','gtin','sizes','sizeprices'].forEach(function(key) { delete patch[key]; });
+    if (onlyEmpty) {
+      Object.keys(patch).forEach(function(key) {
+        if (String(p[key] === null || p[key] === undefined ? '' : p[key]).trim() !== '') delete patch[key];
+      });
+    }
+    return { id:String(p.id || ''), name:String(p.name || ''), current:aiAdminProductView_(p), suggestedPatch:patch, warnings:(generated.warnings || []).slice(0,4), expectedRevision:productRevision_(p) };
+  } catch (err) {
+    return { id:String(p.id || ''), name:String(p.name || ''), error:String(err && err.message || err).slice(0,300) };
+  }
+}
+
 function aiAdminAnalyzeProducts_(args, body, actor) {
   if (!actor || actor.role === 'viewer') return { error: 'Viewer access cannot generate catalog edits.' };
   args = args && typeof args === 'object' ? args : {};
@@ -124,34 +188,36 @@ function aiAdminAnalyzeProducts_(args, body, actor) {
   const wanted = {};
   ids.forEach(function(id) { wanted[id.toLowerCase()] = true; });
   const products = getAllProducts(true).filter(function(p) { return wanted[String(p.id || '').toLowerCase()] && !isArchived_(p); });
-  const results = [];
-  products.forEach(function(p) {
-    try {
-      const gallery = String(p.images || '').split(',').map(function(x) { return x.trim(); }).filter(Boolean).slice(0, 4);
-      const existing = {
-        name:p.name,namehindi:p.namehindi,category:p.category,subcategory:p.subcategory,price:p.price,mrp:p.mrp,costprice:p.costprice,
-        description:p.description,stock:p.stock,stockqty:p.stockqty,brand:p.brand,material:p.material,packsize:p.packsize,
-        specifications:p.specifications,gtin:p.gtin,descriptionhindi:p.descriptionhindi,sizes:p.sizes,sizeprices:p.sizeprices,tags:p.tags,
-        hasSizes:!!String(p.sizes || '').trim()
-      };
-      const generated = generateAiProductDraft_({
-        imageUrl: aiAdminOptimizedImageUrl_(String(p.image || '').trim()),
-        referenceUrls: gallery.map(aiAdminOptimizedImageUrl_),
-        existing: existing,
-        notes: 'Admin AI analysis for ' + p.id + ' — ' + p.name + '. Instruction: ' + instruction + '\nPreserve confirmed existing facts. Use product photos as evidence. Do not infer price, MRP, cost, stock, quantity, GTIN, exact sizes, size prices, certification, or health claims unless the instruction explicitly asks to modify a known existing value. Unknown facts must be null.',
-        modelConfigId: body && body.modelConfigId,
-        reasoningEffort: body && body.reasoningEffort
-      }, actor);
-      const raw = generated && generated.draft || {};
-      ['sizes','tags'].forEach(function(key) { if (Array.isArray(raw[key])) raw[key] = raw[key].join(', '); });
-      const patch = sanitizeAiAdminProductPatch_(raw);
-      ['price','mrp','costprice','stock','stockqty','gtin','sizes','sizeprices'].forEach(function(key) { delete patch[key]; });
-      results.push({ id:String(p.id || ''), name:String(p.name || ''), current:aiAdminProductView_(p), suggestedPatch:patch, warnings:(generated.warnings || []).slice(0,4), expectedRevision:productRevision_(p) });
-    } catch (err) {
-      results.push({ id:String(p.id || ''), name:String(p.name || ''), error:String(err && err.message || err).slice(0,300) });
-    }
-  });
+  const results = products.map(function(p) { return aiAdminAnalyzeOneProduct_(p, instruction, body, actor, args.onlyEmpty === true); });
   return { analyzed: results.length, results: results };
+}
+
+function aiAdminEnrichProducts_(args, body, actor) {
+  if (!actor || actor.role === 'viewer') return { error: 'Viewer access cannot generate catalog edits.' };
+  args = args && typeof args === 'object' ? args : {};
+  const instruction = String(args.instruction || '').trim().slice(0, 1600);
+  if (!instruction) return { error: 'instruction is required' };
+  const query = args.query && typeof args.query === 'object' ? Object.assign({}, args.query) : {};
+  query.status = query.status || 'active';
+  query.includeDescriptions = false;
+  query.includeImages = false;
+  query.summary = false;
+  query.similarNames = false;
+  const limit = Math.max(1, Math.min(AI_ADMIN_TOOL_LIMITS_.enrichProducts, Math.floor(Number(args.limit) || 1)));
+  query.limit = limit;
+  const matched = aiAdminQueryProducts_(query);
+  const ids = matched && Array.isArray(matched.products) ? matched.products.map(function(p) { return String(p.id || ''); }).filter(Boolean).slice(0, limit) : [];
+  if (!ids.length) return { matchedCount: Number(matched && matched.count) || 0, analyzed:0, results:[], remainingCount:0 };
+  const wanted = {};
+  ids.forEach(function(id) { wanted[id.toLowerCase()] = true; });
+  const products = getAllProducts(true).filter(function(p) { return wanted[String(p.id || '').toLowerCase()] && !isArchived_(p); });
+  const results = products.map(function(p) { return aiAdminAnalyzeOneProduct_(p, instruction, body, actor, args.onlyEmpty === true); });
+  return {
+    matchedCount: Number(matched && matched.count) || results.length,
+    analyzed: results.length,
+    results: results,
+    remainingCount: Math.max(0, (Number(matched && matched.count) || results.length) - results.length)
+  };
 }
 
 function aiAdminQueryOrders_(args) {
@@ -176,6 +242,7 @@ function executeAiAdminTool_(request, body, actor) {
   if (name === 'query_products') return aiAdminQueryProducts_(args);
   if (name === 'get_products') return aiAdminGetProducts_(args);
   if (name === 'analyze_products') return aiAdminAnalyzeProducts_(args, body, actor);
+  if (name === 'enrich_products') return aiAdminEnrichProducts_(args, body, actor);
   if (name === 'query_orders') return aiAdminQueryOrders_(args);
   if (name === 'get_dashboard') return aiAdminGetDashboard_();
   return { error: 'Unknown tool: ' + name };

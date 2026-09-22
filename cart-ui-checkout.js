@@ -318,17 +318,10 @@ async function completeCheckout(data, order) {
   } catch (_) {}
   updateCartBadge();
   window.DSBAnalytics?.track('order_completed', { total: Number(data.correctedTotal || 0), items: order.itemsDetail.length, payment: order.paymentMethod });
-  renderOrderConfirmation(lastReceipt);
-  if (typeof updateVisibleCartActions === 'function') updateVisibleCartActions();
-  if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard();
-  if (typeof loadAllProducts === 'function') loadAllProducts({
-    force: true
-  }).then(() => {
-    if (typeof CURRENT_PRODUCT !== 'undefined' && CURRENT_PRODUCT) CURRENT_PRODUCT = ALL_PRODUCTS.find(p => p.id === CURRENT_PRODUCT.id) || null;
-    if (typeof updateVisibleCartActions === 'function') updateVisibleCartActions();
-    if (typeof renderHomeCarousels === 'function') renderHomeCarousels();
-    if (typeof refreshCurrentProductCard === 'function') refreshCurrentProductCard();
-  }).catch(() => {});
+  document.dispatchEvent(new CustomEvent('dsb:ordercomplete'));
+  // The receipt is already stored locally. Move checkout out of the cart drawer
+  // into a dedicated confirmation page without customer data in the URL.
+  window.location.assign('thank-you.html');
 }
 function cartAdjustmentHtml() {
   const {
@@ -352,50 +345,3 @@ window.addEventListener('storage', event => {
   } catch (_) {}
   if ($('#cartOverlay')?.classList.contains('open') && !$('#downloadReceiptBtn')) renderCartDrawer();
 });
-let paymentQrScript = null;
-function loadPaymentQr() {
-  if (typeof window.qrcode === 'function') return Promise.resolve();
-  if (paymentQrScript) return paymentQrScript;
-  paymentQrScript = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'qr-code.js?v=20260909experience1';
-    script.async = true;
-    const fail = () => {
-      clearTimeout(timer);
-      script.remove();
-      paymentQrScript = null;
-      reject(new Error('QR could not load'));
-    };
-    const timer = setTimeout(fail, 10000);
-    script.onload = () => {
-      clearTimeout(timer);
-      if (typeof window.qrcode === 'function') resolve();else fail();
-    };
-    script.onerror = fail;
-    document.head.appendChild(script);
-  });
-  return paymentQrScript;
-}
-async function renderPaymentQr(link) {
-  const target = $('#upiQr');
-  if (!target) return;
-  try {
-    await loadPaymentQr();
-    if (!target.isConnected) return;
-    const qr = window.qrcode(0, 'M');
-    qr.addData(link);
-    qr.make();
-    target.innerHTML = qr.createSvgTag({
-      cellSize: 4,
-      margin: 16,
-      scalable: true
-    });
-    target.querySelector('svg')?.setAttribute('aria-hidden', 'true');
-  } catch (_) {
-    if (target.isConnected) {
-      target.removeAttribute('role');
-      target.removeAttribute('aria-label');
-      target.textContent = 'Use the Open UPI app button or the UPI ID below to pay.';
-    }
-  }
-}

@@ -1,4 +1,4 @@
-/* Cart drawer rendering, confirmation and receipt UI. Requires cart-ui-core.js. */
+/* Cart drawer rendering. Requires cart-ui-core.js. */
 /* ---------------- Cart drawer ---------------- */
 function renderCartDrawer() {
   const wrap = $('#cartContent');
@@ -32,7 +32,7 @@ function renderCartDrawer() {
       b.type = 'button';
       b.className = 'ghost-btn';
       b.textContent = 'View last order';
-      b.onclick = () => renderOrderConfirmation(lastReceipt);
+      b.onclick = () => window.location.assign('thank-you.html');
       wrap.appendChild(b);
     }
     return;
@@ -192,86 +192,6 @@ function renderCartDrawer() {
       preventScroll: true
     });
   });
-}
-function renderOrderConfirmation(receipt) {
-  const wrap = $('#cartContent');
-  const orderId = receipt && receipt.orderId ? receipt.orderId : '';
-  const shopPhone = formatShopPhone(CONFIG.WHATSAPP_NUMBER);
-  const isUpi = receipt.paymentMethod === 'UPI' && CONFIG.UPI_ID;
-  // A short, concrete "what happens next" — replaces a single vague line.
-  // Step 1 is already true by the time this screen shows; step 2 tells the
-  // customer exactly which channel and which number to expect contact from,
-  // so a real shop message doesn't look like a scam text.
-  const stepsHtml = `
-    <ol class="confirm-steps">
-      <li class="done"><span class="step-dot">✓</span><div><strong>Order saved</strong><span>Your items, address and total are recorded.</span></div></li>
-      <li><span class="step-dot">2</span><div><strong>Confirmation on WhatsApp</strong><span>${shopPhone ? `We'll message you from <strong>${escapeHtml(shopPhone)}</strong>` : "We'll message you on WhatsApp"} to confirm your delivery details${isUpi ? ' and payment' : ''} before it's dispatched.</span></div></li>
-      <li><span class="step-dot">3</span><div><strong>Delivery</strong><span>${isUpi ? "Once confirmed, we'll get your order ready and out for delivery." : `Pay ${money(receipt.total)} in cash when your order arrives.`}</span></div></li>
-    </ol>`;
-  const paymentBox = isUpi ? `<div class="upi-box"><p><strong>Payment not yet confirmed.</strong> Use the link below to pay ${money(receipt.total)} — the shop checks and confirms your payment manually on WhatsApp, it isn't automatic. Already paid for this order? Please don't pay again.</p><div class="upi-qr" id="upiQr" role="img" aria-label="UPI payment QR code">Preparing payment QR…</div><a class="primary-btn" href="${escapeHtml(buildUpiLink(receipt.total, orderId))}">Open UPI app</a><p class="hint">UPI ID: ${escapeHtml(CONFIG.UPI_ID)} · Reference: ${escapeHtml(orderId)}</p></div>` : '';
-  wrap.innerHTML = `
-    <button class="closebtn" id="cartClose" aria-label="Close">✕</button>
-    <div class="order-confirm" data-i18n-skip>
-      <div class="confirm-icon">✓</div>
-      <h2>Your order has been received</h2>
-      ${orderId ? `<p class="confirm-id">Order ID: <strong>${escapeHtml(orderId)}</strong></p>` : ''}
-      <p><strong>Order total: ${money(receipt.total)}</strong></p>
-      ${stepsHtml}
-      ${paymentBox}
-      <div class="confirm-actions">
-        ${orderId ? `<button class="ghost-btn" id="confirmTrackBtn" type="button">📦 Track this order</button>` : ''}
-        <button class="primary-btn" id="downloadReceiptBtn" type="button">⬇ Download order slip</button>
-        <button class="ghost-btn" id="printReceiptBtn" type="button">Print / Save as PDF</button>
-        <button class="ghost-btn" id="confirmCloseBtn" type="button">Continue shopping</button>
-      </div>
-    </div>`;
-  const close = () => closeCart();
-  $('#cartClose').addEventListener('click', close);
-  $('#confirmCloseBtn').addEventListener('click', close);
-  $('#downloadReceiptBtn').addEventListener('click', () => downloadReceipt(receipt));
-  $('#printReceiptBtn').addEventListener('click', () => downloadReceipt(receipt, true));
-  $('#confirmTrackBtn')?.addEventListener('click', () => goToTrackOrder(orderId));
-  document.dispatchEvent(new CustomEvent('dsb:ordercomplete'));
-  $('#downloadReceiptBtn').focus();
-  if (isUpi) renderPaymentQr(buildUpiLink(receipt.total, orderId));
-}
-function downloadReceipt(receipt, print = false) {
-  if (!receipt) return;
-  const isUpi = receipt.paymentMethod === 'UPI';
-  const paymentNote = isUpi ? `<div class="notice"><strong>Important:</strong> This is an order confirmation slip only. It is <strong>not a payment receipt</strong> and does not confirm that a UPI payment was received.</div>` : `<div class="notice"><strong>Payment:</strong> Cash on Delivery selected. Payment is due at delivery.</div>`;
-  const itemRows = (receipt.items || []).map(item => `
-    <tr><td>${escapeHtml(item.name)}${item.size ? ` (Size: ${escapeHtml(item.size)})` : ''}</td><td>${Number(item.qty) || 0}</td><td>${money(item.unitPrice)}</td><td>${money(item.lineTotal)}</td></tr>`).join('');
-  const feeRows = `${receipt.discount > 0 ? `<tr><td colspan="3">Discount${receipt.promoCode ? ` (${escapeHtml(receipt.promoCode)})` : ''}</td><td>−${money(receipt.discount)}</td></tr>` : ''}
-    ${receipt.deliveryCharge > 0 ? `<tr><td colspan="3">Delivery</td><td>${money(receipt.deliveryCharge)}</td></tr>` : ''}
-    ${receipt.codCharge > 0 ? `<tr><td colspan="3">Cash on Delivery fee</td><td>${money(receipt.codCharge)}</td></tr>` : ''}`;
-  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Order Confirmation ${escapeHtml(receipt.orderId)}</title><style>body{font-family:Arial,sans-serif;color:#222;max-width:760px;margin:40px auto;padding:0 20px}h1{margin:0 0 6px}p{line-height:1.5}.muted{color:#666}.notice{margin:16px 0;padding:12px 14px;border:1px solid #ddd;border-radius:10px;background:#fff8e8;line-height:1.5}table{width:100%;border-collapse:collapse;margin:24px 0}th,td{padding:10px 8px;border-bottom:1px solid #ddd;text-align:left}th:nth-child(n+2),td:nth-child(n+2){text-align:right}.total td{font-size:18px;font-weight:700;border-top:2px solid #222}.box{background:#f7f7f7;padding:14px;border-radius:10px;margin:16px 0}@media print{body{margin:0}.no-print{display:none}}</style></head><body><h1>${escapeHtml(CONFIG.SHOP_NAME)}</h1><p class="muted"><strong>Order Confirmation Slip</strong></p><div class="box"><strong>Order ID:</strong> ${escapeHtml(receipt.orderId)}<br><strong>Date:</strong> ${escapeHtml(formatDateTime(receipt.orderDate || new Date()))}<br><strong>Customer:</strong> ${escapeHtml(receipt.name)}<br><strong>Phone:</strong> ${escapeHtml(receipt.phone)}<br><strong>Address:</strong> ${escapeHtml(receipt.address)}<br><strong>Payment method:</strong> ${escapeHtml(receipt.paymentMethod)}</div>${paymentNote}<table><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead><tbody>${itemRows}<tr><td colspan="3">Subtotal</td><td>${money(receipt.subtotal)}</td></tr>${feeRows}<tr class="total"><td colspan="3">Order total</td><td>${money(receipt.total)}</td></tr></tbody></table><p>Thank you for shopping with ${escapeHtml(CONFIG.SHOP_NAME)}.</p><p class="muted">This document confirms the order details recorded by the store website.</p></body></html>`;
-  if (print) {
-    const frame = document.createElement('iframe');
-    frame.title = 'Order slip';
-    frame.className = 'receipt-print-frame';
-    frame.onload = () => {
-      frame.contentWindow.focus();
-      frame.contentWindow.print();
-    };
-    frame.srcdoc = html;
-    document.body.appendChild(frame);
-    frame.contentWindow?.addEventListener('afterprint', () => frame.remove(), {
-      once: true
-    });
-    setTimeout(() => frame.remove(), 120000);
-    return;
-  }
-  const blob = new Blob([html], {
-    type: 'text/html;charset=utf-8'
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `order-confirmation-${String(receipt.orderId || 'order').replace(/[^a-z0-9_-]/gi, '-')}.html`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 const PENDING_CHECKOUT_KEY = 'dsb_pending_checkout_v2';
 let checkoutBusy = false,

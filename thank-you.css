@@ -1,0 +1,182 @@
+:root{
+  --thank-ink:#26323b;
+  --thank-muted:#66717a;
+  --thank-border:rgba(31,51,62,.10);
+  --thank-panel:#fff;
+  --thank-soft:#f7fbfa;
+  --thank-accent:#0d8a7d;
+  --thank-accent-dark:#08675f;
+  --thank-pink:#c81163;
+  --thank-shadow:0 22px 70px rgba(28,47,57,.10);
+}
+*{box-sizing:border-box}
+.thank-page-body{
+  margin:0;
+  min-height:100dvh;
+  color:var(--thank-ink);
+  background:
+    radial-gradient(circle at 8% 4%,rgba(200,17,99,.08),transparent 28%),
+    radial-gradient(circle at 92% 14%,rgba(13,138,125,.10),transparent 30%),
+    linear-gradient(180deg,#fbfdfd 0%,#f4f8f7 100%);
+}
+.thank-topbar{
+  min-height:72px;
+  padding:12px max(20px,env(safe-area-inset-right)) 12px max(20px,env(safe-area-inset-left));
+  display:flex;
+  align-items:center;
+  gap:14px;
+  border-bottom:1px solid var(--thank-border);
+  background:rgba(255,255,255,.84);
+  backdrop-filter:blur(16px);
+  position:sticky;
+  top:0;
+  z-index:10;
+}
+.thank-brand{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  text-decoration:none;
+  color:var(--thank-ink);
+  font:800 21px/1 "Baloo 2",sans-serif;
+}
+.thank-brand img{width:42px;height:42px;border-radius:13px;box-shadow:0 6px 18px rgba(40,50,58,.10)}
+.thank-lang{
+  margin-left:auto;
+  min-width:46px;
+  height:40px;
+  border:1px solid var(--thank-border);
+  border-radius:12px;
+  background:#fff;
+  color:var(--thank-ink);
+  font:700 14px/1 "Hind",sans-serif;
+  cursor:pointer;
+}
+.thank-page{padding:38px 18px max(46px,env(safe-area-inset-bottom))}
+.thank-shell{width:min(920px,100%);margin:0 auto}
+.thank-loading,.thank-missing{
+  margin:70px auto;
+  max-width:580px;
+  padding:34px;
+  border:1px solid var(--thank-border);
+  border-radius:26px;
+  background:#fff;
+  box-shadow:var(--thank-shadow);
+  text-align:center;
+}
+.thank-hero{
+  text-align:center;
+  padding:14px 10px 28px;
+}
+.thank-check{
+  width:74px;
+  height:74px;
+  margin:0 auto 18px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:linear-gradient(145deg,#17a596,#087a70);
+  color:#fff;
+  font-size:37px;
+  font-weight:800;
+  box-shadow:0 14px 32px rgba(13,138,125,.22), inset 0 0 0 7px rgba(255,255,255,.13);
+}
+.thank-eyebrow{
+  margin:0 0 6px;
+  color:var(--thank-accent-dark);
+  font:800 12px/1.2 "Rajdhani",sans-serif;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+}
+.thank-hero h1{
+  margin:0;
+  color:var(--thank-ink);
+  font:800 clamp(34px,7vw,52px)/1.08 "Baloo 2",sans-serif;
+  letter-spacing:-.025em;
+}
+.thank-lead{max-width:640px;margin:10px auto 0;color:var(--thank-muted);font-size:16px;line-height:1.65}
+.thank-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:18px;align-items:start}
+.thank-card{
+  background:rgba(255,255,255,.94);
+  border:1px solid var(--thank-border);
+  border-radius:24px;
+  box-shadow:0 12px 42px rgba(30,50,59,.065);
+  overflow:hidden;
+}
+.thank-card-pad{padding:24px}
+.thank-order-head{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;padding:24px;border-bottom:1px solid var(--thank-border)}
+.thank-order-head h2,.thank-card h2{margin:0;font:800 23px/1.2 "Baloo 2",sans-serif}
+.thank-order-id{margin-top:4px;color:var(--thank-muted);font-size:13px;overflow-wrap:anywhere}
+.thank-total{text-align:right;white-space:nowrap}
+.thank-total span{display:block;color:var(--thank-muted);font-size:12px;margin-bottom:2px}
+.thank-total strong{font:800 24px/1 "Baloo 2",sans-serif;color:var(--thank-ink)}
+.thank-items{padding:8px 24px 18px}
+.thank-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;padding:15px 0;border-bottom:1px solid rgba(31,51,62,.07)}
+.thank-item:last-child{border-bottom:0}
+.thank-item-name{font-weight:700;line-height:1.35}
+.thank-item-meta{margin-top:4px;color:var(--thank-muted);font-size:12px}
+.thank-item-price{font-weight:800;white-space:nowrap}
+.thank-summary{padding:18px 24px 24px;background:var(--thank-soft);border-top:1px solid var(--thank-border)}
+.thank-summary-row{display:flex;justify-content:space-between;gap:16px;padding:5px 0;color:var(--thank-muted);font-size:14px}
+.thank-summary-row strong{color:var(--thank-ink)}
+.thank-summary-row.total{margin-top:7px;padding-top:12px;border-top:1px solid var(--thank-border);font-size:16px;color:var(--thank-ink)}
+.thank-summary-row.total strong{font-size:19px}
+.thank-next{padding:24px}
+.thank-next-list{list-style:none;padding:0;margin:18px 0 0;display:grid;gap:17px}
+.thank-next-list li{display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:start}
+.thank-step{width:32px;height:32px;display:grid;place-items:center;border-radius:50%;background:#e9f6f3;color:var(--thank-accent-dark);font-weight:800}
+.thank-next-list strong{display:block;margin-bottom:3px}
+.thank-next-list span{display:block;color:var(--thank-muted);font-size:13px;line-height:1.5}
+.thank-payment{
+  margin:0 24px 24px;
+  padding:18px;
+  border:1px solid rgba(13,138,125,.20);
+  border-radius:18px;
+  background:#f2fbf9;
+}
+.thank-payment h3{margin:0 0 7px;font:800 18px/1.2 "Baloo 2",sans-serif}
+.thank-payment p{margin:0;color:var(--thank-muted);font-size:13px;line-height:1.55}
+.thank-qr{width:174px;max-width:100%;aspect-ratio:1;margin:16px auto;background:#fff;border:1px solid var(--thank-border);border-radius:16px;padding:8px;display:grid;place-items:center}
+.thank-qr svg{width:100%;height:100%;display:block}
+.thank-upi-ref{margin-top:10px!important;text-align:center;overflow-wrap:anywhere}
+.thank-actions{display:grid;gap:10px;margin-top:18px}
+.thank-btn{
+  min-height:48px;
+  border-radius:14px;
+  border:1px solid var(--thank-border);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:11px 16px;
+  text-decoration:none;
+  font:800 15px/1.2 "Hind",sans-serif;
+  cursor:pointer;
+  transition:transform .16s ease,box-shadow .16s ease,background .16s ease;
+}
+.thank-btn:hover{transform:translateY(-1px)}
+.thank-btn.primary{background:linear-gradient(135deg,var(--thank-accent),var(--thank-accent-dark));border-color:transparent;color:#fff;box-shadow:0 9px 22px rgba(13,138,125,.18)}
+.thank-btn.secondary{background:#fff;color:var(--thank-ink)}
+.thank-btn.soft{background:#f7f9f9;color:var(--thank-ink)}
+.thank-help{margin-top:18px;text-align:center;color:var(--thank-muted);font-size:12px;line-height:1.5}
+.thank-help a{color:var(--thank-accent-dark);font-weight:700;text-decoration:none}
+.receipt-print-frame{position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;border:0}
+@media(max-width:760px){
+  .thank-page{padding-top:24px}
+  .thank-grid{grid-template-columns:1fr}
+  .thank-hero{padding-bottom:22px}
+  .thank-order-head{padding:20px}
+  .thank-items{padding-inline:20px}
+  .thank-summary{padding:16px 20px 20px}
+  .thank-next{padding:20px}
+  .thank-payment{margin:0 20px 20px}
+}
+@media(max-width:480px){
+  .thank-topbar{min-height:64px;padding-top:9px;padding-bottom:9px}
+  .thank-brand{font-size:19px}.thank-brand img{width:38px;height:38px}
+  .thank-page{padding-inline:12px}
+  .thank-card{border-radius:20px}
+  .thank-order-head{display:block}
+  .thank-total{text-align:left;margin-top:13px}
+}
+@media(prefers-reduced-motion:reduce){.thank-btn{transition:none}}
