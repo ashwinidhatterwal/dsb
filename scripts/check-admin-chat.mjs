@@ -27,7 +27,7 @@ assert(backend.includes('generateAiProductDraft_'), 'Image-aware product analysi
 assert(backend.includes('aiAdminOptimizedImageUrl_'), 'AI image optimization is missing');
 assert(!backend.includes('classifyAiAdminIntent_') && !backend.includes('aiAdminLocalReport_'), 'Legacy intent/report routing should be removed');
 
-const context = { console };
+const context = { console, aiBudgetAvailable_:()=>true };
 vm.createContext(context);
 vm.runInContext(backend, context, { filename: 'ai-admin-chat.gs' });
 const history = Array.from(context.sanitizeAiAdminHistory_([{role:'user',text:' hello '},{role:'assistant',text:' ok '},{role:'system',text:'no'}]));

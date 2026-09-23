@@ -6,7 +6,7 @@
    - Store only compact decision events; do not track scroll/hover noise.
    - Attribution is session-scoped and intentionally limited to UTM metadata.
    - Orders/real revenue come from authoritative order sheets, not browser events.
-   - Analytics writes are best-effort and isolated from checkout locks.
+   - Analytics writes are best-effort and share the script lock with checkout.
 */
 const ANALYTICS_RESET_AT_PROPERTY = 'ANALYTICS_RESET_AT';
 
@@ -42,7 +42,9 @@ function analyticsSheet_() {
     sheet.appendRow(heads);
     try { sheet.hideSheet(); } catch (_) {}
   } else {
-    heads.forEach(name => ensureColumn_(sheet, name));
+    const existing = headers_(sheet);
+    const missing = heads.filter(name => existing.indexOf(name.toLowerCase()) < 0);
+    if (missing.length) sheet.getRange(1, existing.length + 1, 1, missing.length).setValues([missing]);
   }
   return sheet;
 }
@@ -53,8 +55,10 @@ function analyticsEventRow_(raw, visitorHash, sessionHash, now) {
   const name = analyticsCleanText_(raw && raw.name, 40);
   if (ANALYTICS_EVENTS.indexOf(name) < 0) return null;
   const props = raw && typeof raw.props === 'object' && raw.props ? raw.props : {};
-  let date = new Date(raw && raw.ts || now);
-  if (isNaN(date.getTime()) || Math.abs(now.getTime() - date.getTime()) > 14 * 86400000) date = now;
+  if (!raw || !raw.ts || !analyticsCleanText_(raw.qid, 100)) return null;
+  let date = new Date(raw.ts);
+  if (isNaN(date.getTime()) || now - date > 14 * 86400000 || date - now > 300000) return null;
+  if (date > now) date = now;
   const numeric = value => {
     const n = Number(value);
     return isFinite(n) ? Math.max(-10000000, Math.min(10000000, n)) : '';
@@ -122,7 +126,7 @@ function recordAnalyticsBatch_(body) {
   if (!candidates.length) return { success: true, accepted: 0 };
 
   // Retry safety: qid is persisted with the event and mirrored in Script Cache.
-  // Cache avoids almost all reads; a short tail check protects against cache eviction.
+  // Cache avoids repeat reads; durable lookup covers the whole active retention window.
   const cache = CacheService.getScriptCache();
   const cacheKeys = candidates.map(x => x.cacheKey).filter(Boolean);
   let cached = {};
@@ -136,25 +140,34 @@ function recordAnalyticsBatch_(body) {
   try {
     const sheet = analyticsSheet_();
     const lastRow = sheet.getLastRow();
+    // Recheck reset under the same lock that protects reset and append.
+    const boundary = analyticsResetAt_(), batchSeen = new Set();
+    pending = pending.filter(x => {
+      if (boundary && x.row[0] < boundary || batchSeen.has(x.qid)) return false;
+      batchSeen.add(x.qid); return true;
+    });
+    try { rateLimit_('analytics-global-batches', 120, 60); }
+    catch (_) { return { success: true, accepted: 0, throttled: true }; }
     const qids = {};
-    pending.forEach(x => { if (x.qid) qids[x.qid] = true; });
+    pending.forEach(x => { qids[x.qid] = true; });
     if (lastRow > 1 && Object.keys(qids).length) {
       const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(x => String(x || '').trim().toLowerCase());
       const qidCol = headers.indexOf('qid') + 1;
       if (qidCol > 0) {
-        const take = Math.min(1500, lastRow - 1);
-        sheet.getRange(lastRow - take + 1, qidCol, take, 1).getValues().forEach(r => {
-          const qid = analyticsCleanText_(r[0], 100);
-          if (qid) qids[qid] = qids[qid] === true ? 'seen' : qids[qid];
+        const pattern = '^(?:' + Object.keys(qids).map(analyticsRegexEscape_).join('|') + ')$';
+        sheet.getRange(2, qidCol, lastRow - 1, 1).createTextFinder(pattern).useRegularExpression(true).matchEntireCell(true).findAll().forEach(hit => {
+          qids[String(hit.getValue())] = 'seen';
         });
         pending = pending.filter(x => !x.qid || qids[x.qid] !== 'seen');
       }
     }
     if (pending.length) {
-      const rows = pending.map(x => x.row);
+      const canonical = ['date','visitor','session','event','path','productid','category','subcategory','value','source','device','detail','medium','campaign','content','landing','qid'];
+      const heads = headers_(sheet);
+      const rows = pending.map(x => heads.map(h => canonical.indexOf(h) >= 0 ? x.row[canonical.indexOf(h)] : ''));
       sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
       accepted = rows.length;
-      invalidateAnalyticsCaches_();
+      // Reports expire naturally; ingestion must not defeat the report cache.
       const put = {};
       pending.forEach(x => { if (x.cacheKey) put[x.cacheKey] = '1'; });
       try { if (Object.keys(put).length) cache.putAll(put, 21600); } catch (_) {}
@@ -199,22 +212,20 @@ function analyticsOverlap_(left, right) {
 }
 function getAnalyticsReport_(options) {
   options = options || {};
-  const daysRaw = Number(options.days) || 30;
-  const days = [7, 30, 90].indexOf(daysRaw) >= 0 ? daysRaw : 30;
+  const actualNow=new Date(), tz=Session.getScriptTimeZone();
+  const window=analyticsWindow_(options,actualNow,tz);
+  const days=window.days, now=window.end, today=window.lastDay, currentDay=window.firstDay;
   const cacheKey = ANALYTICS_REPORT_CACHE_KEY + ':' + days;
-  const cached = options.force ? null : cacheGetChunkedJson_(cacheKey);
-  if (cached) return cached;
-
-  const now = new Date();
-  const tz = Session.getScriptTimeZone();
-  const today = analyticsDateKey_(now, tz);
-  const currentDay = analyticsDayOffset_(today, 1 - days);
+  const epoch = String(analyticsResetAt_() || '');
+  const cached = options.force || window.custom ? null : cacheGetChunkedJson_(cacheKey);
+  if (cached && cached.resetEpoch === epoch) return cached;
   const currentStart = Utilities.parseDate(currentDay, tz, 'yyyy-MM-dd');
   const previousStart = Utilities.parseDate(analyticsDayOffset_(currentDay, -days), tz, 'yyyy-MM-dd');
   const resetAt = analyticsResetAt_();
   const orders = rowsAsObjects_(getSheet_(ORDERS_SHEET));
   const events = [];
-  let trackingStart = resetAt;
+  const firstSeen = PropertiesService.getScriptProperties().getProperty('ANALYTICS_FIRST_SEEN');
+  let trackingStart = resetAt || (firstSeen && !isNaN(new Date(firstSeen)) ? new Date(firstSeen) : null);
   // An attributed order proves tracking existed even if all browser events were lost.
   orders.forEach(order => {
     if (resetAt || (!order.analyticsvisitor && !order.analyticssession)) return;
@@ -228,7 +239,7 @@ function getAnalyticsReport_(options) {
       if (!trackingStart || (!resetAt && date < trackingStart)) trackingStart = date;
       if (date >= previousStart) events.push({ ...row, _date: date });
     });
-  } catch (_) {}
+  } catch (err) { throw new Error('Analytics data could not be read. Please retry.'); }
 
   // Browser analytics only exists from trackingStart. Keep order comparisons inside
   // the same coverage window so conversion/revenue comparisons remain honest.
@@ -279,7 +290,7 @@ function getAnalyticsReport_(options) {
     return m;
   }
 
-  const current = period(currentStart, new Date(now.getTime() + 1000));
+  const current = period(currentStart, new Date(now.getTime() + 1));
   const previous = period(previousStart, currentStart);
   orders.forEach(order => {
     const date = new Date(order.date);
@@ -590,7 +601,7 @@ function getAnalyticsReport_(options) {
   if (!insights.length) insights.push(analyticsInsight_('collecting', 'Analytics is collecting', 'Keep this running for a few days. Insights become more useful once real traffic builds up.', 'neutral', 'visitors'));
 
   const report = {
-    generatedAt: now.toISOString(), days: days, timezone: tz, periodStart: currentStart.toISOString(), periodEnd: now.toISOString(), includesPartialToday: true, trackingSince: trackingStart ? trackingStart.toISOString() : '', comparisonAvailable: comparisonAvailable,
+    resetEpoch: epoch, generatedAt: actualNow.toISOString(), days: days, timezone: tz, periodStart: currentStart.toISOString(), periodEnd: now.toISOString(), includesPartialToday: window.partialToday, trackingSince: trackingStart ? trackingStart.toISOString() : '', comparisonAvailable: comparisonAvailable,
     metrics: metrics, series: series, funnel: funnel,
     rates: {
       sessionToProduct: analyticsPct_(current.productViewSessions, current.sessions),
@@ -606,6 +617,119 @@ function getAnalyticsReport_(options) {
     categories: analyticsBreakdown_(categoryCounts), campaigns: campaigns, landingPages: landingPages,
     topProducts: topProducts, productRankings: productRankings, productRankingRows: productRankingRows, insights: insights
   };
-  cachePutJson_(cacheKey, report, ANALYTICS_REPORT_CACHE_TTL);
+  if (String(analyticsResetAt_() || '') !== epoch) throw new Error('Analytics was reset during this report. Refresh to reload.');
+  if(!window.custom)cachePutJson_(cacheKey, report, ANALYTICS_REPORT_CACHE_TTL);
   return report;
+}
+
+function analyticsRegexEscape_(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Optional hourly job. Preserves raw records; never sums daily unique visitors.
+// Only an expired prefix is moved, in a bounded batch. Unexpected row order stops
+// maintenance safely; it never guesses which live rows to remove.
+function maintainShopAnalytics() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return { busy: true };
+  const props = PropertiesService.getScriptProperties();
+  try {
+    const sheet = analyticsSheet_(), heads = headers_(sheet), count = Math.min(300, sheet.getLastRow() - 1);
+    if (count < 1) return { archived: 0 };
+    const cutoff = Date.now() - 200 * 86400000;
+    let rows = sheet.getRange(2, 1, count, heads.length).getValues();
+    let take = 0;
+    while (take < rows.length && rows[take][0] instanceof Date && +rows[take][0] < cutoff) take++;
+    rows = rows.slice(0, take);
+    if (!take) { props.setProperty('ANALYTICS_MAINTENANCE_AT', new Date().toISOString()); return { archived: 0 }; }
+    const first = props.getProperty('ANALYTICS_FIRST_SEEN');
+    const earliest = new Date(Math.min(...rows.map(r => +r[0])));
+    if (!first || earliest < new Date(first)) props.setProperty('ANALYTICS_FIRST_SEEN', earliest.toISOString());
+    // Persist stable archive IDs before copying. A crash at any later step can retry.
+    ensureColumn_(sheet, 'storageId');
+    const sourceHeads = headers_(sheet), idCol = sourceHeads.indexOf('storageid');
+    rows = sheet.getRange(2, 1, take, sourceHeads.length).getValues();
+    rows.forEach(row => { if (!row[idCol]) row[idCol] = Utilities.getUuid(); });
+    sheet.getRange(2, idCol + 1, take, 1).setValues(rows.map(row => [row[idCol]]));
+    SpreadsheetApp.flush();
+    const ss = SpreadsheetApp.getActiveSpreadsheet(), groups = {};
+    rows.forEach(row => {
+      const name = 'AnalyticsArchive_' + Utilities.formatDate(row[0], 'UTC', 'yyyy_MM');
+      (groups[name] || (groups[name] = [])).push(row);
+    });
+    Object.keys(groups).forEach(name => {
+      let archive = ss.getSheetByName(name);
+      if (!archive) { archive = ss.insertSheet(name); archive.appendRow(sourceHeads); archive.hideSheet(); }
+      const archiveHeads = headers_(archive);
+      if (JSON.stringify(archiveHeads) !== JSON.stringify(sourceHeads)) throw new Error('Archive schema differs; source retained.');
+      const group = groups[name];
+      const pattern = '^(?:' + group.map(row => analyticsRegexEscape_(row[idCol])).join('|') + ')$';
+      const existing = new Set();
+      if (archive.getLastRow() > 1) archive.getRange(2, idCol + 1, archive.getLastRow() - 1, 1).createTextFinder(pattern).useRegularExpression(true).matchEntireCell(true).findAll().forEach(hit => existing.add(String(hit.getValue())));
+      const missing = group.filter(row => !existing.has(String(row[idCol])));
+      if (missing.length) archive.getRange(archive.getLastRow() + 1, 1, missing.length, sourceHeads.length).setValues(missing);
+      SpreadsheetApp.flush();
+      const hits = archive.getRange(2, idCol + 1, archive.getLastRow() - 1, 1).createTextFinder(pattern).useRegularExpression(true).matchEntireCell(true).findAll();
+      const saved = {};
+      hits.forEach(hit => { saved[String(hit.getValue())] = archive.getRange(hit.getRow(), 1, 1, sourceHeads.length).getValues()[0]; });
+      group.forEach(row => { if (JSON.stringify(saved[String(row[idCol])]) !== JSON.stringify(row)) throw new Error('Archive verification failed; source retained.'); });
+    });
+    sheet.deleteRows(2, take);
+    props.setProperty('ANALYTICS_MAINTENANCE_AT', new Date().toISOString());
+    props.deleteProperty('ANALYTICS_MAINTENANCE_ERROR');
+    return { archived: take };
+  } catch (err) {
+    props.setProperty('ANALYTICS_MAINTENANCE_ERROR', String(err.message || err).slice(0, 300));
+    throw err;
+  } finally { lock.releaseLock(); }
+}
+function setupShopMaintenance() {
+  if (!ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'rebuildShopDailyAnalytics')) ScriptApp.newTrigger('rebuildShopDailyAnalytics').timeBased().everyDays(1).atHour(2).create();
+  if (!ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'maintainShopAnalytics')) {
+    ScriptApp.newTrigger('maintainShopAnalytics').timeBased().everyHours(1).create();
+  }
+  return { success: true };
+}
+// Run manually in the Apps Script editor. Never exposed as a public web action.
+function getShopOperationalHealth() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet(), props = PropertiesService.getScriptProperties();
+  const pending = [], telegramPending = [];
+  const transactions = ss.getSheetByName('OrderTransactions');
+  if (transactions) rowsAsObjects_(transactions).forEach(row => {
+    if (String(row.status) === 'Pending') pending.push(new Date(row.updated).getTime());
+  });
+  if (transactions && transactions.getLastRow() > 1 && transactions.getLastColumn() >= 5) {
+    transactions.getRange(2, 1, transactions.getLastRow() - 1, 5).getValues().forEach(row => {
+      if (String(row[4]) === 'Pending') telegramPending.push(new Date(row[3]).getTime());
+    });
+  }
+  const age = values => { const valid = values.filter(Number.isFinite); return valid.length ? Math.max(0, (Date.now() - Math.min(...valid)) / 3600000) : null; };
+  const analytics = ss.getSheetByName(ANALYTICS_SHEET);
+  const result = {
+    checkedAt: new Date().toISOString(), pendingTransactions: pending.length,
+    oldestPendingHours: pending.length ? age(pending) : 0,
+    pendingTelegramNotifications: telegramPending.length,
+    oldestTelegramPendingHours: telegramPending.length ? age(telegramPending) : 0,
+    activeAnalyticsRows: analytics ? Math.max(0, analytics.getLastRow() - 1) : 0,
+    maintenanceAt: props.getProperty('ANALYTICS_MAINTENANCE_AT') || '',
+    maintenanceError: props.getProperty('ANALYTICS_MAINTENANCE_ERROR') || '',
+    maintenanceInstalled: ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'maintainShopAnalytics')
+  };
+  console.log(JSON.stringify(result));
+  return result;
+}
+
+function analyticsWindow_(options, now, tz) {
+  const today=analyticsDateKey_(now,tz), custom=!!(options.startDate||options.endDate);
+  let days=[7,30,90].indexOf(Number(options.days))>=0?Number(options.days):30;
+  let firstDay=analyticsDayOffset_(today,1-days),lastDay=today;
+  if(custom){
+    firstDay=String(options.startDate||'');lastDay=String(options.endDate||'');
+    [firstDay,lastDay].forEach(key=>{const date=new Date(key+'T00:00:00Z');if(!/^\d{4}-\d{2}-\d{2}$/.test(key)||isNaN(date)||date.toISOString().slice(0,10)!==key)throw new Error('Choose valid start and end dates.');});
+    days=Math.round((new Date(lastDay+'T00:00:00Z')-new Date(firstDay+'T00:00:00Z'))/86400000)+1;
+    if(days<1||days>90||lastDay>today||firstDay<analyticsDayOffset_(today,-89))throw new Error('Choose a range within the last 90 calendar days.');
+  }
+  const partialToday=lastDay===today;
+  const end=partialToday?now:new Date(Utilities.parseDate(analyticsDayOffset_(lastDay,1),tz,'yyyy-MM-dd').getTime()-1);
+  return {days:days,custom:custom,firstDay:firstDay,lastDay:lastDay,end:end,partialToday:partialToday};
 }

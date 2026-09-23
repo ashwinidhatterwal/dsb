@@ -44,6 +44,11 @@ assert.equal(await run('CartStore.tryAddSafe(sizedCartProduct(fixture,"M"),1)'),
 assert.equal(await run('CartStore.tryAddSafe(sizedCartProduct(fixture,"M"),1)'), false);
 assert.equal(run('CartStore.total()'), 628);
 
+context.sizedFixture={...context.fixture,id:'SIZE',stockQty:2,sizestock:'S=0, M=2'};
+assert.equal(await run('CartStore.tryAddSafe(sizedCartProduct(sizedFixture,"S"),1)'),false);
+assert.equal(await run('CartStore.tryAddSafe(sizedCartProduct(sizedFixture,"M"),2)'),true);
+assert.equal(await run('CartStore.tryAddSafe(sizedCartProduct(sizedFixture,"M"),1)'),false);
+assert.equal(run('DSB_SEO.product(sizedFixture,[],"https://suhagbhandar.in").offers[0].availability'),'https://schema.org/OutOfStock');
 const backend = vm.createContext({ console });
 vm.runInContext(await read('code.gs'), backend);
 const data = [['id','name','price','sizes','sizeprices','stockqty','stock'], ['P','Example',250,'S,M','S=299,M=329',2,'in stock']];
@@ -56,9 +61,11 @@ assert.equal(backend.buildValidatedOrderItems_([{id:'P',size:'S',qty:2},{id:'P',
 const destination = await fs.mkdtemp(path.join(os.tmpdir(), 'dsb-check-'));
 try {
   for (const file of ['index.html','catalog.html']) await fs.copyFile(path.join(root,file),path.join(destination,file));
-  await generateStaticProducts(destination,[{...context.fixture,sizes:'S,M',category:'Bangles'}],await read('product.html'),'https://suhagbhandar.in');
+  await generateStaticProducts(destination,[{...context.fixture,sizes:'S,M',category:'Bangles'}, {...context.sizedFixture,sizes:'S,M',sizeprices:'S=100,M=120',image:'https://example.com/photo.jpg'}],await read('product.html'),'https://suhagbhandar.in');
   assert((await fs.readFile(path.join(destination,'catalog.html'),'utf8')).includes('From ₹299.00'));
   const home=await fs.readFile(path.join(destination,'index.html'),'utf8');
+  const feed=await fs.readFile(path.join(destination,'merchant-feed.xml'),'utf8');
+  assert(feed.includes('?size=M</link>'));assert(feed.includes('<g:price>120.00 INR</g:price>'),'feed must not advertise a sold-out cheaper size');
   assert(home.includes('id="catRail"'));
   assert(!home.includes('class="seo-category-links"'));
 } finally {

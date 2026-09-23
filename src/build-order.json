@@ -22,6 +22,7 @@
     "src/backend/ai-admin-actions.gs",
     "src/backend/ai-admin-enrichment.gs",
     "src/backend/ai-admin-chat.gs",
+    "src/backend/shop-tools.gs",
     "src/backend/admin-auth.gs"
   ],
   "styles": [

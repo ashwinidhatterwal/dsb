@@ -71,12 +71,12 @@ const DSB_SEO = (() => {
       }))
     };
     if (Number.isFinite(price) && price > 0) {
-      const offer = (n, url) => ({
+      const offer = (n, url, size) => ({
         '@type': 'Offer',
         url,
         priceCurrency: 'INR',
         price: Number(n).toFixed(2),
-        availability: out ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
+        availability: (out || (size && val(p,'sizestock') && !val(p,'sizestock').split(',').some(entry=>{const [key,qty]=entry.split('=');return key.trim()===size && Number(qty)>0;}))) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
         itemCondition: 'https://schema.org/NewCondition',
         seller: {
           '@type': 'Organization',
@@ -86,7 +86,7 @@ const DSB_SEO = (() => {
         }
       });
       const prices = pricing(p);
-      result.offers = prices.sizes.length ? prices.sizes.map(size => offer(prices.priceFor(size), url + '?size=' + encodeURIComponent(size))) : offer(price, url);
+      result.offers = prices.sizes.length ? prices.sizes.map(size => offer(prices.priceFor(size), url + '?size=' + encodeURIComponent(size), size)) : offer(price, url);
     }
     return result;
   }

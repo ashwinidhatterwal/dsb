@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import fs from 'node:fs';
+const source=fs.readFileSync(new URL('../admin-reviews.js',import.meta.url),'utf8');
+const elements=Object.fromEntries(['adminReviewsList','adminReviewsStatus','adminReviewsRefresh'].map(id=>[id,{innerHTML:'',textContent:'',focus(){this.focused=true;},addEventListener(){}}]));
+const row={id:'REV-X',productId:'P1',name:'<img src=x onerror=alert(1)>',rating:1,comment:'Poor quality <script>alert(1)</script>',date:'2026-09-23',status:'Pending',verified:false};
+const c=vm.createContext({console,Date,window:{},document:{getElementById:id=>elements[id],addEventListener(){}},API_URL:'api',ADMIN_KEY:'key',ADMIN_PROFILE:{role:'admin'},adminRead:async()=>[row],escapeHtml:val=>String(val).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))});
+vm.runInContext(source,c);
+await c.window.DSBAdminReviews.load();
+assert(elements.adminReviewsList.innerHTML.includes('&lt;img'));
+assert(!elements.adminReviewsList.innerHTML.includes('<script>'));
+assert(elements.adminReviewsList.innerHTML.includes('data-moderate="Approved"'));
+assert(elements.adminReviewsList.innerHTML.includes('★'));
+assert.equal(elements.adminReviewsStatus.textContent,'1 awaiting review · showing up to 100 recent entries');
+console.log('PASS: review moderation UI escapes user content, keeps negative ratings and exposes approval controls.');

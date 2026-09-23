@@ -31,7 +31,7 @@ const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbybavfXBC-5CNst
 // photo straight from the browser and get back a permanent link, no server
 // needed. Fill these in after creating a free Cloudinary account and an
 // unsigned upload preset — see SETUP.md. Safe to leave the preset
-// unsigned/public since it only allows uploads, not account access.
+// public: enforce upload limits in Cloudinary's preset; see SETUP.md.
 const CLOUDINARY_CLOUD_NAME = 'malfl6xv';
 const CLOUDINARY_UPLOAD_PRESET = 'dhatterwal suhag bhandar';
 let API_URL = '';
@@ -188,8 +188,8 @@ async function loadProducts(refreshRelated = true) {
   $('#refreshProductsBtn').disabled = true;
   try {
     if (!ADMIN_PROFILE) {
-      const profile = await adminRead('adminSession');
-      if (profile.version !== 23) throw new Error('Deploy the new code.gs version before opening this admin update.');
+      const profile = await adminRead('adminSession', { requiredVersion: 26 });
+      if (profile.version !== 26) throw new Error('Deploy the new code.gs version before opening this admin update.');
       ADMIN_PROFILE = profile;
       applyStaffRole();
       offerSavedDraft();
@@ -364,6 +364,7 @@ function renderOrderList() {
           ${orderStatusActionsHtml(st, hasPendingCancellation)}
         </section>
 
+        ${window.DSBShopTools?.shipmentHtml(o) || ''}
         <section class="order-payment-slot" aria-label="Payment"></section>
       </div>
     </article>`;
@@ -553,6 +554,8 @@ function fillForm(p) {
   $('#f-gtin').value = p.gtin || '';
   $('#f-descriptionhindi').value = p.descriptionhindi || '';
   $('#f-sizeprices').value = p.sizeprices || '';
+  $('#f-sizestock').value = p.sizestock || '';
+  $('#f-reellink').value = p.reellink || '';
   $('#f-sizes').value = p.sizes || '';
   $('#f-hasSizes').checked = !!String(p.sizes || '').trim();
   $('#sizeOptionsField').hidden = !$('#f-hasSizes').checked;
@@ -598,6 +601,8 @@ function clearForm() {
   $('#f-gtin').value = '';
   $('#f-descriptionhindi').value = '';
   $('#f-sizeprices').value = '';
+  $('#f-sizestock').value = '';
+  $('#f-reellink').value = '';
   $('#f-sizes').value = '';
   $('#f-hasSizes').checked = false;
   $('#sizeOptionsField').hidden = true;
@@ -622,13 +627,23 @@ async function uploadFileToCloudinary(file) {
   }
   const form = new FormData();
   const upload = await resizeUpload(file);
+  // Request a short-lived signature after resizing. Older shops continue with
+  // their existing preset until API credentials are configured in Apps Script.
+  const authorization = ADMIN_PROFILE?.signedUploads ? await adminRead('imageUploadAuthorization') : { mode: 'unsigned' };
+  if (!authorization || !['unsigned', 'signed'].includes(authorization.mode)) throw new Error('Image upload is not configured.');
   form.append('file', upload, file.name.replace(/\.[^.]+$/, '') + ({
     'image/png': '.png',
     'image/webp': '.webp',
     'image/jpeg': '.jpg'
   }[upload.type] || '.jpg'));
-  form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-  const res = await adminFetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+  const signed = authorization.mode === 'signed';
+  form.append('upload_preset', signed ? authorization.uploadPreset : CLOUDINARY_UPLOAD_PRESET);
+  if (signed) {
+    form.append('api_key', authorization.apiKey);
+    form.append('timestamp', authorization.timestamp);
+    form.append('signature', authorization.signature);
+  }
+  const res = await adminFetch(`https://api.cloudinary.com/v1_1/${signed ? authorization.cloudName : CLOUDINARY_CLOUD_NAME}/image/upload`, {
     method: 'POST',
     body: form
   });
@@ -751,6 +766,8 @@ async function saveProductTask() {
     specifications: $('#f-specifications').value.trim(),
     gtin: $('#f-gtin').value.trim(),
     descriptionhindi: $('#f-descriptionhindi').value.trim(),
+    reellink: $('#f-reellink').value.trim(),
+    sizestock: $('#f-hasSizes').checked ? $('#f-sizestock').value.trim() : '',
     sizeprices: $('#f-hasSizes').checked ? $('#f-sizeprices').value.trim() : '',
     tags: $('#f-tags').value.trim(),
     sizes: $('#f-hasSizes').checked ? [...new Set($('#f-sizes').value.split(/[,\n]/).map(x => x.trim()).filter(Boolean))].join(', ') : ''
@@ -853,6 +870,8 @@ function switchTab(name) {
   if (name === 'archive') loadArchive();
   if (name === 'dashboard' && LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
   if (name === 'analytics' && window.DSBAdminAnalytics) window.DSBAdminAnalytics.load();
+  if (name === 'shop-tools' && window.DSBShopTools) window.DSBShopTools.load();
+  if (name === 'reviews' && window.DSBAdminReviews) window.DSBAdminReviews.load();
   if (name === 'ai-config' && window.DSBAIConfig) window.DSBAIConfig.loadPage();
   window.scrollTo({
     top: 0,

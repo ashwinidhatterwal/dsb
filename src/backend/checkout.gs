@@ -58,7 +58,7 @@ function addOrder(o) {
       error: 'Prices or charges changed. Please review the updated total.',
       quote: quoted.quote
     };
-    rateLimit_('order-phone:' + hashText_(order.phone), 5, 3600);
+    rateLimit_('order-phone:' + hashText_(canonicalPhone_(order.phone)), 5, 3600);
     rateLimit_('orders-global', 120, 3600);
     const id = 'ORD-' + hashText_(o.requestId).slice(0, 16).toUpperCase(),
       now = new Date();
@@ -96,7 +96,7 @@ function addOrder(o) {
       notifyAsync: true,
       orderId: id,
       fingerprint: fingerprint,
-      phoneHash: hashText_(order.phone),
+      phoneHash: hashText_(canonicalPhone_(order.phone)),
       record: record,
       result: result,
       items: quoted.priced.items,
@@ -245,9 +245,10 @@ function buildValidatedOrderItems_(itemsDetail, productData) {
     };
   }
   const items = [];
-  const requestedTotals = Object.create(null);
+  const requestedTotals = Object.create(null), requestedSizes = Object.create(null);
   itemsDetail.forEach(x => {
     requestedTotals[x.id] = (requestedTotals[x.id] || 0) + x.qty;
+    const sizeKey=JSON.stringify([x.id,x.size||'']);requestedSizes[sizeKey]=(requestedSizes[sizeKey]||0)+x.qty;
   });
   let subtotal = 0;
   for (const requested of itemsDetail) {
@@ -268,6 +269,9 @@ function buildValidatedOrderItems_(itemsDetail, productData) {
       code: 'invalid_size',
       error: 'Please choose an available size for ' + (row[nameCol] || requested.id) + '.'
     };
+    const sizeStockRaw=heads.indexOf('sizestock')<0?'':row[heads.indexOf('sizestock')];
+    let sizeStock;try{sizeStock=parseSizeStock_(sizeStockRaw,sizes);}catch(_){return {ok:false,error:'Size inventory needs correction. Contact the shop.'};}
+    if(sizeStock && requestedSizes[JSON.stringify([requested.id,size])] > sizeStock[size])return {ok:false,code:'insufficient_stock',productId:requested.id,size:size,availableQty:sizeStock[size],error:'Only '+sizeStock[size]+' left in size '+size+'.'};
     const status = String(stockCol === -1 ? 'in stock' : row[stockCol] || 'in stock').trim().toLowerCase();
     if (status === 'out of stock') return {
       ok: false,
@@ -316,9 +320,11 @@ function buildValidatedOrderItems_(itemsDetail, productData) {
       } : {}),
       unitPrice,
       costPrice: costCol === -1 ? 0 : safeNumber_(row[costCol], 0),
+      costKnown: costCol !== -1 && knownCost_(row[costCol]),
       lineTotal,
       tracked,
       availableQty,
+      sizeStockRaw: sizeStock ? String(sizeStockRaw) : '',
       rowIndex: found.rowIndex
     });
   }
@@ -333,7 +339,7 @@ function quoteOrder(o) {
   return withWriteLock_(function () {
     const order = normalizeAndValidateOrder_(o || {});
     if (!order.ok) return order;
-    rateLimit_('quotes:' + hashText_(order.phone), 30, 600);
+    rateLimit_('quotes:' + hashText_(canonicalPhone_(order.phone)), 30, 600);
     const priced = priceOrder_(order, getOrderSheets_());
     return priced.ok ? Object.assign({
       success: true
@@ -407,7 +413,7 @@ function orderResult(requestId, phone) {
       error: 'No order was saved for this attempt.'
     };
     const t = readTransaction_(sheet, row);
-    if (t.data.phoneHash !== hashText_(cleanPhone_(phone))) return {
+    if (!phoneIdentityVariants_(phone).some(identity => t.data.phoneHash === hashText_(identity))) return {
       success: false,
       code: 'not_found',
       error: 'Order attempt not found.'

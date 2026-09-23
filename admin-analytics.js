@@ -65,11 +65,29 @@
     return report.series.map(x => ({ label: x.label, value: Number(x[meta.series]) || 0 }));
   }
 
+  function csvCell(value) {
+    const text = String(value ?? '');
+    return '"' + (/^[=+@\-\t\r]/.test(text) ? "'" + text : text).replace(/"/g, '""') + '"';
+  }
+  function exportDailyCsv() {
+    if (!report?.series?.length) return;
+    const meta = metricMeta[focus] || metricMeta.visitors;
+    const lines = [['Date', meta.label, 'Timezone', 'Tracking since'], ...chartValues().map((point, i) => [
+      report.series[i]?.key || point.label, point.value, report.timezone || '', report.trackingSince || ''
+    ])];
+    const blob = new Blob(['\uFEFF' + lines.map(row => row.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob), link = document.createElement('a');
+    link.href = url; link.download = 'dsb-' + focus + '-' + (report.days || 30) + 'days.csv';
+    document.body.appendChild(link); link.click(); link.remove();
+    URL.revokeObjectURL(url);
+  }
   function renderChart() {
     const meta = metricMeta[focus] || metricMeta.visitors;
     const data = chartValues(), wrap = $a('analyticsChart');
     $a('analyticsChartTitle').textContent = meta.label + ' trend';
     $a('analyticsChartValue').textContent = fmt(metricValue(focus), meta.format);
+    $a('analyticsDataCaption').textContent = meta.label + ' by shop calendar date (' + (report.timezone || 'shop time') + ')';
+    $a('analyticsChartData').innerHTML = data.map((point, i) => `<tr><th scope="row">${escapeHtml(report.series[i]?.key || point.label)}</th><td>${fmt(point.value, meta.format)}</td></tr>`).join('');
     if (!data.length || data.every(x => !x.value)) {
       wrap.innerHTML = '<div class="analytics-empty">No tracked activity yet for this metric.<br>New storefront activity will appear here automatically.</div>';
       $a('analyticsChartLabels').innerHTML = '';
@@ -129,7 +147,7 @@
     const rows = sortedProducts();
     if (!rows.length) { body.innerHTML = '<tr><td colspan="8" class="analytics-status">No product activity yet.</td></tr>'; return; }
     body.innerHTML = rows.map(p => `<tr data-product-id="${escapeHtml(p.id)}" title="Open product editor">
-      <td data-label="Product"><span class="analytics-product-name">${escapeHtml(p.name)}</span><span class="analytics-product-id">${escapeHtml(p.id)}</span></td>
+      <td data-label="Product"><span class="analytics-product-name">${escapeHtml(p.name)}</span><span class="analytics-product-id">${escapeHtml(p.id)}</span><button type="button" class="analytics-product-edit" data-edit-product="${escapeHtml(p.id)}" aria-label="Edit ${escapeHtml(p.name)}">Edit product</button></td>
       <td data-label="Views" class="num">${number(p.views)}</td><td data-label="Unique viewers" class="num">${number(p.uniqueViewers)}</td><td data-label="Viewer → cart" class="num">${percent(p.cartRate)}</td>
       <td data-label="Sold" class="num">${number(p.sold)}</td><td data-label="Delivered revenue" class="num">${money(p.revenue)}</td><td data-label="₹ / viewer" class="num">${money(p.revenuePerViewer)}</td><td data-label="Opportunity" class="num">${escapeHtml(p.opportunityLabel || '—')}</td></tr>`).join('');
   }
@@ -193,7 +211,7 @@
     const d = new Date(report.generatedAt), started = report.trackingSince ? new Date(report.trackingSince) : null;
     const updated = 'Updated ' + (isNaN(d) ? 'now' : d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
     const coverage = started && !isNaN(started) ? ' · tracking since ' + started.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : '';
-    const compare = (report.comparisonAvailable ? '' : ' · comparisons unlock after a full prior period') + ' · calendar days (' + (report.timezone || 'shop time') + '), today so far';
+    const compare = (report.comparisonAvailable ? '' : ' · comparisons unlock after a full prior period') + ' · calendar days (' + (report.timezone || 'shop time') + ')' + (report.includesPartialToday?', today so far':' · completed days');
     $a('analyticsFresh').textContent = updated + coverage + compare;
   }
 
@@ -243,7 +261,7 @@
     $a('analyticsStatus').hidden = false; $a('analyticsContent').hidden = true;
     $a('analyticsStatus').textContent = 'Loading analytics…';
     try {
-      report = await adminRead('adminAnalytics', { days: Number($a('analyticsRange').value) || 30, force: !!force });
+      report = await adminRead('adminAnalytics', { days: Number($a('analyticsRange').value) || 30, force: !!force, ...($a('analyticsStart')?.value || $a('analyticsEnd')?.value ? {startDate:$a('analyticsStart').value,endDate:$a('analyticsEnd').value} : {}) });
       if (!report?.metrics) throw new Error('Invalid analytics response');
       $a('analyticsStatus').hidden = true; $a('analyticsContent').hidden = false;
       const resetZone = $a('analyticsResetZone');
@@ -281,8 +299,10 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     bindMenu();
-    $a('analyticsRange')?.addEventListener('change', () => { report = null; load(true); });
+    $a('analyticsRange')?.addEventListener('change', () => { $a('analyticsStart').value='';$a('analyticsEnd').value='';report = null; load(true); });
+    $a('analyticsApplyDates')?.addEventListener('click',()=>{report=null;load(true);});
     $a('analyticsRefresh')?.addEventListener('click', () => { report = null; load(true); });
+    $a('analyticsExportCsv')?.addEventListener('click', exportDailyCsv);
     $a('analyticsProductSort')?.addEventListener('change', e => { productSort = e.target.value || 'opportunity'; renderProducts(); });
     $a('analyticsResetOpen')?.addEventListener('click', () => {
       if (ADMIN_PROFILE?.role !== 'admin') return showToast('Only the owner/admin can reset analytics.');
@@ -292,8 +312,10 @@
     });
     $a('analyticsResetConfirm')?.addEventListener('click', resetAnalytics);
     $a('analyticsResetDialog')?.addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+    $a('analyticsResetDialog')?.addEventListener('close', () => $a('analyticsResetOpen')?.focus());
     $a('tab-analytics')?.addEventListener('click', e => {
       const focusBtn = e.target.closest('[data-analytics-focus]'); if (focusBtn) setFocus(focusBtn.dataset.analyticsFocus);
+      const edit = e.target.closest('button[data-edit-product]'); if (edit) { openProduct(edit.dataset.editProduct); return; }
       const row = e.target.closest('tr[data-product-id]'); if (row) openProduct(row.dataset.productId);
     });
   });

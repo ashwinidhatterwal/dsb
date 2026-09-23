@@ -272,15 +272,29 @@ of the full audit.
 
 Remaining phases, each delivered as a separate build:
 1. Phase 1 (this build): analytics/tracking correctness and privacy copy.
-2. Phase 2: compatible phone/promo identity handling, missing-cost accounting,
+2. Phase 2 (implemented; see PHASE-2-3-RELEASE.md): compatible phone/promo identity handling, missing-cost accounting,
    cancellation-request concurrency, and record migration/recovery tests.
-3. Phase 3: analytics reset/ingestion concurrency, retention/aggregation,
+3. Phase 3 (implemented; see PHASE-2-3-RELEASE.md): analytics reset/ingestion concurrency, retention/aggregation,
    reduced repeated Sheet work and operational health/backup procedures.
 4. Phase 4: browser-verified accessibility/UI cleanup and selected shop features
    such as shipment references, UTM links, optional size stock and reel links.
    External account configuration must be verified where relevant.
 
 The reset/ingestion race and bounded retry deduplication described in the audit
-remain Phase 3 work. Daily unique visitor counts must not simply be summed to
+are addressed by the Phase 2/3 release described in PHASE-2-3-RELEASE.md. Daily unique visitor counts must not simply be summed to
 produce multi-day unique totals. Never remove raw/recovery history without a
 validated retention/archive plan.
+
+## Stage 3 review and accessibility release
+
+Backend API 26 supports v24/v25 admin sessions during a gradual static publish
+and v26 sessions for the current tools. Existing owner keys remain valid without
+a new minimum length requirement. New unverified reviews start in Pending; verified purchases start
+Approved; legacy blank moderation status means Approved. Hidden/Pending rows do not
+appear in public review lists or summaries. The owner can approve or hide reviews
+through the Reviews menu, including previously published reviews. The review queue
+shows the 100 newest priority rows; moderate to reveal older rows. Review rating
+does not determine moderation. Review body caches on customer devices expire within
+30 seconds and summary caches within 60 seconds. Cloudinary server-side restrictions
+are configured in the Cloudinary account; the browser size limit is convenience only.
+See STAGE-3-RELEASE.md for staging and rollback steps.

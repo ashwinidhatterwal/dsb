@@ -28,3 +28,5 @@ await fs.appendFile(path.join(destination,'config.js'),'\nwindow.DSB_PUBLISHED_P
 console.log(`Generated ${count} static product pages.`);
 
 await fs.appendFile(path.join(destination,'config.js'),'\nwindow.DSB_HINDI_PRODUCTS=new Set('+JSON.stringify(rows.filter(p=>p.namehindi&&p.descriptionhindi).map(p=>String(p.id))).replaceAll('<','\\u003c')+');\n');
+
+await fs.writeFile(path.join(destination,'shop-publication.json'),JSON.stringify({preparedAt:new Date().toISOString(),catalogueAt:new Date(meta.generatedAt).toISOString(),repositoryUrl:process.env.GITHUB_REPOSITORY?'https://github.com/'+process.env.GITHUB_REPOSITORY:'',commit:process.env.GITHUB_SHA||''}));

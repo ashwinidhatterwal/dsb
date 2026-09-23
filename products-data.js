@@ -24,6 +24,8 @@ function normalizeRows(rows) {
       gtin: String(r.gtin || '').trim(),
       descriptionhindi: String(r.descriptionhindi || '').trim(),
       sizeprices: String(r.sizeprices || '').trim(),
+      sizestock: String(r.sizestock || '').trim(),
+      reellink: String(r.reellink || '').trim(),
       sizes: [...new Set(String(r.sizes ?? r.Sizes ?? '').split(/[,\n]/).map(x => x.trim()).filter(Boolean))],
       nameHindi: String(r.namehindi ?? r.nameHindi ?? '').trim(),
       category: String(r.category ?? r.Category ?? 'Other').trim() || 'Other',
@@ -176,7 +178,7 @@ function invalidateReviewCache(productId) {
 async function loadReviewSummaries() {
   if (!CONFIG.SHEET_API_URL) return REVIEW_SUMMARY;
   try {
-    const payload = await cachedPublicJson('review-summary', `${CONFIG.SHEET_API_URL}?action=reviews&summary=1`);
+    const payload = await cachedPublicJson('review-summary', `${CONFIG.SHEET_API_URL}?action=reviews&summary=1`, 60000);
 
     // The current Apps Script endpoint already returns the compact
     // { productId: { avg, count } } map. Use it directly instead of

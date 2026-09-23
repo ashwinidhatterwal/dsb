@@ -22,15 +22,15 @@ assert(sourceBackend.includes('trackingSince:'), 'Analytics report should expose
 assert(adminClient.includes('tracking since'), 'Analytics UI should explain when tracking began');
 assert(http.indexOf("body.action === 'analyticsBatch'") < http.indexOf('authenticateAdmin_'), 'Public analytics batch must be routed before admin auth');
 assert(auth.includes("'adminAnalytics'"), 'Analytics report must be admin-readable');
-assert(auth.includes('version: 23'), 'Analytics backend version should be 22');
+assert(auth.includes('version: Number(body.options && body.options.requiredVersion) === 26 ? 26 : Number(body.options && body.options.requiredVersion) === 25 ? 25 : 24'), 'Analytics backend must support API version 26');
 assert(backend.includes('function getAnalyticsReport_'), 'Generated code.gs is missing analytics report');
 assert(adminClient.includes('force: !!force'), 'Analytics Refresh must request a fresh backend report');
-assert(sourceBackend.includes('options.force ? null : cacheGetChunkedJson_'), 'Forced analytics refresh must bypass report cache');
+assert(sourceBackend.includes('options.force || window.custom ? null : cacheGetChunkedJson_'), 'Forced analytics refresh must bypass report cache');
 assert(sourceBackend.includes('convertedVisitors'), 'Visitor conversion must use tracked converting visitors, not raw order count');
 
 const context = vm.createContext({ console });
 vm.runInContext(backend, context);
-const row = context.analyticsEventRow_({ name:'page_view', path:'/x', props:{ trafficSource:'=IMPORTXML("x")', device:'Mobile' } }, 'v', 's', new Date());
+const row = context.analyticsEventRow_({ qid:'formula-test', ts:new Date().toISOString(), name:'page_view', path:'/x', props:{ trafficSource:'=IMPORTXML("x")', device:'Mobile' } }, 'v', 's', new Date());
 assert.equal(row[9][0], "'", 'Formula-like analytics text must be escaped before Sheets');
 assert.equal(row[10], 'Mobile');
 assert.equal(context.analyticsEventRow_({name:'not_allowed',props:{}},'v','s',new Date()), null);

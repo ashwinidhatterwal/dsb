@@ -68,6 +68,8 @@
           <div class="row total"><span>Total</span><span>${money(order.total)}</span></div>
           ${order.paymentMethod ? `<div class="row"><span>Payment</span><span>${escapeHtml(order.paymentMethod)}</span></div>` : ''}
         </div>
+        ${order.shipment && (order.shipment.carrier || order.shipment.reference) ? `<p><strong>Shipment</strong>: ${escapeHtml(order.shipment.carrier)} · ${escapeHtml(order.shipment.reference)}</p>` : ''}
+        ${/^https:\/\/[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:[/?#][^\s<>]*)?$/i.test(order.shipment?.url || '') ? `<p><a class="ghost-btn" href="${escapeHtml(order.shipment.url)}" target="_blank" rel="noopener noreferrer">Track shipment</a></p>` : ''}
         <div class="track-request-panel">
           <strong>Need a change or help?</strong>
           <p class="hint">Requests are reviewed by the shop. Sending a cancellation request does not cancel the order instantly.</p>

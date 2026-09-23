@@ -53,8 +53,10 @@ function validatePromoFast_(code, phone) {
   };
   if (onePerCustomer && phone) {
     const sheet = ensurePromoCustomersSheet_();
-    const needle = String(code).trim().toLowerCase() + '|' + hashText_(phone);
-    const hit = sheet.createTextFinder(needle).matchEntireCell(true).findNext();
+    const hit = phoneIdentityVariants_(phone).some(identity => {
+      const needle = String(code).trim().toLowerCase() + '|' + hashText_(identity);
+      return !!sheet.createTextFinder(needle).matchEntireCell(true).findNext();
+    });
     if (hit) return {
       ok: false
     };
@@ -87,7 +89,7 @@ function promoPlan_(code, phone) {
   return {
     code: code,
     usesAfter: Math.max(0, Number(data[i][col]) || 0) + 1,
-    phoneHash: hashText_(phone),
+    phoneHash: hashText_(canonicalPhone_(phone)),
     onePerCustomer: String(data[i][heads.indexOf('onepercustomer')] || '').toLowerCase() === 'yes'
   };
 }

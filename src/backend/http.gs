@@ -34,6 +34,13 @@ function doGet(e) {
   });
 }
 function doPost(e) {
+  const started=Date.now(); let action=''; DSB_REQUEST_LOCK_WAIT_MS_=0; DSB_AI_BUDGET_=null;
+  try { const raw=e && e.postData && e.postData.contents || '{}'; if(raw.length<=24000)action=JSON.parse(raw).action; } catch (_) {}
+  const result=doPostCore_(e);
+  try {recordOperationalTiming_(action,Date.now()-started,JSON.parse(result.getContent()));} catch (_) {}
+  return result;
+}
+function doPostCore_(e) {
   try {
     if (!e || !e.postData || e.postData.contents.length > 24000) return jsonResponse({
       success: false,

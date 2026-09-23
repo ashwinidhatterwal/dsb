@@ -64,7 +64,7 @@ function getDashboardData() {
     name: p.name || p.id,
     qty: Math.max(0, Math.floor(safeNumber_(p.stockqty, 0)))
   })).sort((a, b) => a.qty - b.qty || String(a.name).localeCompare(String(b.name)));
-  let monthProfit = 0;
+  let monthProfit = 0, unknownCostLines = 0;
   const productStats = {};
   const accounted = {};
   try {
@@ -79,6 +79,7 @@ function getDashboardData() {
       const qty = Math.max(0, safeNumber_(item.qty, 0));
       const revenue = Math.max(0, safeNumber_(item.linerevenue, safeNumber_(item.unitprice, 0) * qty));
       const cost = Math.max(0, safeNumber_(item.linecost, safeNumber_(item.costprice, 0) * qty));
+      if (!orderItemCostKnown_(item)) unknownCostLines++;
       monthProfit += revenue - cost;
       accounted[orderId] = true;
       const key = String(item.productid || item.productname || 'Unknown');
@@ -97,7 +98,7 @@ function getDashboardData() {
     monthProfit -= Math.max(0, safeNumber_(completedOrders[id].discount, 0));
   });
   monthProfit = roundMoney_(monthProfit);
-  const accountingIncomplete = Object.keys(completedOrders).some(id => {
+  const accountingIncomplete = unknownCostLines > 0 || Object.keys(completedOrders).some(id => {
     const d = new Date(completedOrders[id].date);
     return Utilities.formatDate(d, tz, 'yyyy-MM') === monthKey && !accounted[id];
   });
@@ -125,7 +126,8 @@ function getDashboardData() {
     todayOrders,
     monthRevenue,
     monthOrders,
-    monthProfit,
+    monthProfit: accountingIncomplete ? null : monthProfit,
+    unknownCostLines,
     accountingIncomplete,
     statusCounts,
     lowStock,
@@ -198,15 +200,13 @@ function getOrderItemQuantities_(orderId) {
       if (String(item.orderid || '').trim() !== wantedId) return;
       const id = String(item.productid || '').trim();
       const qty = Math.max(0, Math.floor(safeNumber_(item.qty, 0)));
-      if (id && qty) totals[id] = (totals[id] || 0) + qty;
+      const key=JSON.stringify([id,String(item.size||'')]);
+      if(id&&qty){if(!totals[key])totals[key]={id:id,size:String(item.size||''),qty:0};totals[key].qty+=qty;}
     });
   } catch (err) {
     // OrderItems is optional; fall through to the order-row summary below.
   }
-  const fromItems = Object.keys(totals).map(id => ({
-    id: id,
-    qty: totals[id]
-  }));
+  const fromItems = Object.values(totals);
   if (fromItems.length) return fromItems;
 
   // Compatibility fallback for older installations/orders where OrderItems
@@ -252,6 +252,7 @@ function recordOrderItemsFromValidated_(orderId, date, items) {
     sheet.appendRow(['orderId', 'date', 'productId', 'productName', 'category', 'subcategory', 'qty', 'unitPrice', 'costPrice', 'lineRevenue', 'lineCost', 'lineProfit']);
   }
   if (items.some(x => x.size)) ensureColumn_(sheet, 'size');
+  ensureColumn_(sheet, 'costKnown');
   const heads = headers_(sheet),
     idColumn = heads.indexOf('orderid');
   if (idColumn < 0) throw new Error('OrderItems is missing orderId.');
@@ -273,10 +274,11 @@ function recordOrderItemsFromValidated_(orderId, date, items) {
       subcategory: item.subcategory,
       qty: item.qty,
       unitprice: item.unitPrice,
-      costprice: item.costPrice,
+      costknown: orderItemCostKnown_(item) ? 'Yes' : 'No',
+      costprice: orderItemCostKnown_(item) ? item.costPrice : '',
       linerevenue: item.lineTotal,
-      linecost: roundMoney_(item.qty * item.costPrice),
-      lineprofit: roundMoney_(item.lineTotal - item.qty * item.costPrice)
+      linecost: orderItemCostKnown_(item) ? roundMoney_(item.qty * item.costPrice) : '',
+      lineprofit: orderItemCostKnown_(item) ? roundMoney_(item.lineTotal - item.qty * item.costPrice) : ''
     };
     return heads.map(h => sheetText_(record[h] !== undefined ? record[h] : ''));
   });
@@ -299,6 +301,7 @@ function trackOrder(orderId, phone) {
     deliveryCharge: order.deliverycharge || 0,
     codCharge: order.codcharge || 0,
     paymentMethod: order.paymentmethod,
+    shipment: {carrier:String(order.shipmentcarrier||''),reference:String(order.shipmentreference||''),url:String(order.shipmenturl||'')},
     canRequestCancellation: canCustomerRequestCancellation_(status),
     requests: publicOrderRequests_(order.orderid)
   };

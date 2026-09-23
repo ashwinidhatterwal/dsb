@@ -1,7 +1,7 @@
 /* Generic, read-first tools used by DSB Admin AI. The model chooses a tool;
  * Apps Script only validates and executes bounded backend operations. */
 
-var AI_ADMIN_TOOL_LIMITS_ = { products: 50, productDetails: 12, visionProducts: 8, enrichProducts: 2, orders: 30, toolSteps: 3 };
+var AI_ADMIN_TOOL_LIMITS_ = { products: 50, productDetails: 12, visionProducts: 2, enrichProducts: 2, orders: 30, toolSteps: 3 };
 
 function aiAdminTagList_(value) {
   return String(value || '').split(',').map(function(x) { return x.trim(); }).filter(Boolean);
@@ -184,12 +184,14 @@ function aiAdminAnalyzeProducts_(args, body, actor) {
   args = args && typeof args === 'object' ? args : {};
   const instruction = String(args.instruction || '').trim().slice(0, 1600);
   if (!instruction) return { error: 'instruction is required' };
-  const ids = Array.isArray(args.ids) ? args.ids.map(function(x) { return String(x || '').trim(); }).filter(Boolean).slice(0, AI_ADMIN_TOOL_LIMITS_.visionProducts) : [];
+  const requestedIds = Array.isArray(args.ids) ? Array.from(new Set(args.ids.map(function(x) { return String(x || '').trim(); }).filter(Boolean))).slice(0,50) : [];
+  const ids=requestedIds.slice(0,AI_ADMIN_TOOL_LIMITS_.visionProducts);
   const wanted = {};
   ids.forEach(function(id) { wanted[id.toLowerCase()] = true; });
   const products = getAllProducts(true).filter(function(p) { return wanted[String(p.id || '').toLowerCase()] && !isArchived_(p); });
-  const results = products.map(function(p) { return aiAdminAnalyzeOneProduct_(p, instruction, body, actor, args.onlyEmpty === true); });
-  return { analyzed: results.length, results: results };
+  const results = [];
+  products.forEach(function(p) { if(aiBudgetAvailable_())results.push(aiAdminAnalyzeOneProduct_(p, instruction, body, actor, args.onlyEmpty === true)); });
+  return { analyzed: results.length, results: results, remainingIds:requestedIds.filter(id=>!results.some(r=>r.id.toLowerCase()===id.toLowerCase())), instruction:instruction, onlyEmpty:args.onlyEmpty===true };
 }
 
 function aiAdminEnrichProducts_(args, body, actor) {
@@ -204,18 +206,20 @@ function aiAdminEnrichProducts_(args, body, actor) {
   query.summary = false;
   query.similarNames = false;
   const limit = Math.max(1, Math.min(AI_ADMIN_TOOL_LIMITS_.enrichProducts, Math.floor(Number(args.limit) || 1)));
-  query.limit = limit;
+  query.limit = AI_ADMIN_TOOL_LIMITS_.products;
   const matched = aiAdminQueryProducts_(query);
   const ids = matched && Array.isArray(matched.products) ? matched.products.map(function(p) { return String(p.id || ''); }).filter(Boolean).slice(0, limit) : [];
   if (!ids.length) return { matchedCount: Number(matched && matched.count) || 0, analyzed:0, results:[], remainingCount:0 };
   const wanted = {};
   ids.forEach(function(id) { wanted[id.toLowerCase()] = true; });
   const products = getAllProducts(true).filter(function(p) { return wanted[String(p.id || '').toLowerCase()] && !isArchived_(p); });
-  const results = products.map(function(p) { return aiAdminAnalyzeOneProduct_(p, instruction, body, actor, args.onlyEmpty === true); });
+  const results = [];
+  products.forEach(function(p) { if(aiBudgetAvailable_())results.push(aiAdminAnalyzeOneProduct_(p, instruction, body, actor, args.onlyEmpty === true)); });
   return {
     matchedCount: Number(matched && matched.count) || results.length,
     analyzed: results.length,
     results: results,
+    remainingIds:(matched.products||[]).map(p=>String(p.id)).filter(id=>!results.some(r=>r.id===id)), instruction:instruction, onlyEmpty:args.onlyEmpty===true,
     remainingCount: Math.max(0, (Number(matched && matched.count) || results.length) - results.length)
   };
 }

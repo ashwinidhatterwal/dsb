@@ -134,6 +134,7 @@ function bindCardActionEvents(card, product, list) {
   });
 }
 
+let quickSizeReturnFocus=null;
 function quickSizePickerElement() {
   let overlay = document.getElementById('quickSizeOverlay');
   if (overlay) return overlay;
@@ -156,7 +157,9 @@ function quickSizePickerElement() {
     if (e.target === overlay || e.target.closest('.quick-size-close')) closeQuickSizePicker();
   });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && overlay.classList.contains('open')) closeQuickSizePicker();
+    if(!overlay.classList.contains('open'))return;
+    if(e.key==='Escape'){e.preventDefault();closeQuickSizePicker();}
+    if(e.key==='Tab'){const buttons=Array.from(overlay.querySelectorAll('button:not(:disabled)'));const first=buttons[0],last=buttons.at(-1);if(e.shiftKey && (document.activeElement===first || !overlay.contains(document.activeElement))){e.preventDefault();last?.focus();}else if(!e.shiftKey && (document.activeElement===last || !overlay.contains(document.activeElement))){e.preventDefault();first?.focus();}}
   });
   return overlay;
 }
@@ -165,8 +168,10 @@ function closeQuickSizePicker() {
   if (!overlay) return;
   overlay.classList.remove('open');
   document.body.classList.remove('quick-size-open');
+  if(quickSizeReturnFocus?.isConnected)quickSizeReturnFocus.focus({preventScroll:true});
 }
 function openQuickSizePicker(product, card, list) {
+  quickSizeReturnFocus=document.activeElement;
   const overlay = quickSizePickerElement();
   const title = $('#quickSizeTitle', overlay);
   const options = $('.quick-size-options', overlay);
@@ -175,14 +180,14 @@ function openQuickSizePicker(product, card, list) {
   title.textContent = customerProductName(product);
   options.innerHTML = product.sizes.map(size => {
     const price = pricing.priceFor(size);
-    return `<button type="button" class="quick-size-option" data-size="${escapeHtml(size)}"><span>${escapeHtml(size)}</span>${variedPrices ? `<small>${money(price)}</small>` : ''}</button>`;
+    return `<button type="button" class="quick-size-option" data-size="${escapeHtml(size)}" ${sizeStockQuantity(product,size) === 0 ? 'disabled' : ''}><span>${escapeHtml(size)}</span>${variedPrices ? `<small>${money(price)}</small>` : ''}</button>`;
   }).join('');
   options.querySelectorAll('.quick-size-option').forEach(button => {
     button.addEventListener('click', async () => {
       if (button.disabled) return;
       const size = button.dataset.size;
       const selected = sizedCartProduct(product, size);
-      if (product.stockQty !== null && CartStore.qtyForProduct(product.id) >= product.stockQty) {
+      if (selected.stockQty !== null && cartStockUsed(selected) >= selected.stockQty) {
         showToast(`Only ${product.stockQty} in stock`);
         closeQuickSizePicker();
         return;
@@ -205,7 +210,7 @@ function openQuickSizePicker(product, card, list) {
   });
   overlay.classList.add('open');
   document.body.classList.add('quick-size-open');
-  requestAnimationFrame(() => options.querySelector('.quick-size-option')?.focus({ preventScroll:true }));
+  requestAnimationFrame(() => (options.querySelector('.quick-size-option:not(:disabled)') || overlay.querySelector('.quick-size-close'))?.focus({ preventScroll:true }));
 }
 
 async function handleCardAdd(product, delta, card, list) {

@@ -9,8 +9,7 @@ function orderRequestSheet_() {
   return sheet;
 }
 function normalizedTrackingPhone_(value) {
-  const digits = cleanPhone_(value);
-  return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits.length === 11 && digits.startsWith('0') ? digits.slice(1) : digits;
+  return canonicalPhone_(value);
 }
 function findCustomerOrder_(orderId, phone) {
   const id = String(orderId || '').trim();
@@ -46,6 +45,9 @@ function publicOrderRequests_(orderId) {
   }));
 }
 function submitOrderRequest_(payload) {
+  return withWriteLock_(function () { return submitOrderRequestUnlocked_(payload); });
+}
+function submitOrderRequestUnlocked_(payload) {
   payload = payload || {};
   const orderId = String(payload.orderId || '').trim(), phone = String(payload.phone || '').trim();
   const type = String(payload.type || '').trim().toLowerCase();

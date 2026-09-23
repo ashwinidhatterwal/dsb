@@ -24,7 +24,7 @@ console.log('Admin surface/action regression passed.');
 // Regression: frontend admin API version must match backend session version.
 {
   const front = admin.match(/profile\.version !== (\d+)/);
-  const back = auth.match(/version:\s*(\d+)/);
+  const back = auth.match(/version:\s*Number\(body\.options[^\n]+?\?\s*(\d+)\s*:/);
   if (!front || !back || front[1] !== back[1]) fail('admin API version mismatch');
 }
 console.log('Admin API version sync regression passed.');

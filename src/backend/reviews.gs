@@ -7,6 +7,13 @@ function getCachedReviews_() {
   cachePutJson_(REVIEWS_CACHE_KEY, rows, REVIEWS_CACHE_TTL);
   return rows;
 }
+function reviewPublicStatus_(row) {
+  // Existing reviews predate moderation; preserve their published state.
+  return String(row.moderationstatus || 'Approved').trim() || 'Approved';
+}
+function reviewVisible_(row) {
+  return reviewPublicStatus_(row) === 'Approved';
+}
 function publicReview_(r) {
   return {
     id: r.id,
@@ -20,13 +27,13 @@ function publicReview_(r) {
 }
 function getReviews(productId) {
   const rows = getCachedReviews_();
-  const selected = productId ? rows.filter(r => String(r.productid) === String(productId)) : rows;
+  const selected = rows.filter(r => reviewVisible_(r) && (!productId || String(r.productid) === String(productId)));
   return selected.map(publicReview_);
 }
 function getReviewSummaries() {
   const cached = cacheGetJson_(REVIEW_SUMMARY_CACHE_KEY);
   if (cached) return cached;
-  const rows = getCachedReviews_();
+  const rows = getCachedReviews_().filter(reviewVisible_);
   const totals = {};
   rows.forEach(r => {
     const pid = String(r.productid || '').trim();
@@ -80,6 +87,7 @@ function addReview(r) {
     const sheet = getSheet_(REVIEWS_SHEET);
     ensureColumn_(sheet, 'verified');
     ensureColumn_(sheet, 'verificationRef');
+    ensureColumn_(sheet, 'moderationStatus');
     const heads = headers_(sheet);
     const record = {
       id: 'REV-' + Utilities.getUuid().slice(0, 8),
@@ -89,7 +97,8 @@ function addReview(r) {
       comment: comment,
       date: new Date(),
       verified: purchase.verified ? 'Yes' : '',
-      verificationref: purchase.ref
+      verificationref: purchase.ref,
+      moderationstatus: purchase.verified ? 'Approved' : 'Pending'
     };
     sheet.appendRow(heads.map(h => sheetText_(record[h] !== undefined ? record[h] : '')));
     cacheRemove_(REVIEW_SUMMARY_CACHE_KEY);
@@ -97,8 +106,37 @@ function addReview(r) {
     return {
       success: true,
       id: record.id,
-      verified: purchase.verified
+      verified: purchase.verified,
+      pending: !purchase.verified
     };
   });
 }
 
+function adminReviews_() {
+  return getCachedReviews_().map(r => ({
+    id: String(r.id || ''), productId: String(r.productid || ''),
+    name: String(r.name || ''), rating: Number(r.rating) || 0,
+    comment: String(r.comment || ''), date: r.date,
+    verified: String(r.verified || '').toLowerCase() === 'yes',
+    status: reviewPublicStatus_(r)
+  })).sort((a, b) => (a.status === 'Pending' ? 0 : 1) - (b.status === 'Pending' ? 0 : 1) || new Date(b.date) - new Date(a.date)).slice(0, 100);
+}
+function moderateReview_(body, actor) {
+  if (!actor || actor.role !== 'admin') throw new Error('Only the owner can moderate reviews.');
+  return withWriteLock_(function () {
+    const id = String(body.reviewId || '').trim();
+    const target = String(body.status || '').trim();
+    if (!id || !['Approved','Hidden'].includes(target)) throw new Error('Invalid moderation action.');
+    const sheet = getSheet_(REVIEWS_SHEET), row = findRow_(sheet, 'id', id);
+    if (!row) throw new Error('Review not found. Refresh the list.');
+    ensureColumn_(sheet, 'moderationStatus');
+    const heads = headers_(sheet), col = heads.indexOf('moderationstatus') + 1;
+    const current = String(sheet.getRange(row, col).getValue() || 'Approved');
+    if (current === target) return { success: true, status: current, alreadyHandled: true };
+    if (body.expectedStatus && String(body.expectedStatus) !== current) throw new Error('Review changed. Refresh before moderating.');
+    sheet.getRange(row, col).setValue(target);
+    cacheRemove_(REVIEWS_CACHE_KEY);
+    cacheRemove_(REVIEW_SUMMARY_CACHE_KEY);
+    return { success: true, status: target };
+  });
+}

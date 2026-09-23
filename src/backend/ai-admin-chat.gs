@@ -2,7 +2,7 @@
  * returns only the requested data, then the model produces a reply/proposal. */
 
 function generateAiAdminChat_(body, actor) {
-  const startedAt = Date.now();
+  const startedAt = Date.now(); aiBudget_();
   const message = String(body && body.message || '').trim().slice(0, 5000);
   if (!message) throw new Error('Type a message first.');
   rateLimit_('ai-admin-chat:' + String(actor && actor.name || 'admin'), 90, 3600);
@@ -14,7 +14,7 @@ function generateAiAdminChat_(body, actor) {
   // New-product creation remains a direct form-draft workflow because it needs
   // the user's uploaded photos before any catalog lookup exists.
   const creation = maybeGenerateAiAdminNewProduct_(body, message, history, actor, chatImageUrls, false);
-  if (creation) return Object.assign({ success:true, elapsedMs:Date.now() - startedAt }, creation);
+  if (creation) return Object.assign({ success:true, usage:aiUsage_(), elapsedMs:Date.now() - startedAt }, creation);
 
   const config = aiProviderConfig_(body && body.modelConfigId);
   const requestedReasoningEffort = sanitizeAiReasoningEffort_(body && body.reasoningEffort, config.supportedEfforts);
@@ -28,7 +28,7 @@ function generateAiAdminChat_(body, actor) {
   let step = 0;
   for (; step < AI_ADMIN_TOOL_LIMITS_.toolSteps; step++) {
     const prompt = aiAdminAgentPrompt_(message, history, sessionState, actor, toolTrace, chatImageUrls.length, false);
-    const outputText = callAiAdminChatProvider_(config, prompt, step === 0 ? chatImageUrls.map(aiAdminOptimizedImageUrl_) : []);
+    const outputText = step===0 && body.resumeBatch && Array.isArray(body.resumeBatch.ids) ? JSON.stringify({tool:{name:'analyze_products',args:body.resumeBatch}}) : callAiAdminChatProvider_(config, prompt, step === 0 ? chatImageUrls.map(aiAdminOptimizedImageUrl_) : []);
     parsed = aiParseStructuredOutput_(outputText);
     const tool = parsed && parsed.tool && typeof parsed.tool === 'object' ? parsed.tool : null;
     if (!tool || !tool.name) break;
@@ -46,7 +46,7 @@ function generateAiAdminChat_(body, actor) {
     // Enrichment is intentionally a self-contained read -> vision -> proposal tool.
     // Returning immediately avoids another model round-trip inside the same Apps
     // Script request, which keeps common catalog-edit tasks well below timeout.
-    if (String(tool.name || '') === 'enrich_products' && result && Array.isArray(result.results)) {
+    if (['enrich_products','analyze_products'].indexOf(String(tool.name || ''))>=0 && result && Array.isArray(result.results)) {
       const items = result.results.map(function(item) {
         if (!item || item.error || !item.suggestedPatch || !Object.keys(item.suggestedPatch).length) return null;
         return { targetId:item.id, title:item.name || item.id, patch:item.suggestedPatch, current:item.current, expectedRevision:item.expectedRevision };
@@ -60,11 +60,12 @@ function generateAiAdminChat_(body, actor) {
       return {
         success:true,
         reply:reply,
+        continuation:result.remainingIds && result.remainingIds.length ? {ids:result.remainingIds,instruction:result.instruction,onlyEmpty:result.onlyEmpty} : null,
         proposal:items.length ? { type:'batch_update_products', title:'AI product enrichment', description:'Review the generated descriptive fields before applying.', items:items, remainingCount:Math.max(0, Number(result.remainingCount) || 0) } : null,
         model:config.model,
         provider:config.providerLabel,
         toolCalls:toolTrace.map(function(x){ return x.name; }),
-        elapsedMs:Math.max(0, Date.now() - startedAt)
+        usage:aiUsage_(), elapsedMs:Math.max(0, Date.now() - startedAt)
       };
     }
   }
@@ -89,7 +90,7 @@ function generateAiAdminChat_(body, actor) {
     model:config.model,
     provider:config.providerLabel,
     toolCalls:toolTrace.map(function(x){ return x.name; }),
-    elapsedMs:Math.max(0, Date.now() - startedAt)
+    usage:aiUsage_(), elapsedMs:Math.max(0, Date.now() - startedAt)
   };
 }
 
@@ -107,7 +108,7 @@ function aiAdminAgentPrompt_(message, history, sessionState, actor, toolTrace, i
   const tools = [
     'query_products(args): filter the live catalog. args may include status, text, ids, category, subcategory, brand, material, tagCount, tagCountMin, tagCountMax, missingFields[], priceMin, priceMax, stockQtyMin, stockQtyMax, stockStatus, similarNames, summary, includeDescriptions, includeImages, sort, limit. Use summary=true for broad catalog-quality/listing-gap audits so one compact call can cover the whole filtered catalog.',
     'get_products(args): fetch full details/photos for ids[]. Use after query_products when deeper comparison is needed.',
-    'analyze_products(args): image-aware analysis for already-known ids (up to 8). Requires instruction. It returns suggested descriptive patches and never changes data.',
+    'analyze_products(args): image-aware analysis for already-known ids (up to 2 per request; return remaining IDs for continuation). Requires instruction. It returns suggested descriptive patches and never changes data.',
     'enrich_products(args): fastest path when the user wants you to FIND products and FILL/IMPROVE descriptive fields. args: {query:{same filters as query_products, sort, limit}, instruction:"...", onlyEmpty:true|false, limit:1|2}. It performs the filtered lookup and image-aware enrichment in one bounded operation and immediately returns a reviewable proposal. Prefer this instead of query_products -> analyze_products for editing/enrichment requests.',
     'query_orders(args): search live orders by text/status with a bounded limit.',
     'get_dashboard(args): get current dashboard summary/top products/recent orders.'

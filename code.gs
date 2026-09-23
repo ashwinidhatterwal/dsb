@@ -144,6 +144,13 @@ function doGet(e) {
   });
 }
 function doPost(e) {
+  const started=Date.now(); let action=''; DSB_REQUEST_LOCK_WAIT_MS_=0; DSB_AI_BUDGET_=null;
+  try { const raw=e && e.postData && e.postData.contents || '{}'; if(raw.length<=24000)action=JSON.parse(raw).action; } catch (_) {}
+  const result=doPostCore_(e);
+  try {recordOperationalTiming_(action,Date.now()-started,JSON.parse(result.getContent()));} catch (_) {}
+  return result;
+}
+function doPostCore_(e) {
   try {
     if (!e || !e.postData || e.postData.contents.length > 24000) return jsonResponse({
       success: false,
@@ -270,7 +277,9 @@ function validRequestId_(id) {
 }
 function withWriteLock_(fn) {
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(10000)) return {
+  const waitStarted=Date.now(), acquired=lock.tryLock(10000);
+  DSB_REQUEST_LOCK_WAIT_MS_ += Date.now()-waitStarted;
+  if (!acquired) return {
     success: false,
     code: 'busy',
     error: 'The shop is busy. Please retry in a moment.'
@@ -293,7 +302,28 @@ function parseSizes_(value) {
   return [...new Set(String(value || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean))];
 }
 function ensureColumn_(sheet, name) {
-  if (headers_(sheet).indexOf(name) < 0) sheet.getRange(1, sheet.getLastColumn() + 1).setValue(name);
+  if (headers_(sheet).indexOf(String(name).trim().toLowerCase()) < 0) sheet.getRange(1, sheet.getLastColumn() + 1).setValue(name);
+}
+
+// Keep checkout payloads unchanged: canonicalization is for identity comparisons only.
+function canonicalPhone_(value) {
+  const digits = cleanPhone_(value);
+  return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits.length === 11 && digits.startsWith('0') ? digits.slice(1) : digits;
+}
+function phoneIdentityVariants_(value) {
+  const raw = cleanPhone_(value), canonical = canonicalPhone_(value);
+  return [...new Set(canonical.length === 10 ? [raw, canonical, '91' + canonical, '0' + canonical] : [raw])];
+}
+function knownCost_(value) {
+  return value !== '' && value !== null && value !== undefined && String(value).trim() !== '' && Number.isFinite(Number(value)) && Number(value) >= 0;
+}
+function orderItemCostKnown_(item) {
+  const flag = item.costKnown !== undefined ? item.costKnown : item.costknown;
+  const cost = item.costPrice !== undefined ? item.costPrice : item.costprice;
+  if (flag === false || String(flag).toLowerCase() === 'no') return false;
+  if (flag === true || String(flag).toLowerCase() === 'yes') return knownCost_(cost);
+  // Legacy zero snapshots cannot distinguish missing cost from a genuinely free item.
+  return knownCost_(cost) && Number(cost) > 0;
 }
 
 /* cache responsibilities. Bundled into code.gs by scripts/build.mjs. */
@@ -374,7 +404,7 @@ function getAllProducts(includeCost) {
   if (includeCost) return rows;
   const publicRows = rows.filter(r => !isArchived_(r)).map(r => {
     const copy = {};
-    ['id', 'name', 'namehindi', 'category', 'subcategory', 'price', 'mrp', 'image', 'images', 'description', 'stock', 'stockqty', 'tags', 'brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices', 'sizes'].forEach(key => {
+    ['id', 'name', 'namehindi', 'category', 'subcategory', 'price', 'mrp', 'image', 'images', 'description', 'stock', 'stockqty', 'tags', 'brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices', 'reellink', 'sizestock', 'sizes'].forEach(key => {
       if (r[key] !== undefined) copy[key] = r[key];
     });
     return copy;
@@ -388,7 +418,7 @@ function addProduct(p, requestId) {
     const retired = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeletedProductIds');
     if (p.id && retired && findRow_(retired, 'id', String(p.id).trim())) throw new Error('This product ID was retired. Choose a new ID.');
     if (p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET), 'sizes');
-    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices'].forEach(k => {
+    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices', 'reellink', 'sizestock'].forEach(k => {
       if (p[k] !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET), k);
     });
     const sheet = getSheet_(PRODUCTS_SHEET),
@@ -460,7 +490,7 @@ function updateProduct(p) {
   return withWriteLock_(function () {
     validateProductFields_(p, false);
     if (p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET), 'sizes');
-    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices'].forEach(k => {
+    ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices', 'reellink', 'sizestock'].forEach(k => {
       if (p[k] !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET), k);
     });
     const sheet = getSheet_(PRODUCTS_SHEET),
@@ -530,7 +560,12 @@ function deleteProduct(id, expectedRevision) {
   });
 }
 function validateProductFields_(p, adding) {
-  ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices'].forEach(k => {
+  if (p.sizestock !== undefined) {
+    const stock=parseSizeStock_(p.sizestock,parseSizes_(p.sizes || ''));
+    if(stock){p.sizestock=serializeSizeStock_(stock);p.stockqty=Object.values(stock).reduce((a,b)=>a+b,0);p.stock=p.stockqty?'in stock':'out of stock';}
+  }
+  if (p.reellink !== undefined) p.reellink = safeShopLink_(p.reellink,true);
+  ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices', 'reellink', 'sizestock'].forEach(k => {
     if (p[k] !== undefined) {
       p[k] = String(p[k]).trim();
       if (p[k].length > 2000) throw new Error(k + ' is too long.');
@@ -565,7 +600,7 @@ function isArchived_(p) {
   return String(p.archived || '').toLowerCase() === 'yes';
 }
 function productRevision_(p) {
-  return hashText_(JSON.stringify(['id', 'name', 'namehindi', 'category', 'subcategory', 'price', 'mrp', 'costprice', 'image', 'images', 'description', 'stock', 'stockqty', 'tags', 'brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices', 'sizes', 'archived'].map(k => String(p[k] ?? ''))));
+  return hashText_(JSON.stringify(['id', 'name', 'namehindi', 'category', 'subcategory', 'price', 'mrp', 'costprice', 'image', 'images', 'description', 'stock', 'stockqty', 'tags', 'brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices', 'reellink', 'sizestock', 'sizes', 'archived'].map(k => String(p[k] ?? ''))));
 }
 function adminProductsPage_(options) {
   const all = getAllProducts(true),
@@ -631,6 +666,13 @@ function getCachedReviews_() {
   cachePutJson_(REVIEWS_CACHE_KEY, rows, REVIEWS_CACHE_TTL);
   return rows;
 }
+function reviewPublicStatus_(row) {
+  // Existing reviews predate moderation; preserve their published state.
+  return String(row.moderationstatus || 'Approved').trim() || 'Approved';
+}
+function reviewVisible_(row) {
+  return reviewPublicStatus_(row) === 'Approved';
+}
 function publicReview_(r) {
   return {
     id: r.id,
@@ -644,13 +686,13 @@ function publicReview_(r) {
 }
 function getReviews(productId) {
   const rows = getCachedReviews_();
-  const selected = productId ? rows.filter(r => String(r.productid) === String(productId)) : rows;
+  const selected = rows.filter(r => reviewVisible_(r) && (!productId || String(r.productid) === String(productId)));
   return selected.map(publicReview_);
 }
 function getReviewSummaries() {
   const cached = cacheGetJson_(REVIEW_SUMMARY_CACHE_KEY);
   if (cached) return cached;
-  const rows = getCachedReviews_();
+  const rows = getCachedReviews_().filter(reviewVisible_);
   const totals = {};
   rows.forEach(r => {
     const pid = String(r.productid || '').trim();
@@ -704,6 +746,7 @@ function addReview(r) {
     const sheet = getSheet_(REVIEWS_SHEET);
     ensureColumn_(sheet, 'verified');
     ensureColumn_(sheet, 'verificationRef');
+    ensureColumn_(sheet, 'moderationStatus');
     const heads = headers_(sheet);
     const record = {
       id: 'REV-' + Utilities.getUuid().slice(0, 8),
@@ -713,7 +756,8 @@ function addReview(r) {
       comment: comment,
       date: new Date(),
       verified: purchase.verified ? 'Yes' : '',
-      verificationref: purchase.ref
+      verificationref: purchase.ref,
+      moderationstatus: purchase.verified ? 'Approved' : 'Pending'
     };
     sheet.appendRow(heads.map(h => sheetText_(record[h] !== undefined ? record[h] : '')));
     cacheRemove_(REVIEW_SUMMARY_CACHE_KEY);
@@ -721,11 +765,40 @@ function addReview(r) {
     return {
       success: true,
       id: record.id,
-      verified: purchase.verified
+      verified: purchase.verified,
+      pending: !purchase.verified
     };
   });
 }
 
+function adminReviews_() {
+  return getCachedReviews_().map(r => ({
+    id: String(r.id || ''), productId: String(r.productid || ''),
+    name: String(r.name || ''), rating: Number(r.rating) || 0,
+    comment: String(r.comment || ''), date: r.date,
+    verified: String(r.verified || '').toLowerCase() === 'yes',
+    status: reviewPublicStatus_(r)
+  })).sort((a, b) => (a.status === 'Pending' ? 0 : 1) - (b.status === 'Pending' ? 0 : 1) || new Date(b.date) - new Date(a.date)).slice(0, 100);
+}
+function moderateReview_(body, actor) {
+  if (!actor || actor.role !== 'admin') throw new Error('Only the owner can moderate reviews.');
+  return withWriteLock_(function () {
+    const id = String(body.reviewId || '').trim();
+    const target = String(body.status || '').trim();
+    if (!id || !['Approved','Hidden'].includes(target)) throw new Error('Invalid moderation action.');
+    const sheet = getSheet_(REVIEWS_SHEET), row = findRow_(sheet, 'id', id);
+    if (!row) throw new Error('Review not found. Refresh the list.');
+    ensureColumn_(sheet, 'moderationStatus');
+    const heads = headers_(sheet), col = heads.indexOf('moderationstatus') + 1;
+    const current = String(sheet.getRange(row, col).getValue() || 'Approved');
+    if (current === target) return { success: true, status: current, alreadyHandled: true };
+    if (body.expectedStatus && String(body.expectedStatus) !== current) throw new Error('Review changed. Refresh before moderating.');
+    sheet.getRange(row, col).setValue(target);
+    cacheRemove_(REVIEWS_CACHE_KEY);
+    cacheRemove_(REVIEW_SUMMARY_CACHE_KEY);
+    return { success: true, status: target };
+  });
+}
 
 /* delivery-estimate responsibilities. Bundled into code.gs by scripts/build.mjs.
    Estimates are intentionally configurable shop guidance, not courier guarantees. */
@@ -763,7 +836,7 @@ function getDeliveryEstimate_(pinCode) {
    - Store only compact decision events; do not track scroll/hover noise.
    - Attribution is session-scoped and intentionally limited to UTM metadata.
    - Orders/real revenue come from authoritative order sheets, not browser events.
-   - Analytics writes are best-effort and isolated from checkout locks.
+   - Analytics writes are best-effort and share the script lock with checkout.
 */
 const ANALYTICS_RESET_AT_PROPERTY = 'ANALYTICS_RESET_AT';
 
@@ -799,7 +872,9 @@ function analyticsSheet_() {
     sheet.appendRow(heads);
     try { sheet.hideSheet(); } catch (_) {}
   } else {
-    heads.forEach(name => ensureColumn_(sheet, name));
+    const existing = headers_(sheet);
+    const missing = heads.filter(name => existing.indexOf(name.toLowerCase()) < 0);
+    if (missing.length) sheet.getRange(1, existing.length + 1, 1, missing.length).setValues([missing]);
   }
   return sheet;
 }
@@ -810,8 +885,10 @@ function analyticsEventRow_(raw, visitorHash, sessionHash, now) {
   const name = analyticsCleanText_(raw && raw.name, 40);
   if (ANALYTICS_EVENTS.indexOf(name) < 0) return null;
   const props = raw && typeof raw.props === 'object' && raw.props ? raw.props : {};
-  let date = new Date(raw && raw.ts || now);
-  if (isNaN(date.getTime()) || Math.abs(now.getTime() - date.getTime()) > 14 * 86400000) date = now;
+  if (!raw || !raw.ts || !analyticsCleanText_(raw.qid, 100)) return null;
+  let date = new Date(raw.ts);
+  if (isNaN(date.getTime()) || now - date > 14 * 86400000 || date - now > 300000) return null;
+  if (date > now) date = now;
   const numeric = value => {
     const n = Number(value);
     return isFinite(n) ? Math.max(-10000000, Math.min(10000000, n)) : '';
@@ -879,7 +956,7 @@ function recordAnalyticsBatch_(body) {
   if (!candidates.length) return { success: true, accepted: 0 };
 
   // Retry safety: qid is persisted with the event and mirrored in Script Cache.
-  // Cache avoids almost all reads; a short tail check protects against cache eviction.
+  // Cache avoids repeat reads; durable lookup covers the whole active retention window.
   const cache = CacheService.getScriptCache();
   const cacheKeys = candidates.map(x => x.cacheKey).filter(Boolean);
   let cached = {};
@@ -893,25 +970,34 @@ function recordAnalyticsBatch_(body) {
   try {
     const sheet = analyticsSheet_();
     const lastRow = sheet.getLastRow();
+    // Recheck reset under the same lock that protects reset and append.
+    const boundary = analyticsResetAt_(), batchSeen = new Set();
+    pending = pending.filter(x => {
+      if (boundary && x.row[0] < boundary || batchSeen.has(x.qid)) return false;
+      batchSeen.add(x.qid); return true;
+    });
+    try { rateLimit_('analytics-global-batches', 120, 60); }
+    catch (_) { return { success: true, accepted: 0, throttled: true }; }
     const qids = {};
-    pending.forEach(x => { if (x.qid) qids[x.qid] = true; });
+    pending.forEach(x => { qids[x.qid] = true; });
     if (lastRow > 1 && Object.keys(qids).length) {
       const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(x => String(x || '').trim().toLowerCase());
       const qidCol = headers.indexOf('qid') + 1;
       if (qidCol > 0) {
-        const take = Math.min(1500, lastRow - 1);
-        sheet.getRange(lastRow - take + 1, qidCol, take, 1).getValues().forEach(r => {
-          const qid = analyticsCleanText_(r[0], 100);
-          if (qid) qids[qid] = qids[qid] === true ? 'seen' : qids[qid];
+        const pattern = '^(?:' + Object.keys(qids).map(analyticsRegexEscape_).join('|') + ')$';
+        sheet.getRange(2, qidCol, lastRow - 1, 1).createTextFinder(pattern).useRegularExpression(true).matchEntireCell(true).findAll().forEach(hit => {
+          qids[String(hit.getValue())] = 'seen';
         });
         pending = pending.filter(x => !x.qid || qids[x.qid] !== 'seen');
       }
     }
     if (pending.length) {
-      const rows = pending.map(x => x.row);
+      const canonical = ['date','visitor','session','event','path','productid','category','subcategory','value','source','device','detail','medium','campaign','content','landing','qid'];
+      const heads = headers_(sheet);
+      const rows = pending.map(x => heads.map(h => canonical.indexOf(h) >= 0 ? x.row[canonical.indexOf(h)] : ''));
       sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
       accepted = rows.length;
-      invalidateAnalyticsCaches_();
+      // Reports expire naturally; ingestion must not defeat the report cache.
       const put = {};
       pending.forEach(x => { if (x.cacheKey) put[x.cacheKey] = '1'; });
       try { if (Object.keys(put).length) cache.putAll(put, 21600); } catch (_) {}
@@ -956,22 +1042,20 @@ function analyticsOverlap_(left, right) {
 }
 function getAnalyticsReport_(options) {
   options = options || {};
-  const daysRaw = Number(options.days) || 30;
-  const days = [7, 30, 90].indexOf(daysRaw) >= 0 ? daysRaw : 30;
+  const actualNow=new Date(), tz=Session.getScriptTimeZone();
+  const window=analyticsWindow_(options,actualNow,tz);
+  const days=window.days, now=window.end, today=window.lastDay, currentDay=window.firstDay;
   const cacheKey = ANALYTICS_REPORT_CACHE_KEY + ':' + days;
-  const cached = options.force ? null : cacheGetChunkedJson_(cacheKey);
-  if (cached) return cached;
-
-  const now = new Date();
-  const tz = Session.getScriptTimeZone();
-  const today = analyticsDateKey_(now, tz);
-  const currentDay = analyticsDayOffset_(today, 1 - days);
+  const epoch = String(analyticsResetAt_() || '');
+  const cached = options.force || window.custom ? null : cacheGetChunkedJson_(cacheKey);
+  if (cached && cached.resetEpoch === epoch) return cached;
   const currentStart = Utilities.parseDate(currentDay, tz, 'yyyy-MM-dd');
   const previousStart = Utilities.parseDate(analyticsDayOffset_(currentDay, -days), tz, 'yyyy-MM-dd');
   const resetAt = analyticsResetAt_();
   const orders = rowsAsObjects_(getSheet_(ORDERS_SHEET));
   const events = [];
-  let trackingStart = resetAt;
+  const firstSeen = PropertiesService.getScriptProperties().getProperty('ANALYTICS_FIRST_SEEN');
+  let trackingStart = resetAt || (firstSeen && !isNaN(new Date(firstSeen)) ? new Date(firstSeen) : null);
   // An attributed order proves tracking existed even if all browser events were lost.
   orders.forEach(order => {
     if (resetAt || (!order.analyticsvisitor && !order.analyticssession)) return;
@@ -985,7 +1069,7 @@ function getAnalyticsReport_(options) {
       if (!trackingStart || (!resetAt && date < trackingStart)) trackingStart = date;
       if (date >= previousStart) events.push({ ...row, _date: date });
     });
-  } catch (_) {}
+  } catch (err) { throw new Error('Analytics data could not be read. Please retry.'); }
 
   // Browser analytics only exists from trackingStart. Keep order comparisons inside
   // the same coverage window so conversion/revenue comparisons remain honest.
@@ -1036,7 +1120,7 @@ function getAnalyticsReport_(options) {
     return m;
   }
 
-  const current = period(currentStart, new Date(now.getTime() + 1000));
+  const current = period(currentStart, new Date(now.getTime() + 1));
   const previous = period(previousStart, currentStart);
   orders.forEach(order => {
     const date = new Date(order.date);
@@ -1347,7 +1431,7 @@ function getAnalyticsReport_(options) {
   if (!insights.length) insights.push(analyticsInsight_('collecting', 'Analytics is collecting', 'Keep this running for a few days. Insights become more useful once real traffic builds up.', 'neutral', 'visitors'));
 
   const report = {
-    generatedAt: now.toISOString(), days: days, timezone: tz, periodStart: currentStart.toISOString(), periodEnd: now.toISOString(), includesPartialToday: true, trackingSince: trackingStart ? trackingStart.toISOString() : '', comparisonAvailable: comparisonAvailable,
+    resetEpoch: epoch, generatedAt: actualNow.toISOString(), days: days, timezone: tz, periodStart: currentStart.toISOString(), periodEnd: now.toISOString(), includesPartialToday: window.partialToday, trackingSince: trackingStart ? trackingStart.toISOString() : '', comparisonAvailable: comparisonAvailable,
     metrics: metrics, series: series, funnel: funnel,
     rates: {
       sessionToProduct: analyticsPct_(current.productViewSessions, current.sessions),
@@ -1363,8 +1447,121 @@ function getAnalyticsReport_(options) {
     categories: analyticsBreakdown_(categoryCounts), campaigns: campaigns, landingPages: landingPages,
     topProducts: topProducts, productRankings: productRankings, productRankingRows: productRankingRows, insights: insights
   };
-  cachePutJson_(cacheKey, report, ANALYTICS_REPORT_CACHE_TTL);
+  if (String(analyticsResetAt_() || '') !== epoch) throw new Error('Analytics was reset during this report. Refresh to reload.');
+  if(!window.custom)cachePutJson_(cacheKey, report, ANALYTICS_REPORT_CACHE_TTL);
   return report;
+}
+
+function analyticsRegexEscape_(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Optional hourly job. Preserves raw records; never sums daily unique visitors.
+// Only an expired prefix is moved, in a bounded batch. Unexpected row order stops
+// maintenance safely; it never guesses which live rows to remove.
+function maintainShopAnalytics() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return { busy: true };
+  const props = PropertiesService.getScriptProperties();
+  try {
+    const sheet = analyticsSheet_(), heads = headers_(sheet), count = Math.min(300, sheet.getLastRow() - 1);
+    if (count < 1) return { archived: 0 };
+    const cutoff = Date.now() - 200 * 86400000;
+    let rows = sheet.getRange(2, 1, count, heads.length).getValues();
+    let take = 0;
+    while (take < rows.length && rows[take][0] instanceof Date && +rows[take][0] < cutoff) take++;
+    rows = rows.slice(0, take);
+    if (!take) { props.setProperty('ANALYTICS_MAINTENANCE_AT', new Date().toISOString()); return { archived: 0 }; }
+    const first = props.getProperty('ANALYTICS_FIRST_SEEN');
+    const earliest = new Date(Math.min(...rows.map(r => +r[0])));
+    if (!first || earliest < new Date(first)) props.setProperty('ANALYTICS_FIRST_SEEN', earliest.toISOString());
+    // Persist stable archive IDs before copying. A crash at any later step can retry.
+    ensureColumn_(sheet, 'storageId');
+    const sourceHeads = headers_(sheet), idCol = sourceHeads.indexOf('storageid');
+    rows = sheet.getRange(2, 1, take, sourceHeads.length).getValues();
+    rows.forEach(row => { if (!row[idCol]) row[idCol] = Utilities.getUuid(); });
+    sheet.getRange(2, idCol + 1, take, 1).setValues(rows.map(row => [row[idCol]]));
+    SpreadsheetApp.flush();
+    const ss = SpreadsheetApp.getActiveSpreadsheet(), groups = {};
+    rows.forEach(row => {
+      const name = 'AnalyticsArchive_' + Utilities.formatDate(row[0], 'UTC', 'yyyy_MM');
+      (groups[name] || (groups[name] = [])).push(row);
+    });
+    Object.keys(groups).forEach(name => {
+      let archive = ss.getSheetByName(name);
+      if (!archive) { archive = ss.insertSheet(name); archive.appendRow(sourceHeads); archive.hideSheet(); }
+      const archiveHeads = headers_(archive);
+      if (JSON.stringify(archiveHeads) !== JSON.stringify(sourceHeads)) throw new Error('Archive schema differs; source retained.');
+      const group = groups[name];
+      const pattern = '^(?:' + group.map(row => analyticsRegexEscape_(row[idCol])).join('|') + ')$';
+      const existing = new Set();
+      if (archive.getLastRow() > 1) archive.getRange(2, idCol + 1, archive.getLastRow() - 1, 1).createTextFinder(pattern).useRegularExpression(true).matchEntireCell(true).findAll().forEach(hit => existing.add(String(hit.getValue())));
+      const missing = group.filter(row => !existing.has(String(row[idCol])));
+      if (missing.length) archive.getRange(archive.getLastRow() + 1, 1, missing.length, sourceHeads.length).setValues(missing);
+      SpreadsheetApp.flush();
+      const hits = archive.getRange(2, idCol + 1, archive.getLastRow() - 1, 1).createTextFinder(pattern).useRegularExpression(true).matchEntireCell(true).findAll();
+      const saved = {};
+      hits.forEach(hit => { saved[String(hit.getValue())] = archive.getRange(hit.getRow(), 1, 1, sourceHeads.length).getValues()[0]; });
+      group.forEach(row => { if (JSON.stringify(saved[String(row[idCol])]) !== JSON.stringify(row)) throw new Error('Archive verification failed; source retained.'); });
+    });
+    sheet.deleteRows(2, take);
+    props.setProperty('ANALYTICS_MAINTENANCE_AT', new Date().toISOString());
+    props.deleteProperty('ANALYTICS_MAINTENANCE_ERROR');
+    return { archived: take };
+  } catch (err) {
+    props.setProperty('ANALYTICS_MAINTENANCE_ERROR', String(err.message || err).slice(0, 300));
+    throw err;
+  } finally { lock.releaseLock(); }
+}
+function setupShopMaintenance() {
+  if (!ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'rebuildShopDailyAnalytics')) ScriptApp.newTrigger('rebuildShopDailyAnalytics').timeBased().everyDays(1).atHour(2).create();
+  if (!ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'maintainShopAnalytics')) {
+    ScriptApp.newTrigger('maintainShopAnalytics').timeBased().everyHours(1).create();
+  }
+  return { success: true };
+}
+// Run manually in the Apps Script editor. Never exposed as a public web action.
+function getShopOperationalHealth() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet(), props = PropertiesService.getScriptProperties();
+  const pending = [], telegramPending = [];
+  const transactions = ss.getSheetByName('OrderTransactions');
+  if (transactions) rowsAsObjects_(transactions).forEach(row => {
+    if (String(row.status) === 'Pending') pending.push(new Date(row.updated).getTime());
+  });
+  if (transactions && transactions.getLastRow() > 1 && transactions.getLastColumn() >= 5) {
+    transactions.getRange(2, 1, transactions.getLastRow() - 1, 5).getValues().forEach(row => {
+      if (String(row[4]) === 'Pending') telegramPending.push(new Date(row[3]).getTime());
+    });
+  }
+  const age = values => { const valid = values.filter(Number.isFinite); return valid.length ? Math.max(0, (Date.now() - Math.min(...valid)) / 3600000) : null; };
+  const analytics = ss.getSheetByName(ANALYTICS_SHEET);
+  const result = {
+    checkedAt: new Date().toISOString(), pendingTransactions: pending.length,
+    oldestPendingHours: pending.length ? age(pending) : 0,
+    pendingTelegramNotifications: telegramPending.length,
+    oldestTelegramPendingHours: telegramPending.length ? age(telegramPending) : 0,
+    activeAnalyticsRows: analytics ? Math.max(0, analytics.getLastRow() - 1) : 0,
+    maintenanceAt: props.getProperty('ANALYTICS_MAINTENANCE_AT') || '',
+    maintenanceError: props.getProperty('ANALYTICS_MAINTENANCE_ERROR') || '',
+    maintenanceInstalled: ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'maintainShopAnalytics')
+  };
+  console.log(JSON.stringify(result));
+  return result;
+}
+
+function analyticsWindow_(options, now, tz) {
+  const today=analyticsDateKey_(now,tz), custom=!!(options.startDate||options.endDate);
+  let days=[7,30,90].indexOf(Number(options.days))>=0?Number(options.days):30;
+  let firstDay=analyticsDayOffset_(today,1-days),lastDay=today;
+  if(custom){
+    firstDay=String(options.startDate||'');lastDay=String(options.endDate||'');
+    [firstDay,lastDay].forEach(key=>{const date=new Date(key+'T00:00:00Z');if(!/^\d{4}-\d{2}-\d{2}$/.test(key)||isNaN(date)||date.toISOString().slice(0,10)!==key)throw new Error('Choose valid start and end dates.');});
+    days=Math.round((new Date(lastDay+'T00:00:00Z')-new Date(firstDay+'T00:00:00Z'))/86400000)+1;
+    if(days<1||days>90||lastDay>today||firstDay<analyticsDayOffset_(today,-89))throw new Error('Choose a range within the last 90 calendar days.');
+  }
+  const partialToday=lastDay===today;
+  const end=partialToday?now:new Date(Utilities.parseDate(analyticsDayOffset_(lastDay,1),tz,'yyyy-MM-dd').getTime()-1);
+  return {days:days,custom:custom,firstDay:firstDay,lastDay:lastDay,end:end,partialToday:partialToday};
 }
 
 /* promos responsibilities. Bundled into code.gs by scripts/build.mjs. */
@@ -1422,8 +1619,10 @@ function validatePromoFast_(code, phone) {
   };
   if (onePerCustomer && phone) {
     const sheet = ensurePromoCustomersSheet_();
-    const needle = String(code).trim().toLowerCase() + '|' + hashText_(phone);
-    const hit = sheet.createTextFinder(needle).matchEntireCell(true).findNext();
+    const hit = phoneIdentityVariants_(phone).some(identity => {
+      const needle = String(code).trim().toLowerCase() + '|' + hashText_(identity);
+      return !!sheet.createTextFinder(needle).matchEntireCell(true).findNext();
+    });
     if (hit) return {
       ok: false
     };
@@ -1456,7 +1655,7 @@ function promoPlan_(code, phone) {
   return {
     code: code,
     usesAfter: Math.max(0, Number(data[i][col]) || 0) + 1,
-    phoneHash: hashText_(phone),
+    phoneHash: hashText_(canonicalPhone_(phone)),
     onePerCustomer: String(data[i][heads.indexOf('onepercustomer')] || '').toLowerCase() === 'yes'
   };
 }
@@ -1541,7 +1740,7 @@ function getDashboardData() {
     name: p.name || p.id,
     qty: Math.max(0, Math.floor(safeNumber_(p.stockqty, 0)))
   })).sort((a, b) => a.qty - b.qty || String(a.name).localeCompare(String(b.name)));
-  let monthProfit = 0;
+  let monthProfit = 0, unknownCostLines = 0;
   const productStats = {};
   const accounted = {};
   try {
@@ -1556,6 +1755,7 @@ function getDashboardData() {
       const qty = Math.max(0, safeNumber_(item.qty, 0));
       const revenue = Math.max(0, safeNumber_(item.linerevenue, safeNumber_(item.unitprice, 0) * qty));
       const cost = Math.max(0, safeNumber_(item.linecost, safeNumber_(item.costprice, 0) * qty));
+      if (!orderItemCostKnown_(item)) unknownCostLines++;
       monthProfit += revenue - cost;
       accounted[orderId] = true;
       const key = String(item.productid || item.productname || 'Unknown');
@@ -1574,7 +1774,7 @@ function getDashboardData() {
     monthProfit -= Math.max(0, safeNumber_(completedOrders[id].discount, 0));
   });
   monthProfit = roundMoney_(monthProfit);
-  const accountingIncomplete = Object.keys(completedOrders).some(id => {
+  const accountingIncomplete = unknownCostLines > 0 || Object.keys(completedOrders).some(id => {
     const d = new Date(completedOrders[id].date);
     return Utilities.formatDate(d, tz, 'yyyy-MM') === monthKey && !accounted[id];
   });
@@ -1602,7 +1802,8 @@ function getDashboardData() {
     todayOrders,
     monthRevenue,
     monthOrders,
-    monthProfit,
+    monthProfit: accountingIncomplete ? null : monthProfit,
+    unknownCostLines,
     accountingIncomplete,
     statusCounts,
     lowStock,
@@ -1675,15 +1876,13 @@ function getOrderItemQuantities_(orderId) {
       if (String(item.orderid || '').trim() !== wantedId) return;
       const id = String(item.productid || '').trim();
       const qty = Math.max(0, Math.floor(safeNumber_(item.qty, 0)));
-      if (id && qty) totals[id] = (totals[id] || 0) + qty;
+      const key=JSON.stringify([id,String(item.size||'')]);
+      if(id&&qty){if(!totals[key])totals[key]={id:id,size:String(item.size||''),qty:0};totals[key].qty+=qty;}
     });
   } catch (err) {
     // OrderItems is optional; fall through to the order-row summary below.
   }
-  const fromItems = Object.keys(totals).map(id => ({
-    id: id,
-    qty: totals[id]
-  }));
+  const fromItems = Object.values(totals);
   if (fromItems.length) return fromItems;
 
   // Compatibility fallback for older installations/orders where OrderItems
@@ -1729,6 +1928,7 @@ function recordOrderItemsFromValidated_(orderId, date, items) {
     sheet.appendRow(['orderId', 'date', 'productId', 'productName', 'category', 'subcategory', 'qty', 'unitPrice', 'costPrice', 'lineRevenue', 'lineCost', 'lineProfit']);
   }
   if (items.some(x => x.size)) ensureColumn_(sheet, 'size');
+  ensureColumn_(sheet, 'costKnown');
   const heads = headers_(sheet),
     idColumn = heads.indexOf('orderid');
   if (idColumn < 0) throw new Error('OrderItems is missing orderId.');
@@ -1750,10 +1950,11 @@ function recordOrderItemsFromValidated_(orderId, date, items) {
       subcategory: item.subcategory,
       qty: item.qty,
       unitprice: item.unitPrice,
-      costprice: item.costPrice,
+      costknown: orderItemCostKnown_(item) ? 'Yes' : 'No',
+      costprice: orderItemCostKnown_(item) ? item.costPrice : '',
       linerevenue: item.lineTotal,
-      linecost: roundMoney_(item.qty * item.costPrice),
-      lineprofit: roundMoney_(item.lineTotal - item.qty * item.costPrice)
+      linecost: orderItemCostKnown_(item) ? roundMoney_(item.qty * item.costPrice) : '',
+      lineprofit: orderItemCostKnown_(item) ? roundMoney_(item.lineTotal - item.qty * item.costPrice) : ''
     };
     return heads.map(h => sheetText_(record[h] !== undefined ? record[h] : ''));
   });
@@ -1776,6 +1977,7 @@ function trackOrder(orderId, phone) {
     deliveryCharge: order.deliverycharge || 0,
     codCharge: order.codcharge || 0,
     paymentMethod: order.paymentmethod,
+    shipment: {carrier:String(order.shipmentcarrier||''),reference:String(order.shipmentreference||''),url:String(order.shipmenturl||'')},
     canRequestCancellation: canCustomerRequestCancellation_(status),
     requests: publicOrderRequests_(order.orderid)
   };
@@ -1817,8 +2019,7 @@ function orderRequestSheet_() {
   return sheet;
 }
 function normalizedTrackingPhone_(value) {
-  const digits = cleanPhone_(value);
-  return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits.length === 11 && digits.startsWith('0') ? digits.slice(1) : digits;
+  return canonicalPhone_(value);
 }
 function findCustomerOrder_(orderId, phone) {
   const id = String(orderId || '').trim();
@@ -1854,6 +2055,9 @@ function publicOrderRequests_(orderId) {
   }));
 }
 function submitOrderRequest_(payload) {
+  return withWriteLock_(function () { return submitOrderRequestUnlocked_(payload); });
+}
+function submitOrderRequestUnlocked_(payload) {
   payload = payload || {};
   const orderId = String(payload.orderId || '').trim(), phone = String(payload.phone || '').trim();
   const type = String(payload.type || '').trim().toLowerCase();
@@ -1987,7 +2191,7 @@ function addOrder(o) {
       error: 'Prices or charges changed. Please review the updated total.',
       quote: quoted.quote
     };
-    rateLimit_('order-phone:' + hashText_(order.phone), 5, 3600);
+    rateLimit_('order-phone:' + hashText_(canonicalPhone_(order.phone)), 5, 3600);
     rateLimit_('orders-global', 120, 3600);
     const id = 'ORD-' + hashText_(o.requestId).slice(0, 16).toUpperCase(),
       now = new Date();
@@ -2025,7 +2229,7 @@ function addOrder(o) {
       notifyAsync: true,
       orderId: id,
       fingerprint: fingerprint,
-      phoneHash: hashText_(order.phone),
+      phoneHash: hashText_(canonicalPhone_(order.phone)),
       record: record,
       result: result,
       items: quoted.priced.items,
@@ -2174,9 +2378,10 @@ function buildValidatedOrderItems_(itemsDetail, productData) {
     };
   }
   const items = [];
-  const requestedTotals = Object.create(null);
+  const requestedTotals = Object.create(null), requestedSizes = Object.create(null);
   itemsDetail.forEach(x => {
     requestedTotals[x.id] = (requestedTotals[x.id] || 0) + x.qty;
+    const sizeKey=JSON.stringify([x.id,x.size||'']);requestedSizes[sizeKey]=(requestedSizes[sizeKey]||0)+x.qty;
   });
   let subtotal = 0;
   for (const requested of itemsDetail) {
@@ -2197,6 +2402,9 @@ function buildValidatedOrderItems_(itemsDetail, productData) {
       code: 'invalid_size',
       error: 'Please choose an available size for ' + (row[nameCol] || requested.id) + '.'
     };
+    const sizeStockRaw=heads.indexOf('sizestock')<0?'':row[heads.indexOf('sizestock')];
+    let sizeStock;try{sizeStock=parseSizeStock_(sizeStockRaw,sizes);}catch(_){return {ok:false,error:'Size inventory needs correction. Contact the shop.'};}
+    if(sizeStock && requestedSizes[JSON.stringify([requested.id,size])] > sizeStock[size])return {ok:false,code:'insufficient_stock',productId:requested.id,size:size,availableQty:sizeStock[size],error:'Only '+sizeStock[size]+' left in size '+size+'.'};
     const status = String(stockCol === -1 ? 'in stock' : row[stockCol] || 'in stock').trim().toLowerCase();
     if (status === 'out of stock') return {
       ok: false,
@@ -2245,9 +2453,11 @@ function buildValidatedOrderItems_(itemsDetail, productData) {
       } : {}),
       unitPrice,
       costPrice: costCol === -1 ? 0 : safeNumber_(row[costCol], 0),
+      costKnown: costCol !== -1 && knownCost_(row[costCol]),
       lineTotal,
       tracked,
       availableQty,
+      sizeStockRaw: sizeStock ? String(sizeStockRaw) : '',
       rowIndex: found.rowIndex
     });
   }
@@ -2262,7 +2472,7 @@ function quoteOrder(o) {
   return withWriteLock_(function () {
     const order = normalizeAndValidateOrder_(o || {});
     if (!order.ok) return order;
-    rateLimit_('quotes:' + hashText_(order.phone), 30, 600);
+    rateLimit_('quotes:' + hashText_(canonicalPhone_(order.phone)), 30, 600);
     const priced = priceOrder_(order, getOrderSheets_());
     return priced.ok ? Object.assign({
       success: true
@@ -2336,7 +2546,7 @@ function orderResult(requestId, phone) {
       error: 'No order was saved for this attempt.'
     };
     const t = readTransaction_(sheet, row);
-    if (t.data.phoneHash !== hashText_(cleanPhone_(phone))) return {
+    if (!phoneIdentityVariants_(phone).some(identity => t.data.phoneHash === hashText_(identity))) return {
       success: false,
       code: 'not_found',
       error: 'Order attempt not found.'
@@ -2422,24 +2632,19 @@ function finishTransaction_(sheet, row, data, committed, stockAlreadyApplied) {
   SpreadsheetApp.flush();
 }
 function stockPlan_(items, sheets) {
-  const grouped = new Map();
-  items.filter(x => x.tracked).forEach(x => {
-    if (!grouped.has(x.id)) grouped.set(x.id, {
-      ...x,
-      qty: 0
-    });
-    grouped.get(x.id).qty += x.qty;
+  const grouped=new Map();
+  items.filter(x=>x.tracked || x.sizeStockRaw).forEach(x=>{
+    if(!grouped.has(x.id))grouped.set(x.id,{item:x,qty:0,bySize:{}});
+    const group=grouped.get(x.id);group.qty+=x.qty;group.bySize[x.size||'']=(group.bySize[x.size||'']||0)+x.qty;
   });
-  const statusCol = sheets.productHeads.indexOf('stock');
-  return Array.from(grouped.values()).map(x => {
-    const oldStatus = statusCol < 0 ? null : sheets.productData[x.rowIndex][statusCol];
-    return {
-      id: x.id,
-      beforeQty: x.availableQty,
-      afterQty: x.availableQty - x.qty,
-      beforeStatus: oldStatus,
-      afterStatus: oldStatus === null ? null : x.availableQty === x.qty ? 'out of stock' : oldStatus
-    };
+  const statusCol=sheets.productHeads.indexOf('stock');
+  return Array.from(grouped.values()).map(group=>{
+    const x=group.item, oldStatus=statusCol<0?null:sheets.productData[x.rowIndex][statusCol];
+    const stock=x.sizeStockRaw?parseSizeStock_(x.sizeStockRaw,parseSizes_(sheets.productData[x.rowIndex][sheets.productHeads.indexOf('sizes')])):null;
+    if(stock)Object.keys(group.bySize).forEach(size=>{stock[size]-=group.bySize[size];if(stock[size]<0)throw new Error('Insufficient size stock.');});
+    const beforeQty=stock?Object.values(stock).reduce((a,b)=>a+b,0)+group.qty:x.availableQty;
+    return {id:x.id,beforeQty:beforeQty,afterQty:beforeQty-group.qty,beforeStatus:oldStatus,afterStatus:oldStatus===null?null:beforeQty===group.qty?'out of stock':oldStatus,
+      ...(stock?{beforeSizeStock:x.sizeStockRaw,afterSizeStock:serializeSizeStock_(stock)}:{})};
   });
 }
 function applyStockPlan_(plan, forward, sheets) {
@@ -2467,6 +2672,7 @@ function applyStockPlan_(plan, forward, sheets) {
     const row = rows[x.id];
     if (!row) throw new Error('Inventory recovery cannot find product ' + x.id + '. Restore it before retrying.');
     add(qtyCol + 1, row, forward ? x.afterQty : x.beforeQty);
+    if(x.beforeSizeStock !== undefined){const sizeCol=heads.indexOf('sizestock');if(sizeCol<0)throw new Error('Size inventory column missing; restore it before recovery.');add(sizeCol+1,row,forward?x.afterSizeStock:x.beforeSizeStock);}
     const status = forward ? x.afterStatus : x.beforeStatus;
     if (statusCol >= 0 && status !== null) add(statusCol + 1, row, status);
   });
@@ -2492,18 +2698,23 @@ function statusStockPlan_(orderId, oldStatus, newStatus) {
     statusCol = heads.indexOf('stock');
   if (qtyCol < 0) return [];
   const reactivating = oldStatus === 'Cancelled';
-  return items.map(item => {
+  const grouped={};items.forEach(item=>{const group=grouped[item.id]||(grouped[item.id]={id:item.id,qty:0,sizes:{}});group.qty+=item.qty;group.sizes[item.size||'']=(group.sizes[item.size||'']||0)+item.qty;});
+  return Object.values(grouped).map(item => {
     const row = data.slice(1).find(r => String(r[idCol]) === item.id);
     if (!row) {
       if (reactivating) throw new Error('Cannot reactivate: product ' + item.id + ' was deleted.');
       return null;
     }
-    if (row[qtyCol] === '' || row[qtyCol] == null) return null;
-    const beforeQty = Number(row[qtyCol]),
-      afterQty = beforeQty + (reactivating ? -item.qty : item.qty);
+    const rawSize=heads.indexOf('sizestock')<0?'':row[heads.indexOf('sizestock')];
+    const sizeStock=parseSizeStock_(rawSize,parseSizes_(heads.indexOf('sizes')<0?'':row[heads.indexOf('sizes')]));
+    if(sizeStock)Object.keys(item.sizes).forEach(size=>{if(sizeStock[size]===undefined)throw new Error('Cannot safely restore size inventory for '+item.id+'. Restore the original size or reconcile this order first.');sizeStock[size]+=(reactivating?-1:1)*item.sizes[size];if(sizeStock[size]<0)throw new Error('Insufficient stock for size '+size);});
+    if (!sizeStock && (row[qtyCol] === '' || row[qtyCol] == null)) return null;
+    const afterQty = sizeStock ? Object.values(sizeStock).reduce((a,b)=>a+b,0) : Number(row[qtyCol]) + (reactivating ? -item.qty : item.qty),
+      beforeQty = sizeStock ? afterQty + (reactivating ? item.qty : -item.qty) : Number(row[qtyCol]);
     if (!Number.isInteger(beforeQty) || beforeQty < 0 || afterQty < 0) throw new Error('Insufficient or invalid stock for ' + item.id + '.');
     return {
       id: item.id,
+      ...(sizeStock?{beforeSizeStock:String(rawSize),afterSizeStock:serializeSizeStock_(sizeStock)}:{}),
       beforeQty: beforeQty,
       afterQty: afterQty,
       beforeStatus: statusCol < 0 ? null : row[statusCol],
@@ -2911,7 +3122,7 @@ function aiConfiguredProvider_(configId) {
  * Backward compatibility: OPENAI_API_KEY and OPENAI_MODEL are still accepted.
  */
 function generateAiProductDraft_(body, actor) {
-  const startedAt = Date.now();
+  const startedAt = Date.now(); aiBudget_();
   const config = aiProviderConfig_(body && body.modelConfigId);
   const requestedReasoningEffort = sanitizeAiReasoningEffort_(body && body.reasoningEffort, config.supportedEfforts);
   if (requestedReasoningEffort) config.reasoningEffort = requestedReasoningEffort;
@@ -2950,7 +3161,7 @@ function generateAiProductDraft_(body, actor) {
     provider: config.providerLabel,
     apiType: config.apiType,
     reasoningEffort: config.reasoningEffort || '',
-    elapsedMs: Math.max(0, Date.now() - startedAt)
+    usage:aiUsage_(), elapsedMs: Math.max(0, Date.now() - startedAt)
   };
 }
 
@@ -3177,9 +3388,10 @@ function aiFetchJson_(config, payload) {
   };
   let response;
   try {
+    aiBudgetBeforeCall_();
     response = UrlFetchApp.fetch(config.endpoint, options);
   } catch (err) {
-    throw new Error('AI provider connection failed: ' + String(err && err.message || err).slice(0, 300));
+    throw new Error((config.providerLabel || 'AI provider') + ' connection failed or request budget reached. Retry or continue the remaining batch.');
   }
   let status = response.getResponseCode();
 
@@ -3187,6 +3399,7 @@ function aiFetchJson_(config, payload) {
   // quota, authentication, invalid model, or rate-limit errors.
   if (status === 502 || status === 503 || status === 504) {
     Utilities.sleep(300);
+    aiBudgetBeforeCall_();
     response = UrlFetchApp.fetch(config.endpoint, options);
     status = response.getResponseCode();
   }
@@ -3197,8 +3410,9 @@ function aiFetchJson_(config, payload) {
   catch (_) { throw new Error('AI provider returned an unreadable response (HTTP ' + status + ').'); }
   if (status < 200 || status >= 300) {
     const message = aiProviderErrorMessage_(data) || ('HTTP ' + status);
-    throw new Error('AI generation failed: ' + message.slice(0, 400));
+    throw new Error((config.providerLabel || 'AI provider') + ' / ' + config.model + ' (HTTP ' + status + '): ' + message.slice(0, 400));
   }
+  aiRecordUsage_(data);
   return data;
 }
 
@@ -3436,6 +3650,24 @@ function cleanAiDraft_(draft) {
   return out;
 }
 
+// Soft request budget: Apps Script cannot cancel an in-flight UrlFetch call.
+var DSB_AI_BUDGET_=null;
+function aiBudget_() {
+  if(!DSB_AI_BUDGET_)DSB_AI_BUDGET_={startedAt:Date.now(),calls:0,inputTokens:0,outputTokens:0,usageResponses:0};
+  return DSB_AI_BUDGET_;
+}
+function aiBudgetAvailable_() {const b=aiBudget_();return b.calls<4 && Date.now()-b.startedAt<75000;}
+function aiBudgetBeforeCall_() {
+  if(!aiBudgetAvailable_())throw new Error('AI request budget reached. Review completed results and continue with a new request.');
+  aiBudget_().calls++;
+}
+function aiRecordUsage_(data) {
+  const u=data && data.usage;if(!u)return;
+  const input=Number(u.input_tokens??u.prompt_tokens),output=Number(u.output_tokens??u.completion_tokens);
+  if(Number.isFinite(input)&&Number.isFinite(output)&&input>=0&&output>=0){const b=aiBudget_();b.inputTokens+=input;b.outputTokens+=output;b.usageResponses++;}
+}
+function aiUsage_() {const b=aiBudget_();return {providerCalls:b.calls,inputTokens:b.usageResponses?b.inputTokens:null,outputTokens:b.usageResponses?b.outputTokens:null,partial:b.usageResponses<b.calls};}
+
 /* Admin AI modules. Source files are bundled into code.gs by scripts/build.mjs. */
 
 function aiAdminOptimizedImageUrl_(url) {
@@ -3518,7 +3750,7 @@ function aiAdminOrderView_(o) {
 /* Generic, read-first tools used by DSB Admin AI. The model chooses a tool;
  * Apps Script only validates and executes bounded backend operations. */
 
-var AI_ADMIN_TOOL_LIMITS_ = { products: 50, productDetails: 12, visionProducts: 8, enrichProducts: 2, orders: 30, toolSteps: 3 };
+var AI_ADMIN_TOOL_LIMITS_ = { products: 50, productDetails: 12, visionProducts: 2, enrichProducts: 2, orders: 30, toolSteps: 3 };
 
 function aiAdminTagList_(value) {
   return String(value || '').split(',').map(function(x) { return x.trim(); }).filter(Boolean);
@@ -3701,12 +3933,14 @@ function aiAdminAnalyzeProducts_(args, body, actor) {
   args = args && typeof args === 'object' ? args : {};
   const instruction = String(args.instruction || '').trim().slice(0, 1600);
   if (!instruction) return { error: 'instruction is required' };
-  const ids = Array.isArray(args.ids) ? args.ids.map(function(x) { return String(x || '').trim(); }).filter(Boolean).slice(0, AI_ADMIN_TOOL_LIMITS_.visionProducts) : [];
+  const requestedIds = Array.isArray(args.ids) ? Array.from(new Set(args.ids.map(function(x) { return String(x || '').trim(); }).filter(Boolean))).slice(0,50) : [];
+  const ids=requestedIds.slice(0,AI_ADMIN_TOOL_LIMITS_.visionProducts);
   const wanted = {};
   ids.forEach(function(id) { wanted[id.toLowerCase()] = true; });
   const products = getAllProducts(true).filter(function(p) { return wanted[String(p.id || '').toLowerCase()] && !isArchived_(p); });
-  const results = products.map(function(p) { return aiAdminAnalyzeOneProduct_(p, instruction, body, actor, args.onlyEmpty === true); });
-  return { analyzed: results.length, results: results };
+  const results = [];
+  products.forEach(function(p) { if(aiBudgetAvailable_())results.push(aiAdminAnalyzeOneProduct_(p, instruction, body, actor, args.onlyEmpty === true)); });
+  return { analyzed: results.length, results: results, remainingIds:requestedIds.filter(id=>!results.some(r=>r.id.toLowerCase()===id.toLowerCase())), instruction:instruction, onlyEmpty:args.onlyEmpty===true };
 }
 
 function aiAdminEnrichProducts_(args, body, actor) {
@@ -3721,18 +3955,20 @@ function aiAdminEnrichProducts_(args, body, actor) {
   query.summary = false;
   query.similarNames = false;
   const limit = Math.max(1, Math.min(AI_ADMIN_TOOL_LIMITS_.enrichProducts, Math.floor(Number(args.limit) || 1)));
-  query.limit = limit;
+  query.limit = AI_ADMIN_TOOL_LIMITS_.products;
   const matched = aiAdminQueryProducts_(query);
   const ids = matched && Array.isArray(matched.products) ? matched.products.map(function(p) { return String(p.id || ''); }).filter(Boolean).slice(0, limit) : [];
   if (!ids.length) return { matchedCount: Number(matched && matched.count) || 0, analyzed:0, results:[], remainingCount:0 };
   const wanted = {};
   ids.forEach(function(id) { wanted[id.toLowerCase()] = true; });
   const products = getAllProducts(true).filter(function(p) { return wanted[String(p.id || '').toLowerCase()] && !isArchived_(p); });
-  const results = products.map(function(p) { return aiAdminAnalyzeOneProduct_(p, instruction, body, actor, args.onlyEmpty === true); });
+  const results = [];
+  products.forEach(function(p) { if(aiBudgetAvailable_())results.push(aiAdminAnalyzeOneProduct_(p, instruction, body, actor, args.onlyEmpty === true)); });
   return {
     matchedCount: Number(matched && matched.count) || results.length,
     analyzed: results.length,
     results: results,
+    remainingIds:(matched.products||[]).map(p=>String(p.id)).filter(id=>!results.some(r=>r.id===id)), instruction:instruction, onlyEmpty:args.onlyEmpty===true,
     remainingCount: Math.max(0, (Number(matched && matched.count) || results.length) - results.length)
   };
 }
@@ -3913,7 +4149,7 @@ function maybeGenerateAiAdminNewProduct_(body, message, history, actor, photos, 
  * returns only the requested data, then the model produces a reply/proposal. */
 
 function generateAiAdminChat_(body, actor) {
-  const startedAt = Date.now();
+  const startedAt = Date.now(); aiBudget_();
   const message = String(body && body.message || '').trim().slice(0, 5000);
   if (!message) throw new Error('Type a message first.');
   rateLimit_('ai-admin-chat:' + String(actor && actor.name || 'admin'), 90, 3600);
@@ -3925,7 +4161,7 @@ function generateAiAdminChat_(body, actor) {
   // New-product creation remains a direct form-draft workflow because it needs
   // the user's uploaded photos before any catalog lookup exists.
   const creation = maybeGenerateAiAdminNewProduct_(body, message, history, actor, chatImageUrls, false);
-  if (creation) return Object.assign({ success:true, elapsedMs:Date.now() - startedAt }, creation);
+  if (creation) return Object.assign({ success:true, usage:aiUsage_(), elapsedMs:Date.now() - startedAt }, creation);
 
   const config = aiProviderConfig_(body && body.modelConfigId);
   const requestedReasoningEffort = sanitizeAiReasoningEffort_(body && body.reasoningEffort, config.supportedEfforts);
@@ -3939,7 +4175,7 @@ function generateAiAdminChat_(body, actor) {
   let step = 0;
   for (; step < AI_ADMIN_TOOL_LIMITS_.toolSteps; step++) {
     const prompt = aiAdminAgentPrompt_(message, history, sessionState, actor, toolTrace, chatImageUrls.length, false);
-    const outputText = callAiAdminChatProvider_(config, prompt, step === 0 ? chatImageUrls.map(aiAdminOptimizedImageUrl_) : []);
+    const outputText = step===0 && body.resumeBatch && Array.isArray(body.resumeBatch.ids) ? JSON.stringify({tool:{name:'analyze_products',args:body.resumeBatch}}) : callAiAdminChatProvider_(config, prompt, step === 0 ? chatImageUrls.map(aiAdminOptimizedImageUrl_) : []);
     parsed = aiParseStructuredOutput_(outputText);
     const tool = parsed && parsed.tool && typeof parsed.tool === 'object' ? parsed.tool : null;
     if (!tool || !tool.name) break;
@@ -3957,7 +4193,7 @@ function generateAiAdminChat_(body, actor) {
     // Enrichment is intentionally a self-contained read -> vision -> proposal tool.
     // Returning immediately avoids another model round-trip inside the same Apps
     // Script request, which keeps common catalog-edit tasks well below timeout.
-    if (String(tool.name || '') === 'enrich_products' && result && Array.isArray(result.results)) {
+    if (['enrich_products','analyze_products'].indexOf(String(tool.name || ''))>=0 && result && Array.isArray(result.results)) {
       const items = result.results.map(function(item) {
         if (!item || item.error || !item.suggestedPatch || !Object.keys(item.suggestedPatch).length) return null;
         return { targetId:item.id, title:item.name || item.id, patch:item.suggestedPatch, current:item.current, expectedRevision:item.expectedRevision };
@@ -3971,11 +4207,12 @@ function generateAiAdminChat_(body, actor) {
       return {
         success:true,
         reply:reply,
+        continuation:result.remainingIds && result.remainingIds.length ? {ids:result.remainingIds,instruction:result.instruction,onlyEmpty:result.onlyEmpty} : null,
         proposal:items.length ? { type:'batch_update_products', title:'AI product enrichment', description:'Review the generated descriptive fields before applying.', items:items, remainingCount:Math.max(0, Number(result.remainingCount) || 0) } : null,
         model:config.model,
         provider:config.providerLabel,
         toolCalls:toolTrace.map(function(x){ return x.name; }),
-        elapsedMs:Math.max(0, Date.now() - startedAt)
+        usage:aiUsage_(), elapsedMs:Math.max(0, Date.now() - startedAt)
       };
     }
   }
@@ -4000,7 +4237,7 @@ function generateAiAdminChat_(body, actor) {
     model:config.model,
     provider:config.providerLabel,
     toolCalls:toolTrace.map(function(x){ return x.name; }),
-    elapsedMs:Math.max(0, Date.now() - startedAt)
+    usage:aiUsage_(), elapsedMs:Math.max(0, Date.now() - startedAt)
   };
 }
 
@@ -4018,7 +4255,7 @@ function aiAdminAgentPrompt_(message, history, sessionState, actor, toolTrace, i
   const tools = [
     'query_products(args): filter the live catalog. args may include status, text, ids, category, subcategory, brand, material, tagCount, tagCountMin, tagCountMax, missingFields[], priceMin, priceMax, stockQtyMin, stockQtyMax, stockStatus, similarNames, summary, includeDescriptions, includeImages, sort, limit. Use summary=true for broad catalog-quality/listing-gap audits so one compact call can cover the whole filtered catalog.',
     'get_products(args): fetch full details/photos for ids[]. Use after query_products when deeper comparison is needed.',
-    'analyze_products(args): image-aware analysis for already-known ids (up to 8). Requires instruction. It returns suggested descriptive patches and never changes data.',
+    'analyze_products(args): image-aware analysis for already-known ids (up to 2 per request; return remaining IDs for continuation). Requires instruction. It returns suggested descriptive patches and never changes data.',
     'enrich_products(args): fastest path when the user wants you to FIND products and FILL/IMPROVE descriptive fields. args: {query:{same filters as query_products, sort, limit}, instruction:"...", onlyEmpty:true|false, limit:1|2}. It performs the filtered lookup and image-aware enrichment in one bounded operation and immediately returns a reviewable proposal. Prefer this instead of query_products -> analyze_products for editing/enrichment requests.',
     'query_orders(args): search live orders by text/status with a bounded limit.',
     'get_dashboard(args): get current dashboard summary/top products/recent orders.'
@@ -4103,10 +4340,118 @@ function callAiAdminChatProvider_(config, prompt, imageUrls) {
   return text;
 }
 
+/* Small shop operations; no public route exposes health, backups or settings. */
+var DSB_REQUEST_LOCK_WAIT_MS_ = 0;
+function safeShopLink_(value, instagram) {
+  const url = String(value || '').trim();
+  if (!url) return '';
+  if (url.length > 1000 || !/^https:\/\/[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:[/?#][^\s<>]*)?$/i.test(url)) throw new Error('Use a valid HTTPS link without credentials.');
+  if (instagram && !/^https:\/\/(?:www\.)?instagram\.com\/(?:p|reel|tv)\/[a-z0-9_-]+\/?(?:\?[^\s<>]*)?$/i.test(url)) throw new Error('Use an Instagram post or reel link.');
+  return url;
+}
+function saveShipment_(body) {
+  return withWriteLock_(function () {
+    const carrier = String(body.carrier || '').trim(), reference = String(body.reference || '').trim();
+    if (carrier.length > 80 || reference.length > 120) throw new Error('Shipment details are too long.');
+    const link = safeShopLink_(body.trackingUrl, false);
+    const sheet = getSheet_(ORDERS_SHEET), row = findRow_(sheet, 'orderid', String(body.orderId || ''));
+    if (!row) throw new Error('Order not found.');
+    ['shipmentcarrier','shipmentreference','shipmenturl','shipmentupdatedat'].forEach(k => ensureColumn_(sheet,k));
+    const heads = headers_(sheet), stampCol = heads.indexOf('shipmentupdatedat') + 1;
+    if (String(sheet.getRange(row,stampCol).getValue() || '') !== String(body.expectedUpdatedAt || '')) throw new Error('Shipment changed. Refresh before saving.');
+    const data = { shipmentcarrier:carrier, shipmentreference:reference, shipmenturl:link, shipmentupdatedat:new Date().toISOString() };
+    Object.keys(data).forEach(k => sheet.getRange(row,heads.indexOf(k)+1).setValue(sheetText_(data[k])));
+    return { success:true };
+  });
+}
+function recordOperationalTiming_(action, elapsed, outcome) {
+  if (!['quoteOrder','addOrder','adminDashboard','adminAnalytics'].includes(action) || Math.random() > .2) return;
+  try {
+    const key = 'dsb.timings.' + action;
+    const values = cacheGetJson_(key) || [];
+    values.push({ms:Math.max(0,elapsed),wait:DSB_REQUEST_LOCK_WAIT_MS_,ok:!outcome.error && outcome.success !== false,busy:outcome.code === 'busy',at:Date.now()});
+    cachePutJson_(key,values.slice(-80),21600);
+  } catch (_) {} // Measurements never interrupt an order.
+}
+function operationalTimingSnapshot_() {
+  const result = {};
+  ['quoteOrder','addOrder','adminDashboard','adminAnalytics'].forEach(action => {
+    const rows = (cacheGetJson_('dsb.timings.'+action) || []).filter(x=> Date.now()-x.at < 21600000);
+    const sorted = rows.map(x=>x.ms).sort((a,b)=>a-b), waits=rows.map(x=>x.wait || 0).sort((a,b)=>a-b);
+    const percentile = (a,p) => a.length ? a[Math.max(0,Math.ceil(a.length*p)-1)] : null;
+    result[action]={samples:rows.length,p50:percentile(sorted,.5),p95:percentile(sorted,.95),lockP95:percentile(waits,.95),errors:rows.filter(x=>!x.ok).length,busy:rows.filter(x=>x.busy).length};
+  });
+  return result;
+}
+function adminOperations_() {
+  const health = getShopOperationalHealth();
+  const orders = rowsAsObjects_(getSheet_(ORDERS_SHEET));
+  let outstanding=0, refunded=0, unverifiedOrders=0;
+  orders.forEach(o=> {
+    if (String(o.paymentstatus || 'Unverified') === 'Refunded') refunded += Number(o.refundedamount === '' || o.refundedamount == null ? o.total : o.refundedamount) || 0;
+    if (o.status !== 'Cancelled' && String(o.paymentstatus || 'Unverified') === 'Unverified') {outstanding += Number(o.total)||0;unverifiedOrders++;}
+  });
+  const props=PropertiesService.getScriptProperties();
+  const daily=SpreadsheetApp.getActiveSpreadsheet().getSheetByName('AnalyticsDaily');
+  const epoch=String(props.getProperty(ANALYTICS_RESET_AT_PROPERTY)||'');
+  const dailyRows=daily?rowsAsObjects_(daily).filter(r=>String(r.epoch||'')===epoch).slice(-14):[];
+  return {health:health,timings:operationalTimingSnapshot_(),accounting:getDashboardData(),payments:{unverifiedOrders:unverifiedOrders,outstandingUnverified:roundMoney_(outstanding),recordedRefunds:roundMoney_(refunded)},backupAt:props.getProperty('SHOP_BACKUP_AT')||'',daily:dailyRows};
+}
+// Run in the editor: copies the whole Sheet while application writes are paused.
+// Script Properties, deployment versions and external accounts need separate backup.
+function backupShopData() {
+  const lock=LockService.getScriptLock();
+  if (!lock.tryLock(1000)) throw new Error('Shop is busy. Retry backup during a quiet period.');
+  try {
+    recoverTransactions_(); SpreadsheetApp.flush();
+    const ss=SpreadsheetApp.getActiveSpreadsheet();
+    const backup=DriveApp.getFileById(ss.getId()).makeCopy('DSB backup '+new Date().toISOString());
+    PropertiesService.getScriptProperties().setProperty('SHOP_BACKUP_AT',new Date().toISOString());
+    return {success:true,backupId:backup.getId()};
+  } finally {lock.releaseLock();}
+}
+function setupShopBackups() {
+  if (!ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()==='backupShopData')) ScriptApp.newTrigger('backupShopData').timeBased().everyDays(1).atHour(3).create();
+  return {success:true};
+}
+function rebuildShopDailyAnalytics() {
+  const epoch=String(PropertiesService.getScriptProperties().getProperty(ANALYTICS_RESET_AT_PROPERTY)||'');
+  const tz=Session.getScriptTimeZone(), since=Date.now()-200*86400000, days={};
+  rowsAsObjects_(analyticsSheet_()).forEach(row=>{
+    const date=new Date(row.date);
+    if (isNaN(date) || date>Date.now() || +date<since || epoch && date<new Date(epoch)) return;
+    const key=analyticsDateKey_(date,tz), item=days[key]||(days[key]={events:0,visitors:new Set(),sessions:new Set()});
+    item.events++; if(row.visitor)item.visitors.add(row.visitor);if(row.session)item.sessions.add(row.session);
+  });
+  const lock=LockService.getScriptLock();if(!lock.tryLock(1000))return {busy:true};
+  try {
+    if(String(PropertiesService.getScriptProperties().getProperty(ANALYTICS_RESET_AT_PROPERTY)||'')!==epoch)return {reset:true};
+    const ss=SpreadsheetApp.getActiveSpreadsheet();let sheet=ss.getSheetByName('AnalyticsDaily');
+    if(!sheet){sheet=ss.insertSheet('AnalyticsDaily');sheet.hideSheet();}
+    const rows=[['date','events','dailyVisitors','dailySessions','epoch','generatedAt'],...Object.keys(days).sort().map(key=>[key,days[key].events,days[key].visitors.size,days[key].sessions.size,epoch,new Date()])];
+    sheet.getRange(1,1,rows.length,6).setValues(rows);
+    if(sheet.getLastRow()>rows.length)sheet.getRange(rows.length+1,1,sheet.getLastRow()-rows.length,6).clearContent();
+    return {days:rows.length-1};
+  } finally {lock.releaseLock();}
+}
+function parseSizeStock_(raw, sizes) {
+  if (!String(raw || '').trim()) return null;
+  const out=Object.create(null);
+  String(raw).split(',').forEach(entry=>{
+    const parts=entry.trim().split('='), key=String(parts[0]||'').trim(), value=String(parts[1]||'').trim();
+    if(parts.length!==2 || !sizes.includes(key) || !/^\d+$/.test(value) || Number(value)>999999 || Object.prototype.hasOwnProperty.call(out,key))throw new Error('Size stock must list each available size once with a whole quantity: S=3, M=0.');
+    out[key]=Number(value);
+  });
+  if(sizes.some(size=>!Object.prototype.hasOwnProperty.call(out,size)))throw new Error('List a quantity for every available size, including zero.');
+  return out;
+}
+function serializeSizeStock_(stock) {return Object.keys(stock).map(size=>size+'='+stock[size]).join(', ');}
+
 /* admin-auth responsibilities. Bundled into code.gs by scripts/build.mjs. */
 function authenticateAdmin_(key) {
   const owner = secret_('ADMIN_KEY', ADMIN_KEY);
-  if (owner && owner !== 'change-this-secret-key' && key === owner) return {
+  const candidate = typeof key === 'string' ? key : '';
+  if (owner && candidate === owner) return {
     name: 'Owner',
     role: 'admin'
   };
@@ -4116,24 +4461,32 @@ function authenticateAdmin_(key) {
   } catch (_) {
     throw new Error('Staff configuration is invalid.');
   }
-  const match = Array.isArray(staff) && staff.find(x => x.enabled !== false && typeof x.key === 'string' && x.key.length >= 24 && x.key === key && ['admin', 'editor', 'viewer'].includes(x.role));
-  if (!match) throw new Error('unauthorized');
+  const match = Array.isArray(staff) && staff.find(x => x.enabled !== false && typeof x.key === 'string' && x.key.length >= 24 && x.key === candidate && ['admin', 'editor', 'viewer'].includes(x.role));
+  if (!match) {
+    // Cache-based global limit is best effort: Apps Script provides no trusted
+    // client IP. Never record candidate credentials in logs or Properties.
+    rateLimit_('admin-login-failures', 90, 3600);
+    if (candidate) rateLimit_('admin-login-key:' + hashText_(candidate), 8, 3600);
+    throw new Error('unauthorized');
+  }
   return {
     name: String(match.name || 'Staff').slice(0, 60),
     role: match.role
   };
 }
 function assertAdminPermission_(actor, action) {
-  const reads = ['adminSession', 'adminProducts', 'adminProductsPage', 'adminOrders', 'adminDashboard', 'adminAnalytics', 'aiAdminChat', 'aiModels'];
-  const edits = ['add', 'update', 'archiveProduct', 'updateOrderStatus', 'resolveOrderRequest', 'aiProductDraft'];
-  if (actor.role === 'admin' || reads.includes(action) || actor.role === 'editor' && edits.includes(action)) return;
+  const reads = ['adminSession', 'adminProducts', 'adminProductsPage', 'adminOrders', 'adminDashboard', 'adminAnalytics', 'adminReviews', 'adminOperations', 'aiAdminChat', 'aiModels'];
+  const edits = ['add', 'update', 'archiveProduct', 'updateOrderStatus', 'resolveOrderRequest', 'saveShipment', 'aiProductDraft'];
+  if (actor.role === 'admin' || reads.includes(action) || actor.role === 'editor' && (edits.includes(action) || action === 'imageUploadAuthorization')) return;
   throw new Error('Your staff role does not allow this action.');
 }
 function dispatchAdmin_(body, actor) {
   const action = String(body.action || '');
   assertAdminPermission_(actor, action);
   if (action === 'adminSession') return {
-    version: 23,
+    // Existing admin (v24) remains usable while the new website publishes.
+    version: Number(body.options && body.options.requiredVersion) === 26 ? 26 : Number(body.options && body.options.requiredVersion) === 25 ? 25 : 24,
+    signedUploads: !!secret_('CLOUDINARY_API_SECRET', '') || !!secret_('CLOUDINARY_API_KEY', ''),
     name: actor.name,
     role: actor.role
   };
@@ -4142,6 +4495,14 @@ function dispatchAdmin_(body, actor) {
   if (action === 'adminOrders') return getAllOrders(body.options);
   if (action === 'adminDashboard') return getDashboardData();
   if (action === 'adminAnalytics') return getAnalyticsReport_(body.options || {});
+  if (action === 'adminOperations') return adminOperations_();
+  if (action === 'saveShipment') return saveShipment_(body);
+  if (action === 'adminReviews') return adminReviews_();
+  if (action === 'moderateReview') return moderateReview_(body, actor);
+  if (action === 'imageUploadAuthorization') {
+    if (actor.role === 'viewer') throw new Error('Your staff role does not allow uploads.');
+    return imageUploadAuthorization_(actor);
+  }
   if (action === 'resetAnalytics') return resetAnalytics_(actor);
   if (action === 'aiModels') return aiModelsGet_();
   if (action === 'aiConfigGet') return aiConfigGet_();
@@ -4161,4 +4522,21 @@ function dispatchAdmin_(body, actor) {
   if (action === 'resolveOrderRequest') return resolveOrderRequest_(body, actor);
   if (action === 'verifyPayment') return verifyPayment_(body, actor);
   throw new Error('unknown action');
+}
+
+function imageUploadAuthorization_(actor) {
+  if (!actor || actor.role === 'viewer') throw new Error('Only product editors can upload photos.');
+  rateLimit_('image-upload-signatures', 60, 3600);
+  const apiKey = secret_('CLOUDINARY_API_KEY', '');
+  const secret = secret_('CLOUDINARY_API_SECRET', '');
+  if (!!apiKey !== !!secret) throw new Error('Cloudinary signed upload configuration is incomplete.');
+  if (!apiKey) return { mode: 'unsigned' }; // Existing deployments keep working until upgraded.
+  const cloudName = secret_('CLOUDINARY_CLOUD_NAME', 'malfl6xv');
+  const preset = secret_('CLOUDINARY_SIGNED_UPLOAD_PRESET', '');
+  if (!preset || !/^[a-z0-9_-]+$/i.test(cloudName)) throw new Error('Configure a signed Cloudinary upload preset and cloud name.');
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const input = 'timestamp=' + timestamp + '&upload_preset=' + preset + secret;
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_1, input);
+  const signature = bytes.map(b => ('0' + ((b + 256) % 256).toString(16)).slice(-2)).join('');
+  return { mode: 'signed', cloudName: cloudName, uploadPreset: preset, apiKey: apiKey, timestamp: timestamp, signature: signature };
 }

@@ -1,3 +1,5 @@
+> Current release: see AUDIT-COMPLETION.md for API 26, new shop tools, setup and outstanding live checks.
+
 # Phase 1 update - analytics correctness
 
 This build is based on `dsb-analytics-v3-resettable-clean.zip`. Keep that ZIP as
@@ -92,7 +94,7 @@ Apps Script still scans the sheet; this is not an indexed database.
 
 ## Admin access and optional staff
 
-Your existing `ADMIN_KEY` remains the Owner login. Keys are kept in browser memory,
+Backend API 26 keeps your existing `ADMIN_KEY` as the Owner login, with no minimum length requirement. The placeholder `change-this-secret-key` is still rejected. Keys are kept in browser memory,
 not saved with drafts. Manage optional staff in Apps Script **Project Settings →
 Script properties**, under `ADMIN_STAFF_JSON`:
 
@@ -126,9 +128,23 @@ owner and authorize it. Keep its timer trigger; customer confirmation does not
 wait for Telegram. Retried notifications can occasionally repeat, but cannot
 create another order. Do not rerun setup for every website update.
 
-Keep the existing Cloudinary cloud name and unsigned upload preset in `admin.js`.
-Uploads accept JPEG, PNG and WebP up to 15 MB and resize large images. Alternatively,
-paste an image URL. API, UPI and delivery settings remain in their existing locations.
+Keep the existing Cloudinary cloud name and unsigned upload preset in `admin.js` until
+signed uploads are configured. JPEG, PNG and WebP uploads accept up to 15 MB input,
+with the existing resize/compression behaviour and no separate 5 MB prepared-image cap. This browser check does not stop someone
+from calling a public unsigned preset directly. In Cloudinary Settings → Upload →
+Upload Presets, restrict allowed formats, incoming file size and overwrite behavior,
+set usage alerts, and inspect account usage. These account settings must be verified
+in your own Cloudinary account.
+
+For signed uploads, create a separate **signed** Cloudinary preset and add the
+`CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_SIGNED_UPLOAD_PRESET`, and
+optionally `CLOUDINARY_CLOUD_NAME` to Apps Script Script Properties. Never place the
+API secret in GitHub, the browser, or the Sheet. The backend authenticates an editor
+and issues a timestamped signature; incomplete setup produces an error rather than
+falling back to unsigned. Test uploading in staging, then disable/delete the old
+public unsigned preset in Cloudinary. Once disabled, older admin deployments that
+still use it will fail to upload. Pasting an image URL remains available. API, UPI
+and delivery settings remain in their existing locations.
 
 ## Troubleshooting
 

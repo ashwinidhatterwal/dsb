@@ -55,7 +55,14 @@ export async function generateStaticProducts(destination,rows,template,site){
    if(!image || !Number.isFinite(pricing.min) || pricing.min<=0)return [];
    const out=String(p.stock).toLowerCase()==='out of stock'||((p.stockqty??p.stockQty)!=null&&String(p.stockqty??p.stockQty)!==''&&Number(p.stockqty??p.stockQty)<=0);
    const tag=(name,value)=>`<g:${name}>${esc(value)}</g:${name}>`;
-   return [`<item><title>${esc(seo.name(p))}</title><description>${esc(seo.description(p))}</description><link>${esc(site+'/'+productPath(p.id))}</link>${tag('id',p.id)}${tag('image_link',image)}${tag('availability',out?'out_of_stock':'in_stock')}${tag('condition','new')}${tag('price',pricing.min.toFixed(2)+' INR')}${p.brand?tag('brand',p.brand):''}${p.gtin?tag('gtin',p.gtin):tag('identifier_exists','no')}${p.category?tag('product_type',p.category):''}</item>`];
+   // Keep one feed item per product, selecting an actually available priced size.
+   const stock=Object.fromEntries(String(p.sizestock||'').split(',').filter(x=>x.includes('=')).map(x=>{const [size,qty]=x.split('=');return [size.trim(),Number(qty)];}));
+   const available=pricing.sizes.filter(size=>!String(p.sizestock||'').trim() || stock[size]>0).sort((a,b)=>pricing.priceFor(a)-pricing.priceFor(b));
+   const selected=available[0] || pricing.sizes.slice().sort((a,b)=>pricing.priceFor(a)-pricing.priceFor(b))[0];
+   const feedPrice=selected?pricing.priceFor(selected):pricing.min;
+   const feedLink=site+'/'+productPath(p.id)+(selected?'?size='+encodeURIComponent(selected):'');
+   const feedOut=out || (pricing.sizes.length>0 && available.length===0);
+   return [`<item><title>${esc(seo.name(p))}</title><description>${esc(seo.description(p))}</description><link>${esc(feedLink)}</link>${tag('id',p.id)}${tag('image_link',image)}${tag('availability',feedOut?'out_of_stock':'in_stock')}${tag('condition','new')}${tag('price',feedPrice.toFixed(2)+' INR')}${p.brand?tag('brand',p.brand):''}${p.gtin?tag('gtin',p.gtin):tag('identifier_exists','no')}${p.category?tag('product_type',p.category):''}</item>`];
  }).join('');
  const merchant=`<?xml version="1.0" encoding="UTF-8"?>\n<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0"><channel><title>Dhatterwal Suhag Bhandar</title><link>${esc(site)}/</link><description>Live product catalogue</description>${merchantItems}</channel></rss>\n`;
  await fs.writeFile(path.join(destination,'merchant-feed.xml'),merchant);

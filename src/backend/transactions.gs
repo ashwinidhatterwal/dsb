@@ -55,24 +55,19 @@ function finishTransaction_(sheet, row, data, committed, stockAlreadyApplied) {
   SpreadsheetApp.flush();
 }
 function stockPlan_(items, sheets) {
-  const grouped = new Map();
-  items.filter(x => x.tracked).forEach(x => {
-    if (!grouped.has(x.id)) grouped.set(x.id, {
-      ...x,
-      qty: 0
-    });
-    grouped.get(x.id).qty += x.qty;
+  const grouped=new Map();
+  items.filter(x=>x.tracked || x.sizeStockRaw).forEach(x=>{
+    if(!grouped.has(x.id))grouped.set(x.id,{item:x,qty:0,bySize:{}});
+    const group=grouped.get(x.id);group.qty+=x.qty;group.bySize[x.size||'']=(group.bySize[x.size||'']||0)+x.qty;
   });
-  const statusCol = sheets.productHeads.indexOf('stock');
-  return Array.from(grouped.values()).map(x => {
-    const oldStatus = statusCol < 0 ? null : sheets.productData[x.rowIndex][statusCol];
-    return {
-      id: x.id,
-      beforeQty: x.availableQty,
-      afterQty: x.availableQty - x.qty,
-      beforeStatus: oldStatus,
-      afterStatus: oldStatus === null ? null : x.availableQty === x.qty ? 'out of stock' : oldStatus
-    };
+  const statusCol=sheets.productHeads.indexOf('stock');
+  return Array.from(grouped.values()).map(group=>{
+    const x=group.item, oldStatus=statusCol<0?null:sheets.productData[x.rowIndex][statusCol];
+    const stock=x.sizeStockRaw?parseSizeStock_(x.sizeStockRaw,parseSizes_(sheets.productData[x.rowIndex][sheets.productHeads.indexOf('sizes')])):null;
+    if(stock)Object.keys(group.bySize).forEach(size=>{stock[size]-=group.bySize[size];if(stock[size]<0)throw new Error('Insufficient size stock.');});
+    const beforeQty=stock?Object.values(stock).reduce((a,b)=>a+b,0)+group.qty:x.availableQty;
+    return {id:x.id,beforeQty:beforeQty,afterQty:beforeQty-group.qty,beforeStatus:oldStatus,afterStatus:oldStatus===null?null:beforeQty===group.qty?'out of stock':oldStatus,
+      ...(stock?{beforeSizeStock:x.sizeStockRaw,afterSizeStock:serializeSizeStock_(stock)}:{})};
   });
 }
 function applyStockPlan_(plan, forward, sheets) {
@@ -100,6 +95,7 @@ function applyStockPlan_(plan, forward, sheets) {
     const row = rows[x.id];
     if (!row) throw new Error('Inventory recovery cannot find product ' + x.id + '. Restore it before retrying.');
     add(qtyCol + 1, row, forward ? x.afterQty : x.beforeQty);
+    if(x.beforeSizeStock !== undefined){const sizeCol=heads.indexOf('sizestock');if(sizeCol<0)throw new Error('Size inventory column missing; restore it before recovery.');add(sizeCol+1,row,forward?x.afterSizeStock:x.beforeSizeStock);}
     const status = forward ? x.afterStatus : x.beforeStatus;
     if (statusCol >= 0 && status !== null) add(statusCol + 1, row, status);
   });
@@ -125,18 +121,23 @@ function statusStockPlan_(orderId, oldStatus, newStatus) {
     statusCol = heads.indexOf('stock');
   if (qtyCol < 0) return [];
   const reactivating = oldStatus === 'Cancelled';
-  return items.map(item => {
+  const grouped={};items.forEach(item=>{const group=grouped[item.id]||(grouped[item.id]={id:item.id,qty:0,sizes:{}});group.qty+=item.qty;group.sizes[item.size||'']=(group.sizes[item.size||'']||0)+item.qty;});
+  return Object.values(grouped).map(item => {
     const row = data.slice(1).find(r => String(r[idCol]) === item.id);
     if (!row) {
       if (reactivating) throw new Error('Cannot reactivate: product ' + item.id + ' was deleted.');
       return null;
     }
-    if (row[qtyCol] === '' || row[qtyCol] == null) return null;
-    const beforeQty = Number(row[qtyCol]),
-      afterQty = beforeQty + (reactivating ? -item.qty : item.qty);
+    const rawSize=heads.indexOf('sizestock')<0?'':row[heads.indexOf('sizestock')];
+    const sizeStock=parseSizeStock_(rawSize,parseSizes_(heads.indexOf('sizes')<0?'':row[heads.indexOf('sizes')]));
+    if(sizeStock)Object.keys(item.sizes).forEach(size=>{if(sizeStock[size]===undefined)throw new Error('Cannot safely restore size inventory for '+item.id+'. Restore the original size or reconcile this order first.');sizeStock[size]+=(reactivating?-1:1)*item.sizes[size];if(sizeStock[size]<0)throw new Error('Insufficient stock for size '+size);});
+    if (!sizeStock && (row[qtyCol] === '' || row[qtyCol] == null)) return null;
+    const afterQty = sizeStock ? Object.values(sizeStock).reduce((a,b)=>a+b,0) : Number(row[qtyCol]) + (reactivating ? -item.qty : item.qty),
+      beforeQty = sizeStock ? afterQty + (reactivating ? item.qty : -item.qty) : Number(row[qtyCol]);
     if (!Number.isInteger(beforeQty) || beforeQty < 0 || afterQty < 0) throw new Error('Insufficient or invalid stock for ' + item.id + '.');
     return {
       id: item.id,
+      ...(sizeStock?{beforeSizeStock:String(rawSize),afterSizeStock:serializeSizeStock_(sizeStock)}:{}),
       beforeQty: beforeQty,
       afterQty: afterQty,
       beforeStatus: statusCol < 0 ? null : row[statusCol],

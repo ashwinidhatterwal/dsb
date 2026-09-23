@@ -20,7 +20,7 @@ function renderCartDrawer() {
   if (!items.length) {
     wrap.innerHTML = `
       <div class="cart-header">
-        <div><span class="cart-eyebrow">SHOPPING BAG</span><h2>Your cart</h2></div>
+        <div><span class="cart-eyebrow">SHOPPING BAG</span><h2>Your cart</h2><button type="button" class="ghost-btn" id="forgetCheckoutInfo">Forget saved checkout details</button></div>
         <button class="closebtn" id="cartClose" aria-label="Close cart">✕</button>
       </div>
       <div class="cart-main" id="cartMain">${cartAdjustmentHtml()}
@@ -50,7 +50,7 @@ function renderCartDrawer() {
   const upiSaving = Math.max(0, Number(checkoutState.feeConfig?.codCharge) || 0);
   wrap.innerHTML = `
     <div class="cart-header">
-      <div><span class="cart-eyebrow">SHOPPING BAG · ${CartStore.count()} ITEM${CartStore.count() === 1 ? '' : 'S'}</span><h2>Your cart</h2></div>
+      <div><span class="cart-eyebrow">SHOPPING BAG · ${CartStore.count()} ITEM${CartStore.count() === 1 ? '' : 'S'}</span><h2>Your cart</h2><button type="button" class="ghost-btn" id="forgetCheckoutInfo">Forget saved checkout details</button></div>
       <button class="closebtn" id="cartClose" aria-label="Close cart">✕</button>
     </div>
     <div class="cart-main" id="cartMain">${cartAdjustmentHtml()}
@@ -70,7 +70,7 @@ function renderCartDrawer() {
               </div>
               <div class="cart-item-actions">
                 <div class="stepper" data-id="${escapeHtml(product.id)}">
-                  <button type="button" data-act="dec" aria-label="Decrease quantity">−</button><span>${qty}</span><button type="button" data-act="inc" aria-label="Increase quantity" ${product.stockQty !== null && CartStore.qtyForProduct(product.productId || product.id) >= product.stockQty ? 'disabled' : ''}>+</button>
+                  <button type="button" data-act="dec" aria-label="Decrease quantity">−</button><span>${qty}</span><button type="button" data-act="inc" aria-label="Increase quantity" ${product.stockQty !== null && cartStockUsed(product) >= product.stockQty ? 'disabled' : ''}>+</button>
                 </div>
                 <button type="button" class="cart-remove" data-act="remove" data-id="${escapeHtml(product.id)}" aria-label="Remove ${escapeHtml(product.name)}">Remove</button>
               </div>
@@ -132,7 +132,7 @@ function renderCartDrawer() {
     const entry = cart[id];
     if (!entry) return;
     $('[data-act="inc"]', stepper).addEventListener('click', async () => {
-      if (entry.product.stockQty !== null && CartStore.qtyForProduct(entry.product.productId || entry.product.id) >= entry.product.stockQty) {
+      if (entry.product.stockQty !== null && cartStockUsed(entry.product) >= entry.product.stockQty) {
         showToast(`Only ${entry.product.stockQty} in stock`);
         return;
       }
@@ -153,6 +153,7 @@ function renderCartDrawer() {
     updateCartBadge();
     renderCartDrawer();
   }));
+  $('#forgetCheckoutInfo')?.addEventListener('click', forgetSavedCheckoutInfo);
   $('#custName').addEventListener('input', e => {
     checkoutState.name = e.target.value;
     saveCheckoutInfo();

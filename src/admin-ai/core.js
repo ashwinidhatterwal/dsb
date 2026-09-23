@@ -74,6 +74,7 @@ function clearSession() {
   if (applying) return showToast('Wait for the current change to finish saving.');
   // In-flight AI replies/uploads belong to the old context and are discarded.
   sessionEpoch++;
+  qs('#aiContinueBatch')?.remove(); pendingResumeBatch=null;
   busy = false;
   uploading = false;
   pendingImageUrls = [];

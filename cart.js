@@ -18,10 +18,18 @@ function notifyCartChanged() {
 function sizeCartKey(id, size) {
   return size ? String(id) + '::size:' + encodeURIComponent(size) : String(id);
 }
+function sizeStockQuantity(product,size) {
+  const raw=String(product.sizestock||'').trim();if(!raw)return null;
+  const pair=raw.split(',').map(x=>x.trim().split('=')).find(x=>x[0]?.trim()===size);
+  return pair && /^\d+$/.test(String(pair[1]||'').trim())?Number(pair[1]):0;
+}
+function cartStockUsed(product) {return product.sizeTracked?CartStore.qtyFor(product.id):CartStore.qtyForProduct(product.productId||product.id);}
 function sizedCartProduct(product, size) {
   return size ? {
     ...product,
     price: DSB_SEO.pricing(product).priceFor(size),
+    sizeTracked: sizeStockQuantity(product,size)!==null,
+    stockQty: sizeStockQuantity(product,size) ?? product.stockQty,
     productId: product.productId || product.id,
     id: sizeCartKey(product.productId || product.id, size),
     size
@@ -161,7 +169,7 @@ const CartStore = function () {
       if (delta > 0) {
         if (product.sizes?.length && !product.sizes.includes(product.size)) return cart[product.id]?.qty || 0;
         const baseId = product.productId || product.id;
-        const used = Object.values(cart).filter(x => (x.product.productId || x.product.id) === baseId).reduce((n, x) => n + x.qty, 0);
+        const used = product.sizeTracked ? (cart[product.id]?.qty||0) : Object.values(cart).filter(x => (x.product.productId || x.product.id) === baseId).reduce((n, x) => n + x.qty, 0);
         if (product.stock === 'out of stock' || product.stockQty != null && used + delta > product.stockQty) return cart[product.id]?.qty || 0;
       }
       const nextQty = Math.min(999, (cart[product.id]?.qty || 0) + delta);
@@ -213,8 +221,9 @@ const CartStore = function () {
           return;
         }
         cart[id].product = sizedCartProduct(fresh, old.size || '');
-        if (fresh.stockQty != null) {
-          const available = Math.max(0, fresh.stockQty - (used[baseId] || 0));
+        const variant=cart[id].product;
+        if (variant.stockQty != null) {
+          const available = Math.max(0, variant.stockQty - (variant.sizeTracked ? 0 : used[baseId] || 0));
           cart[id].qty = Math.min(cart[id].qty, available);
           if (!cart[id].qty) {
             removed.push(old.name);

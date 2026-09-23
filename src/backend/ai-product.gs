@@ -11,7 +11,7 @@
  * Backward compatibility: OPENAI_API_KEY and OPENAI_MODEL are still accepted.
  */
 function generateAiProductDraft_(body, actor) {
-  const startedAt = Date.now();
+  const startedAt = Date.now(); aiBudget_();
   const config = aiProviderConfig_(body && body.modelConfigId);
   const requestedReasoningEffort = sanitizeAiReasoningEffort_(body && body.reasoningEffort, config.supportedEfforts);
   if (requestedReasoningEffort) config.reasoningEffort = requestedReasoningEffort;
@@ -50,7 +50,7 @@ function generateAiProductDraft_(body, actor) {
     provider: config.providerLabel,
     apiType: config.apiType,
     reasoningEffort: config.reasoningEffort || '',
-    elapsedMs: Math.max(0, Date.now() - startedAt)
+    usage:aiUsage_(), elapsedMs: Math.max(0, Date.now() - startedAt)
   };
 }
 
@@ -277,9 +277,10 @@ function aiFetchJson_(config, payload) {
   };
   let response;
   try {
+    aiBudgetBeforeCall_();
     response = UrlFetchApp.fetch(config.endpoint, options);
   } catch (err) {
-    throw new Error('AI provider connection failed: ' + String(err && err.message || err).slice(0, 300));
+    throw new Error((config.providerLabel || 'AI provider') + ' connection failed or request budget reached. Retry or continue the remaining batch.');
   }
   let status = response.getResponseCode();
 
@@ -287,6 +288,7 @@ function aiFetchJson_(config, payload) {
   // quota, authentication, invalid model, or rate-limit errors.
   if (status === 502 || status === 503 || status === 504) {
     Utilities.sleep(300);
+    aiBudgetBeforeCall_();
     response = UrlFetchApp.fetch(config.endpoint, options);
     status = response.getResponseCode();
   }
@@ -297,8 +299,9 @@ function aiFetchJson_(config, payload) {
   catch (_) { throw new Error('AI provider returned an unreadable response (HTTP ' + status + ').'); }
   if (status < 200 || status >= 300) {
     const message = aiProviderErrorMessage_(data) || ('HTTP ' + status);
-    throw new Error('AI generation failed: ' + message.slice(0, 400));
+    throw new Error((config.providerLabel || 'AI provider') + ' / ' + config.model + ' (HTTP ' + status + '): ' + message.slice(0, 400));
   }
+  aiRecordUsage_(data);
   return data;
 }
 
@@ -535,3 +538,21 @@ function cleanAiDraft_(draft) {
   if (out.stock && !/^(in stock|out of stock)$/i.test(out.stock)) delete out.stock;
   return out;
 }
+
+// Soft request budget: Apps Script cannot cancel an in-flight UrlFetch call.
+var DSB_AI_BUDGET_=null;
+function aiBudget_() {
+  if(!DSB_AI_BUDGET_)DSB_AI_BUDGET_={startedAt:Date.now(),calls:0,inputTokens:0,outputTokens:0,usageResponses:0};
+  return DSB_AI_BUDGET_;
+}
+function aiBudgetAvailable_() {const b=aiBudget_();return b.calls<4 && Date.now()-b.startedAt<75000;}
+function aiBudgetBeforeCall_() {
+  if(!aiBudgetAvailable_())throw new Error('AI request budget reached. Review completed results and continue with a new request.');
+  aiBudget_().calls++;
+}
+function aiRecordUsage_(data) {
+  const u=data && data.usage;if(!u)return;
+  const input=Number(u.input_tokens??u.prompt_tokens),output=Number(u.output_tokens??u.completion_tokens);
+  if(Number.isFinite(input)&&Number.isFinite(output)&&input>=0&&output>=0){const b=aiBudget_();b.inputTokens+=input;b.outputTokens+=output;b.usageResponses++;}
+}
+function aiUsage_() {const b=aiBudget_();return {providerCalls:b.calls,inputTokens:b.usageResponses?b.inputTokens:null,outputTokens:b.usageResponses?b.outputTokens:null,partial:b.usageResponses<b.calls};}

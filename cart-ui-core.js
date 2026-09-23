@@ -267,3 +267,11 @@ function buildUpiLink(amount, orderId) {
   return `upi://pay?${params.toString()}`;
 }
 
+
+function forgetSavedCheckoutInfo() {
+  try { localStorage.removeItem(CHECKOUT_INFO_KEY); } catch (_) {}
+  ['name','phone','address','pinCode'].forEach(key=>checkoutState[key]='');
+  checkoutQuote = null;
+  renderCartDrawer();
+  showToast('Saved checkout details cleared.');
+}

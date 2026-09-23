@@ -3,7 +3,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const elements = new Map();
 function element(key) {
-  if (!elements.has(key)) elements.set(key,{value:'',innerHTML:'',textContent:'',hidden:false,disabled:false,dataset:{},style:{},classList:{add(){},remove(){},contains(){return false}},addEventListener(){},focus(){},scrollIntoView(){},setAttribute(){},querySelectorAll(){return []},scrollHeight:40});
+  if (!elements.has(key)) elements.set(key,{value:'',innerHTML:'',textContent:'',hidden:false,disabled:false,dataset:{},style:{},classList:{add(){},remove(){},contains(){return false}},remove(){},addEventListener(){},focus(){},scrollIntoView(){},setAttribute(){},querySelectorAll(){return []},scrollHeight:40});
   return elements.get(key);
 }
 const selected = [{dataset:{aiField:'description'}}];

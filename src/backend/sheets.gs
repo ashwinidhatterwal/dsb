@@ -86,7 +86,9 @@ function validRequestId_(id) {
 }
 function withWriteLock_(fn) {
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(10000)) return {
+  const waitStarted=Date.now(), acquired=lock.tryLock(10000);
+  DSB_REQUEST_LOCK_WAIT_MS_ += Date.now()-waitStarted;
+  if (!acquired) return {
     success: false,
     code: 'busy',
     error: 'The shop is busy. Please retry in a moment.'
@@ -109,5 +111,26 @@ function parseSizes_(value) {
   return [...new Set(String(value || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean))];
 }
 function ensureColumn_(sheet, name) {
-  if (headers_(sheet).indexOf(name) < 0) sheet.getRange(1, sheet.getLastColumn() + 1).setValue(name);
+  if (headers_(sheet).indexOf(String(name).trim().toLowerCase()) < 0) sheet.getRange(1, sheet.getLastColumn() + 1).setValue(name);
+}
+
+// Keep checkout payloads unchanged: canonicalization is for identity comparisons only.
+function canonicalPhone_(value) {
+  const digits = cleanPhone_(value);
+  return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits.length === 11 && digits.startsWith('0') ? digits.slice(1) : digits;
+}
+function phoneIdentityVariants_(value) {
+  const raw = cleanPhone_(value), canonical = canonicalPhone_(value);
+  return [...new Set(canonical.length === 10 ? [raw, canonical, '91' + canonical, '0' + canonical] : [raw])];
+}
+function knownCost_(value) {
+  return value !== '' && value !== null && value !== undefined && String(value).trim() !== '' && Number.isFinite(Number(value)) && Number(value) >= 0;
+}
+function orderItemCostKnown_(item) {
+  const flag = item.costKnown !== undefined ? item.costKnown : item.costknown;
+  const cost = item.costPrice !== undefined ? item.costPrice : item.costprice;
+  if (flag === false || String(flag).toLowerCase() === 'no') return false;
+  if (flag === true || String(flag).toLowerCase() === 'yes') return knownCost_(cost);
+  // Legacy zero snapshots cannot distinguish missing cost from a genuinely free item.
+  return knownCost_(cost) && Number(cost) > 0;
 }

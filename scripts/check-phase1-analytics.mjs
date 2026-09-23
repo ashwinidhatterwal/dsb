@@ -25,7 +25,7 @@ function report(events=[],orders=[],options={}) {
   const c=vm.createContext({console,Date:Clock,Session:{getScriptTimeZone:()=>tz},Utilities:{parseDate:parseDay,formatDate:(date,zone,format)=>dateKey(date,zone)},PropertiesService:{getScriptProperties:()=>({getProperty:()=>options.reset || null})}});
   vm.runInContext(backend,c);
   Object.assign(c,{cacheGetChunkedJson_:()=>null,cachePutJson_:()=>{},analyticsSheet_:()=> 'events',getSheet_:name=>name,rowsAsObjects_:name=>name==='events'?events:name==='Orders'?orders:name==='OrderItems'?(options.items||[]):name==='Products'?(options.products||[]):[]});
-  return c.getAnalyticsReport_({days:options.days||7});
+  return c.getAnalyticsReport_({days:options.days||7,...(options.range||{})});
 }
 const ev=(visitor,session,event,date='2026-09-22T10:00:00Z',extra={})=>({date,visitor,session,event,...extra});
 const order=(visitor,session,status='Pending',extra={})=>({orderid:'O-'+visitor,date:'2026-09-22T11:00:00Z',analyticsvisitor:visitor,analyticssession:session,status,total:100,...extra});
@@ -104,3 +104,11 @@ const cached = new Map(), cache={get:key=>cached.get(key)||null,put:(key,value)=
 const cacheVM=vm.createContext({CacheService:{getScriptCache:()=>cache}});vm.runInContext(backend,cacheVM);
 const large={...r,example:'हिंदी'.repeat(7000)};cacheVM.cachePutJson_('report',large,60);assert(cached.has('report:meta'));assert.equal(JSON.stringify(cacheVM.cacheGetChunkedJson_('report')),JSON.stringify(large));
 console.log('PASS: admin analytics rendering, full-list sort wiring, loading/error recovery and chunked report caching (mock DOM; no visual certification).');
+
+for(const tz of ['Asia/Kolkata','America/New_York']){
+ const start=parseDay('2026-09-19',tz),end=parseDay('2026-09-21',tz);
+ const custom=report([ev('a','a','page_view',start.toISOString()),ev('b','b','page_view',new Date(+end-1).toISOString()),ev('c','c','page_view',end.toISOString())],[],{tz,range:{startDate:'2026-09-19',endDate:'2026-09-20'}});
+ assert.equal(custom.metrics.visitors.value,2);assert.equal(custom.days,2);assert.equal(custom.includesPartialToday,false);assert.equal(custom.series[0].key,'2026-09-19');assert.equal(custom.series.at(-1).key,'2026-09-20');
+}
+for(const range of [{startDate:'2026-02-30',endDate:'2026-09-20'},{startDate:'2026-09-22',endDate:'2026-09-21'},{startDate:'2026-09-20',endDate:'2026-09-23'}])assert.throws(()=>report([],[],{range}));
+console.log('PASS: custom report boundaries, dates, future/reversed ranges and completed-day labels.');

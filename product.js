@@ -156,6 +156,7 @@ function renderProduct(p) {
       <div class="section-title"><h2>Recently viewed</h2></div>
       <div class="related-rail" id="productRecentRail"></div>
     </div>
+    ${/^https:\/\/(?:www\.)?instagram\.com\/(?:p|reel|tv)\/[a-z0-9_-]+\/?(?:\?[^\s<>]*)?$/i.test(p.reellink || '') ? `<p><a class="ghost-btn" href="${escapeHtml(p.reellink)}" target="_blank" rel="noopener noreferrer">Watch product reel / post</a></p>` : ''}
     <div class="reviews-section">
       <div class="section-title"><h2>Ratings & feedback</h2></div>
       <div id="reviewSummary" class="review-summary"></div>
@@ -416,7 +417,7 @@ function renderPdActions(p) {
   }
   const variant = sizedCartProduct(p, p.sizes?.includes(selectedSize) ? selectedSize : '');
   const qty = CartStore.qtyFor(variant.id);
-  const maxReached = p.stockQty !== null && CartStore.qtyForProduct(p.id) >= p.stockQty;
+  const maxReached = variant.stockQty !== null && cartStockUsed(variant) >= variant.stockQty;
   const actions = $('#pdActions'),
     state = JSON.stringify([variant.id, qty, maxReached]);
   if (actions.dataset.state === state && actions._product === p) return;
@@ -516,7 +517,7 @@ async function loadReviews(productId, force = false) {
     return;
   }
   try {
-    const reviews = await cachedPublicJson('reviews-' + productId, `${CONFIG.SHEET_API_URL}?action=reviews&productId=${encodeURIComponent(productId)}`, 180000, force);
+    const reviews = await cachedPublicJson('reviews-' + productId, `${CONFIG.SHEET_API_URL}?action=reviews&productId=${encodeURIComponent(productId)}`, 30000, force);
     if (!Array.isArray(reviews)) throw new Error('Invalid review response');
     if (CURRENT_PRODUCT?.id !== productId) return;
     CURRENT_REVIEWS = reviews;
@@ -597,7 +598,7 @@ async function submitReview() {
       })
     });
     if (data.error) throw new Error(data.error);
-    status_(statusEl, data.verified ? 'Thanks! Your review is marked as a verified purchase.' : 'Thanks for your feedback!', true);
+    status_(statusEl, data.verified ? 'Thanks! Your review is marked as a verified purchase.' : 'Thanks! Your review is awaiting moderation.', true);
     window.DSBAnalytics?.track('review_submitted', { productId: CURRENT_PRODUCT.id, verified: !!data.verified });
     $('#revName').value = '';
     $('#revComment').value = '';
@@ -705,10 +706,10 @@ function updateSizeOptions(p) {
     field.className = 'product-sizes';
     $('#pdPurchase').prepend(field);
   }
-  const signature = JSON.stringify([p.sizes, selectedSize]);
+  const signature = JSON.stringify([p.sizes, p.sizestock, selectedSize]);
   if (field.dataset.signature === signature) return;
   field.dataset.signature = signature;
-  field.innerHTML = `<legend>Choose size</legend><div class="size-options">${p.sizes.map(size => `<button type="button" class="size-option" data-size="${escapeHtml(size)}" aria-pressed="${selectedSize === size}">${escapeHtml(size)}</button>`).join('')}</div><p class="hint" id="sizeHelp">Select a size before adding to cart.</p>`;
+  field.innerHTML = `<legend>Choose size</legend><div class="size-options">${p.sizes.map(size => `<button type="button" class="size-option" data-size="${escapeHtml(size)}" ${sizeStockQuantity(p,size) === 0 ? 'disabled' : ''} aria-pressed="${selectedSize === size}">${escapeHtml(size)}</button>`).join('')}</div><p class="hint" id="sizeHelp">Select a size before adding to cart.</p>`;
   field.querySelectorAll('.size-option').forEach(btn => btn.addEventListener('click', () => {
     selectedSize = btn.dataset.size;
     field.querySelectorAll('.size-option').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.size === selectedSize)));
