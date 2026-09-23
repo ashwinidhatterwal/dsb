@@ -8,7 +8,18 @@ function customerIdentity_(token) {
   const response = UrlFetchApp.fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(key), {
     method: 'post', contentType: 'application/json', payload: JSON.stringify({idToken: token}), muteHttpExceptions: true
   });
-  if (response.getResponseCode() !== 200) throw new Error('Sign-in could not be verified. Please sign in again or shop as a guest.');
+  if (response.getResponseCode() !== 200) {
+    // Firebase responses can include account details or URLs. Expose only known,
+    // non-sensitive error identifiers so the owner can fix the configuration.
+    let reason = '';
+    try { reason = String(JSON.parse(response.getContentText()).error?.message || ''); } catch (_) {}
+    const known = ['API_KEY_HTTP_REFERRER_BLOCKED', 'API_KEY_SERVICE_BLOCKED', 'API_KEY_INVALID',
+      'INVALID_API_KEY', 'INVALID_ID_TOKEN', 'TOKEN_EXPIRED', 'PROJECT_NOT_FOUND',
+      'CONFIGURATION_NOT_FOUND', 'OPERATION_NOT_ALLOWED'];
+    const tag = known.find(code => reason.includes(code)) || 'HTTP_' + response.getResponseCode();
+    console.error('Firebase customer authentication failed: ' + tag); // Never log the token or API key.
+    throw new Error('Sign-in verification failed (' + tag + '). Please contact the shop or continue as a guest.');
+  }
   const user = (JSON.parse(response.getContentText()).users || [])[0];
   // Decode claims only AFTER Google's verification, and enforce this project's identity.
   const claims = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(token.split('.')[1])).getDataAsString());

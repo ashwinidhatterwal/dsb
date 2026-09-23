@@ -39,6 +39,10 @@ Redeploy the existing Apps Script web app as a new version, preserving the curre
 
 Customers and CustomerAddresses sheets are created on the first successful save. CustomerUID and CustomerItems columns are added to Orders on the first authenticated order. Existing order rows are untouched. Do not add rows/columns manually unless repairing a schema.
 
+## If the profile shows “Sign-in verification failed”
+
+Google sign-in may succeed in the browser while Apps Script's `accounts:lookup` call fails. Firebase key restrictions can affect a server-side request differently from a browser request. In the same Google Cloud project, go to APIs & Services > Credentials and inspect the key used for the `CUSTOMER_FIREBASE_API_KEY` Script Property. If it permits only website HTTP referrers, create a separate API key for Apps Script: set Application restrictions to **None**, and API restrictions to **Restrict key** with **Identity Toolkit API** allowed. Put this separate key only in the Script Property; leave the `config.js` browser key as provided by Firebase. You may need to enable the Identity Toolkit API in the project. You do not need a service account or a new website ZIP for a Script Property change. If the key was changed, reload the profile and try again. The updated backend displays a short Firebase error identifier without exposing the ID token or key; report that identifier if the error persists.
+
 ## 3. Publish and verify
 
 Publish the whole website ZIP, including .github, source modules and generated code. Run `node scripts/build.mjs` after editing backend sources, then `node scripts/run-checks.mjs`.

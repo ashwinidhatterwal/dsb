@@ -13,7 +13,14 @@ assert.equal(c.customerIdentity_(token()).uid,'alice');
 for(const changes of [{aud:'other'},{iss:'other'},{sub:'bob'},{exp:now-1},{auth_time:0},{firebase:{sign_in_provider:'password'}}])assert.throws(()=>c.customerIdentity_(token(changes)));
 user.disabled=true;assert.throws(()=>c.customerIdentity_(token()));delete user.disabled;
 user.validSince=now;assert.throws(()=>c.customerIdentity_(token()));delete user.validSince;
-status=400;assert.throws(()=>c.customerIdentity_(token()));status=200;
+status=400;assert.throws(()=>c.customerIdentity_(token()),/HTTP_400/);
+let upstreamMessage='API_KEY_HTTP_REFERRER_BLOCKED';
+c.UrlFetchApp.fetch=()=>({getResponseCode:()=>403,getContentText:()=>JSON.stringify({error:{message:upstreamMessage}})});
+assert.throws(()=>c.customerIdentity_(token()),/API_KEY_HTTP_REFERRER_BLOCKED/);
+upstreamMessage='INVALID_ID_TOKEN';assert.throws(()=>c.customerIdentity_(token()),/INVALID_ID_TOKEN/);
+upstreamMessage='some email@example.test and key=private';assert.throws(()=>c.customerIdentity_(token()),/HTTP_403/);
+status=200;
+c.UrlFetchApp.fetch=()=>({getResponseCode:()=>status,getContentText:()=>JSON.stringify({users:[user]})});
 assert.throws(()=>c.customerIdentity_('alice'));assert(fetches>0);
 // Minimal Sheets fixture, including text coercion and exact case-sensitive ID search.
 class Sheet{
