@@ -225,7 +225,11 @@ function safeNumber_(value, fallback) {
   return isFinite(n) ? n : fallback || 0;
 }
 function cleanPhone_(value) {
-  return String(value || '').replace(/\D/g, '');
+  return String(value == null ? '' : value).replace(/\D/g, '');
+}
+function orderSheetRow_(heads, record) {
+  // Sheets interprets an apostrophe prefix as literal text, preserving leading zeros.
+  return heads.map(h => h === 'phone' ? "'" + cleanPhone_(record[h]) : sheetText_(record[h] !== undefined ? record[h] : ''));
 }
 function hashText_(value) {
   const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(value || ''));
@@ -2241,7 +2245,7 @@ function addOrder(o) {
     SpreadsheetApp.flush();
     try {
       applyStockPlan_(data.stock, true, sheets);
-      sheets.orders.appendRow(sheets.orderHeads.map(h => sheetText_(record[h] !== undefined ? record[h] : '')));
+      sheets.orders.appendRow(orderSheetRow_(sheets.orderHeads, record));
       SpreadsheetApp.flush();
       finishTransaction_(journal, jr, data, true, true);
     } catch (err) {
@@ -2279,7 +2283,7 @@ function normalizeAndValidateOrder_(o) {
     code: 'validation_failed',
     error: 'Please provide a valid customer name.'
   };
-  if (!/^\d{10,15}$/.test(phone)) return {
+  if (!/^\d{10,15}$/.test(phone) || /^0+$/.test(phone)) return {
     success: false,
     code: 'validation_failed',
     error: 'Please provide a valid phone number.'
@@ -4490,7 +4494,10 @@ function dispatchAdmin_(body, actor) {
     name: actor.name,
     role: actor.role
   };
-  if (action === 'adminProducts') return getAllProducts(true);
+  if (action === 'adminProducts') {
+    const products = getAllProducts(true);
+    return body.options && body.options.linkPicker ? products.filter(p => !isArchived_(p)).map(p => ({id:p.id, name:p.name})) : products;
+  }
   if (action === 'adminProductsPage') return adminProductsPage_(body.options || {});
   if (action === 'adminOrders') return getAllOrders(body.options);
   if (action === 'adminDashboard') return getDashboardData();

@@ -40,7 +40,7 @@ function validateCheckoutDetails(order) {
     message: 'Enter a name of 2–100 characters.'
   };
   const digits = order.phone.replace(/\D/g, '');
-  if (!/^[+\d\s()-]+$/.test(order.phone) || !/^\d{10,15}$/.test(digits)) return {
+  if (!/^[+\d\s()-]+$/.test(order.phone) || !/^\d{10,15}$/.test(digits) || /^0+$/.test(digits)) return {
     field: 'custPhone',
     message: 'Enter a valid phone number with 10–15 digits.'
   };

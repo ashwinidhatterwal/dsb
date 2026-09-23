@@ -41,7 +41,10 @@ function dispatchAdmin_(body, actor) {
     name: actor.name,
     role: actor.role
   };
-  if (action === 'adminProducts') return getAllProducts(true);
+  if (action === 'adminProducts') {
+    const products = getAllProducts(true);
+    return body.options && body.options.linkPicker ? products.filter(p => !isArchived_(p)).map(p => ({id:p.id, name:p.name})) : products;
+  }
   if (action === 'adminProductsPage') return adminProductsPage_(body.options || {});
   if (action === 'adminOrders') return getAllOrders(body.options);
   if (action === 'adminDashboard') return getDashboardData();

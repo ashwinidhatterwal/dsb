@@ -134,6 +134,7 @@ async function resolveOrderRequest(requestId, requestStatus, resolutionNote) {
 async function adminFetch(url, options = {}) {
   const {
     timeoutMs = 30000,
+    readOnly = false,
     ...requestOptions
   } = options;
   const controller = new AbortController(),
@@ -149,14 +150,23 @@ async function adminFetch(url, options = {}) {
       json: async () => data
     };
   } catch (err) {
-    if (err.name === 'AbortError') throw new Error('Request timed out. A write may already have saved; refresh the list before retrying.');
+    if (err.name === 'AbortError') throw new Error(readOnly ? 'Reading data timed out. Try refreshing this view.' : 'Request timed out. A write may already have saved; refresh the list before retrying.');
     throw err;
   } finally {
     clearTimeout(timer);
   }
 }
-async function adminRead(action, options) {
+const adminReadsInFlight = new Map();
+function adminRead(action, options) {
+  const identity = JSON.stringify([API_URL, ADMIN_KEY, action, options || null]);
+  if (adminReadsInFlight.has(identity)) return adminReadsInFlight.get(identity);
+  const request = performAdminRead(action, options).finally(() => adminReadsInFlight.delete(identity));
+  adminReadsInFlight.set(identity, request);
+  return request;
+}
+async function performAdminRead(action, options) {
   const res = await adminFetch(API_URL, {
+    readOnly: true,
     method: 'POST',
     headers: {
       'Content-Type': 'text/plain;charset=utf-8'

@@ -34,7 +34,11 @@ function safeNumber_(value, fallback) {
   return isFinite(n) ? n : fallback || 0;
 }
 function cleanPhone_(value) {
-  return String(value || '').replace(/\D/g, '');
+  return String(value == null ? '' : value).replace(/\D/g, '');
+}
+function orderSheetRow_(heads, record) {
+  // Sheets interprets an apostrophe prefix as literal text, preserving leading zeros.
+  return heads.map(h => h === 'phone' ? "'" + cleanPhone_(record[h]) : sheetText_(record[h] !== undefined ? record[h] : ''));
 }
 function hashText_(value) {
   const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(value || ''));

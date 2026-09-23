@@ -108,7 +108,7 @@ function addOrder(o) {
     SpreadsheetApp.flush();
     try {
       applyStockPlan_(data.stock, true, sheets);
-      sheets.orders.appendRow(sheets.orderHeads.map(h => sheetText_(record[h] !== undefined ? record[h] : '')));
+      sheets.orders.appendRow(orderSheetRow_(sheets.orderHeads, record));
       SpreadsheetApp.flush();
       finishTransaction_(journal, jr, data, true, true);
     } catch (err) {
@@ -146,7 +146,7 @@ function normalizeAndValidateOrder_(o) {
     code: 'validation_failed',
     error: 'Please provide a valid customer name.'
   };
-  if (!/^\d{10,15}$/.test(phone)) return {
+  if (!/^\d{10,15}$/.test(phone) || /^0+$/.test(phone)) return {
     success: false,
     code: 'validation_failed',
     error: 'Please provide a valid phone number.'

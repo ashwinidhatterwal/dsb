@@ -18,7 +18,7 @@
     if(loaded)return;
     $t('shopToolsStatus').textContent='Loading product selector…';
     try {
-      products=(await adminRead('adminProducts')).filter(p=>String(p.archived||'').toLowerCase()!=='yes');
+      products=(await adminRead('adminProducts', {linkPicker:true})).filter(p=>String(p.archived||'').toLowerCase()!=='yes');
       $t('utmProduct').innerHTML='<option value="">Home / custom shop link</option>'+products.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name||p.id)} · ${escapeHtml(p.id)}</option>`).join('');
       loaded=true;$t('shopToolsStatus').textContent='Choose a product or paste a shop link. Generating links makes no backend request.';
     } catch(e){$t('shopToolsStatus').textContent='Product lookup failed. You can still paste a shop link. '+e.message;}
