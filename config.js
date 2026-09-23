@@ -5,6 +5,8 @@
    Script API and WhatsApp number. See SETUP.md.
    ========================================================= */
 const CONFIG = {
+  // Firebase project and Google provider configured. Publish only after deploying the matching Apps Script backend.
+  CUSTOMER_ACCOUNTS: { enabled: true, firebase: { apiKey: 'AIzaSyBjmTSQowzoT7JKMb8qZVnCGPOJxboLKu0', authDomain: 'dhatterwal-suhag-bhandar.firebaseapp.com', projectId: 'dhatterwal-suhag-bhandar', appId: '1:30784544410:web:725d244eeda310ad0b4923', messagingSenderId: '30784544410', storageBucket: 'dhatterwal-suhag-bhandar.firebasestorage.app' } },
   // Your deployed Apps Script Web App URL (see SETUP.md).
   // Leave blank ('') to use the bundled sample-products.json for local testing.
   SHEET_API_URL: 'https://script.google.com/macros/s/AKfycbybavfXBC-5CNstiZx-giJcngXjHVKA1NljUQ6N55ybOu4OvunkQTVr3IFvLPp_9Ohu/exec',

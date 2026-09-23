@@ -162,12 +162,19 @@ function doPostCore_(e) {
     if (body.action === 'orderResult') return jsonResponse(orderResult(body.requestId, body.phone));
     if (body.action === 'analyticsBatch') return jsonResponse(recordAnalyticsBatch_(body));
 
+    if (String(body.action || '').startsWith('customer.')) return jsonResponse(customerDispatch_(body));
+
     // Public actions — no admin key needed, customers use these from the site.
     if (body.action === 'addReview') {
       return jsonResponse(addReview(body.review || {}));
     }
     if (body.action === 'addOrder') {
-      return jsonResponse(addOrder(body.order || {}));
+      let uid = '';
+      if (body.idToken) {
+        try { uid = customerIdentity_(body.idToken).uid; }
+        catch (_) { return jsonResponse({success:false, code:'customer_auth', error:'We could not verify your account. Retry or continue as a guest.'}); }
+      }
+      return jsonResponse(addOrder(body.order || {}, uid));
     }
     if (body.action === 'trackOrder') {
       return jsonResponse(trackOrder(body.orderId, body.phone));
@@ -328,6 +335,131 @@ function orderItemCostKnown_(item) {
   if (flag === true || String(flag).toLowerCase() === 'yes') return knownCost_(cost);
   // Legacy zero snapshots cannot distinguish missing cost from a genuinely free item.
   return knownCost_(cost) && Number(cost) > 0;
+}
+
+/* Customer convenience API. Identity is verified here; never accept a browser UID. */
+function customerIdentity_(token) {
+  const project = secret_('CUSTOMER_FIREBASE_PROJECT_ID');
+  const key = secret_('CUSTOMER_FIREBASE_API_KEY');
+  if (secret_('CUSTOMER_ACCOUNTS_ENABLED') !== 'true' || !project || !key) throw new Error('Customer accounts are unavailable. You can shop as a guest.');
+  if (typeof token !== 'string' || token.length > 6000 || token.split('.').length !== 3) throw new Error('Please sign in again.');
+  // Online verification is intentional: no hand-written JWT signature verifier or token cache.
+  const response = UrlFetchApp.fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(key), {
+    method: 'post', contentType: 'application/json', payload: JSON.stringify({idToken: token}), muteHttpExceptions: true
+  });
+  if (response.getResponseCode() !== 200) throw new Error('Sign-in could not be verified. Please sign in again or shop as a guest.');
+  const user = (JSON.parse(response.getContentText()).users || [])[0];
+  // Decode claims only AFTER Google's verification, and enforce this project's identity.
+  const claims = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(token.split('.')[1])).getDataAsString());
+  const now = Math.floor(Date.now() / 1000);
+  if (!user || user.disabled || !user.localId || claims.sub !== user.localId || claims.aud !== project ||
+      claims.iss !== 'https://securetoken.google.com/' + project || !(claims.exp > now) ||
+      !(claims.auth_time > 0 && claims.auth_time <= now + 60) || Number(user.validSince || 0) > claims.auth_time ||
+      claims.firebase?.sign_in_provider !== 'google.com') throw new Error('Please sign in again.');
+  return {uid: user.localId, email: String(user.email || ''), name: String(user.displayName || ''), authTime: claims.auth_time};
+}
+function customerSheet_(name, headers, create) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(name);
+  if (!sheet && create) { sheet = ss.insertSheet(name); sheet.appendRow(headers); }
+  return sheet;
+}
+function customerProfiles_(create) { return customerSheet_('Customers', ['UID','Email','DisplayName','Phone','UpdatedAt'], create); }
+function customerAddresses_(create) { return customerSheet_('CustomerAddresses', ['AddressID','UID','RecipientName','Phone','Address','Pincode','Label','IsDefault','UpdatedAt'], create); }
+function customerRows_(sheet, uid) { return sheet ? rowsAsObjects_(sheet).filter(r => String(r.uid) === uid) : []; }
+function customerProfile_(identity) {
+  const p = customerRows_(customerProfiles_(false), identity.uid)[0];
+  return {name: p ? String(p.displayname || '') : identity.name, phone: p ? String(p.phone || '') : '', email: identity.email};
+}
+function customerAddressList_(uid) {
+  return customerRows_(customerAddresses_(false), uid).map(a => ({id: String(a.addressid), name: String(a.recipientname), phone: String(a.phone), address: String(a.address), pinCode: String(a.pincode), label: String(a.label), isDefault: String(a.isdefault) === 'yes'}));
+}
+function customerText_(value, max, min) {
+  const s = String(value == null ? '' : value).trim();
+  if (s.length > max || s.length < (min || 0)) throw new Error('Please check the saved details and field lengths.');
+  return s;
+}
+function customerPhone_(value, optional) {
+  const s = cleanPhone_(value);
+  if ((!optional || s) && (!/^\d{10,15}$/.test(s) || /^0+$/.test(s))) throw new Error('Enter a valid mobile number.');
+  return s;
+}
+function customerWrite_(sheet, row, record) {
+  const heads = headers_(sheet);
+  sheet.getRange(row || sheet.getLastRow() + 1, 1, 1, heads.length).setValues([heads.map(h => {
+    const v = record[h] == null ? '' : record[h];
+    return h === 'phone' || h === 'pincode' ? "'" + v : sheetText_(v);
+  })]);
+}
+function customerOrders_(uid, cursor) {
+  const sheet = getSheet_(ORDERS_SHEET), heads = headers_(sheet), col = heads.indexOf('customeruid');
+  if (col < 0 || sheet.getLastRow() < 2) return {orders: [], nextCursor: null};
+  const bound = cursor == null ? sheet.getLastRow() + 1 : Number(cursor);
+  if (!Number.isInteger(bound) || bound < 2) throw new Error('Invalid order page.');
+  // Read the ownership column first, then only the requested customer's 10 rows.
+  const matches = sheet.getRange(2, col + 1, sheet.getLastRow() - 1, 1).createTextFinder(uid).matchEntireCell(true).matchCase(true).findAll()
+    .map(hit => hit.getRow()).filter(row => row < bound).sort((a,b) => b-a);
+  const selected = matches.slice(0,10);
+  return {orders: selected.map(row => {
+    const values = sheet.getRange(row,1,1,heads.length).getValues()[0], order = {};
+    heads.forEach((h,i) => order[h] = values[i]);
+    return customerOrderView_(order);
+  }), nextCursor: matches.length > 10 ? selected[selected.length-1] : null};
+}
+function customerOrderView_(o) {
+  let items = [];
+  try { items = JSON.parse(o.customeritems || '[]'); } catch (_) {}
+  // Explicit allowlist: never return internal costs, analytics, journal or admin data.
+  return {orderId: String(o.orderid), orderDate: o.date, name: String(o.customername || ''), phone: String(o.phone || ''), address: String(o.address || ''),
+    paymentMethod: String(o.paymentmethod || ''), status: String(o.status || 'Pending'), paymentStatus: String(o.paymentstatus || 'Unverified'),
+    promoCode: String(o.promocode || ''), discount: Number(o.discount) || 0, deliveryCharge: Number(o.deliverycharge) || 0, codCharge: Number(o.codcharge) || 0,
+    total: Number(o.total) || 0, subtotal: (Number(o.total)||0)+(Number(o.discount)||0)-(Number(o.deliverycharge)||0)-(Number(o.codcharge)||0),
+    items: Array.isArray(items) ? items.map(x => ({name: String(x.name || ''), size: String(x.size || ''), qty: Number(x.qty)||0, unitPrice: Number(x.unitPrice)||0, lineTotal: Number(x.lineTotal)||0})) : []};
+}
+function customerDispatch_(body) {
+  try {
+    const identity = customerIdentity_(body.idToken), uid = identity.uid;
+    rateLimit_('customer:' + uid, 90, 600);
+    if (body.action === 'customer.profile.get') return {success:true, profile:customerProfile_(identity), addresses:customerAddressList_(uid)};
+    if (body.action === 'customer.orders.list') return Object.assign({success:true}, customerOrders_(uid, body.cursor));
+    // Customer writes use the same script lock as order placement, without unrelated journal recovery.
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(5000)) return {success:false, error:'The shop is busy. Please retry.'};
+    try {
+      if (body.action === 'customer.profile.save') {
+        const p = body.profile || {}, sheet = customerProfiles_(true);
+        customerWrite_(sheet, findRow_(sheet,'uid',uid), {uid, email:identity.email, displayname:customerText_(p.name,100,2), phone:customerPhone_(p.phone,true), updatedat:new Date()});
+        return {success:true, profile:customerProfile_(identity)};
+      }
+      if (body.action === 'customer.address.save') {
+        const a = body.address || {}, sheet = customerAddresses_(true), existing = customerAddressList_(uid);
+        const id = a.id ? customerText_(a.id,80,1) : Utilities.getUuid();
+        const own = existing.find(x => x.id === id);
+        if (a.id && !own && (!validRequestId_(id) || findRow_(sheet,'addressid',id))) throw new Error('Address not found.');
+        if (!own && existing.length >= 5) throw new Error('You can save up to five addresses.');
+        const record = {addressid:id, uid, recipientname:customerText_(a.name,100,2), phone:customerPhone_(a.phone), address:customerText_(a.address,488,5), pincode:customerText_(a.pinCode,6,6), label:customerText_(a.label,30)||'Home', isdefault:(a.isDefault || !existing.length)?'yes':'no', updatedat:new Date()};
+        if (!/^[1-9]\d{5}$/.test(record.pincode)) throw new Error('Enter a valid six-digit PIN code.');
+        if (record.isdefault === 'yes') existing.filter(x => x.isDefault && x.id !== id).forEach(x => sheet.getRange(findRow_(sheet,'addressid',x.id),headers_(sheet).indexOf('isdefault')+1).setValue('no'));
+        customerWrite_(sheet, own ? findRow_(sheet,'addressid',id) : 0, record);
+        return {success:true, addresses:customerAddressList_(uid)};
+      }
+      if (body.action === 'customer.address.delete') {
+        const sheet = customerAddresses_(false), own = customerAddressList_(uid).find(a => a.id === body.addressId);
+        if (!own) throw new Error('Address not found.');
+        sheet.deleteRow(findRow_(sheet,'addressid',own.id));
+        return {success:true, addresses:customerAddressList_(uid)};
+      }
+      if (body.action === 'customer.saved.delete') {
+        if (body.confirm !== 'DELETE_SAVED_DETAILS' || Date.now()/1000 - identity.authTime > 300) throw new Error('Sign out and sign in again before deleting saved details.');
+        const addresses = customerAddresses_(false);
+        customerAddressList_(uid).forEach(a => addresses.deleteRow(findRow_(addresses,'addressid',a.id)));
+        const profiles = customerProfiles_(false), row = profiles && findRow_(profiles,'uid',uid);
+        if (row) profiles.deleteRow(row);
+        return {success:true}; // Order records and sign-in identity are deliberately retained.
+      }
+      throw new Error('Unknown customer action.');
+    } finally { lock.releaseLock(); }
+  } catch (err) { return {success:false, code:'customer_error', error:String(err.message || 'Customer service unavailable.')}; }
 }
 
 /* cache responsibilities. Bundled into code.gs by scripts/build.mjs. */
@@ -2161,7 +2293,7 @@ function normalizeOrderAnalytics_(value) {
   };
 }
 
-function addOrder(o) {
+function addOrder(o, customerUid) {
   const result = withWriteLock_(function () {
     const order = normalizeAndValidateOrder_(o || {});
     if (!order.ok) return order;
@@ -2184,7 +2316,7 @@ function addOrder(o) {
         replayed: true
       });
     }
-    const sheets = getOrderSheets_(true),
+    const sheets = getOrderSheets_(true, !!customerUid),
       quoted = priceOrder_(order, sheets);
     if (!quoted.ok) return Object.assign({
       code: 'validation_failed'
@@ -2204,6 +2336,8 @@ function addOrder(o) {
     const record = {
       orderid: id,
       date: now,
+      customeruid: customerUid || '',
+      customeritems: customerUid ? JSON.stringify(quoted.priced.items.map(x => ({name:x.name,size:x.size||'',qty:x.qty,unitPrice:x.unitPrice,lineTotal:x.lineTotal}))) : '',
       customername: order.customerName,
       phone: order.phone,
       address: order.address,
@@ -2343,11 +2477,12 @@ function normalizeAndValidateOrder_(o) {
     itemsDetail: itemsDetail
   };
 }
-function getOrderSheets_(ensureAnalytics) {
+function getOrderSheets_(ensureAnalytics, ensureCustomer) {
   const productSheet = getSheet_(PRODUCTS_SHEET);
   const productData = productSheet.getDataRange().getValues();
   const productHeads = productData[0].map(h => String(h).trim().toLowerCase());
   const orders = getSheet_(ORDERS_SHEET);
+  if (ensureCustomer) ['customerUID','customerItems'].forEach(name => ensureColumn_(orders, name));
   if (ensureAnalytics) ['analyticsSession','analyticsVisitor','analyticsSource','analyticsMedium','analyticsCampaign','analyticsContent','analyticsLanding'].forEach(name => ensureColumn_(orders, name));
   const orderHeads = headers_(orders);
   if (['orderid', 'date', 'customername', 'phone', 'address', 'paymentmethod', 'promocode', 'discount', 'items', 'total', 'status'].some(h => orderHeads.indexOf(h) < 0)) throw new Error('Orders sheet is missing required columns. Ask the shop to check setup.');

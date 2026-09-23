@@ -67,3 +67,6 @@
   border-color: var(--marigold);
   color: var(--indigo);
 }
+
+/* Feature-disabled account links must stay hidden despite icon display rules. */
+[data-customer-link][hidden]{display:none!important}

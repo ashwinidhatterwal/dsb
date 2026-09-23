@@ -159,6 +159,7 @@ async function openCart() {
     if (changes.removed.length || changes.adjusted.length) cartAdjustments = changes;
   }
   renderCartDrawer();
+  loadCustomerCheckoutDetails();
   if (CartStore.takeRepairNotice()) showToast('Some saved cart data was damaged and has been removed.');
   lockPageForCart();
   $('#cartOverlay').classList.add('open');
@@ -275,3 +276,36 @@ function forgetSavedCheckoutInfo() {
   renderCartDrawer();
   showToast('Saved checkout details cleared.');
 }
+
+let customerCheckoutDetails = null;
+async function loadCustomerCheckoutDetails() {
+  if (!window.DSBAccount?.returning || pendingCheckout || checkoutQuote) return;
+  try {
+    const result = await window.DSBAccount.getDetails();
+    if (!result || pendingCheckout || checkoutQuote || checkoutBusy) return;
+    customerCheckoutDetails = result;
+    const address = result.addresses.find(a=>a.isDefault) || result.addresses[0];
+    // Never overwrite a guest's details or edits made while this request was in flight.
+    if (address && !checkoutState.name && !checkoutState.phone && !checkoutState.address && !checkoutState.pinCode) {
+      Object.assign(checkoutState,{name:address.name,phone:address.phone,address:address.address,pinCode:address.pinCode});
+      ['custName','custPhone','custAddress','custPinCode'].forEach((id,i)=>{const input=document.getElementById(id);if(input)input.value=[address.name,address.phone,address.address,address.pinCode][i];});
+    }
+    renderCustomerAddressChoices();
+  } catch (_) { /* Saved details are optional; the checkout form stays usable. */ }
+}
+function renderCustomerAddressChoices() {
+  const slot=document.getElementById('customerAddressSlot');
+  if(!slot || !customerCheckoutDetails?.addresses?.length)return;
+  slot.innerHTML='<label for="customerAddressChoice">Saved address / सेव किया गया पता</label><select id="customerAddressChoice"><option value="">Choose / चुनें</option>'+customerCheckoutDetails.addresses.map((a,i)=>`<option value="${i}">${escapeHtml(a.label)} — ${escapeHtml(a.pinCode)}</option>`).join('')+'</select>';
+  slot.querySelector('select').onchange=e=>{
+    if(e.target.value==='')return;
+    const a=customerCheckoutDetails.addresses[Number(e.target.value)];if(!a)return;
+    Object.assign(checkoutState,{name:a.name,phone:a.phone,address:a.address,pinCode:a.pinCode});
+    renderCartDrawer();
+  };
+}
+window.addEventListener('dsb:customer-cleared',()=>{
+  customerCheckoutDetails=null;lastReceipt=null;
+  Object.assign(checkoutState,{name:'',phone:'',address:'',pinCode:''});
+  if(!pendingCheckout && !checkoutQuote && !checkoutBusy && $('#cartOverlay')?.classList.contains('open'))renderCartDrawer();
+});

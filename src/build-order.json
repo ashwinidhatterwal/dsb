@@ -3,6 +3,7 @@
     "src/backend/config.gs",
     "src/backend/http.gs",
     "src/backend/sheets.gs",
+    "src/backend/customers.gs",
     "src/backend/cache.gs",
     "src/backend/products.gs",
     "src/backend/reviews.gs",

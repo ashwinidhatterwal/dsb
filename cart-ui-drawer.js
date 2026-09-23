@@ -81,6 +81,7 @@ function renderCartDrawer() {
       <div class="cart-summary">
         <div class="cart-checkout-title"><div><span class="cart-eyebrow">CHECKOUT</span><h3>Delivery details</h3></div></div>
         <div class="field">
+          <div id="customerAddressSlot"></div>${window.DSBAccount?.enabled ? '<p class="hint"><a href="profile.html">My account / मेरा खाता</a> · Save your details for next time / अगली बार के लिए जानकारी सेव करें</p>' : ''}
           <label for="custName">Your name</label>
           <input type="text" id="custName" maxlength="100" placeholder="Full name" autocomplete="name" value="${escapeHtml(checkoutState.name)}">
         </div>
@@ -154,6 +155,7 @@ function renderCartDrawer() {
     renderCartDrawer();
   }));
   $('#forgetCheckoutInfo')?.addEventListener('click', forgetSavedCheckoutInfo);
+  renderCustomerAddressChoices();
   $('#custName').addEventListener('input', e => {
     checkoutState.name = e.target.value;
     saveCheckoutInfo();

@@ -24,7 +24,7 @@ function normalizeOrderAnalytics_(value) {
   };
 }
 
-function addOrder(o) {
+function addOrder(o, customerUid) {
   const result = withWriteLock_(function () {
     const order = normalizeAndValidateOrder_(o || {});
     if (!order.ok) return order;
@@ -47,7 +47,7 @@ function addOrder(o) {
         replayed: true
       });
     }
-    const sheets = getOrderSheets_(true),
+    const sheets = getOrderSheets_(true, !!customerUid),
       quoted = priceOrder_(order, sheets);
     if (!quoted.ok) return Object.assign({
       code: 'validation_failed'
@@ -67,6 +67,8 @@ function addOrder(o) {
     const record = {
       orderid: id,
       date: now,
+      customeruid: customerUid || '',
+      customeritems: customerUid ? JSON.stringify(quoted.priced.items.map(x => ({name:x.name,size:x.size||'',qty:x.qty,unitPrice:x.unitPrice,lineTotal:x.lineTotal}))) : '',
       customername: order.customerName,
       phone: order.phone,
       address: order.address,
@@ -206,11 +208,12 @@ function normalizeAndValidateOrder_(o) {
     itemsDetail: itemsDetail
   };
 }
-function getOrderSheets_(ensureAnalytics) {
+function getOrderSheets_(ensureAnalytics, ensureCustomer) {
   const productSheet = getSheet_(PRODUCTS_SHEET);
   const productData = productSheet.getDataRange().getValues();
   const productHeads = productData[0].map(h => String(h).trim().toLowerCase());
   const orders = getSheet_(ORDERS_SHEET);
+  if (ensureCustomer) ['customerUID','customerItems'].forEach(name => ensureColumn_(orders, name));
   if (ensureAnalytics) ['analyticsSession','analyticsVisitor','analyticsSource','analyticsMedium','analyticsCampaign','analyticsContent','analyticsLanding'].forEach(name => ensureColumn_(orders, name));
   const orderHeads = headers_(orders);
   if (['orderid', 'date', 'customername', 'phone', 'address', 'paymentmethod', 'promocode', 'discount', 'items', 'total', 'status'].some(h => orderHeads.indexOf(h) < 0)) throw new Error('Orders sheet is missing required columns. Ask the shop to check setup.');

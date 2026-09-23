@@ -1,6 +1,11 @@
 /* Checkout submission, recovery and payment QR. Requires cart-ui-core.js + cart-ui-drawer.js. */
 async function postCheckout(action, body) {
   if (!CONFIG.SHEET_API_URL) throw new Error('Checkout is unavailable in demo mode.');
+  let idToken = '';
+  if (action === 'addOrder' && !pendingCheckout?.guest) {
+    try { idToken = await customerTokenForCheckout(); }
+    catch (_) { return {success:false,code:'customer_auth',error:'Account sign-in is unavailable. Retry or continue as a guest.'}; }
+  }
   return requestJson(CONFIG.SHEET_API_URL, {
     method: 'POST',
     headers: {
@@ -8,7 +13,8 @@ async function postCheckout(action, body) {
     },
     body: JSON.stringify({
       action,
-      ...body
+      ...body,
+      ...(idToken ? {idToken} : {})
     })
   }, 30000);
 }
@@ -215,6 +221,10 @@ async function sendPendingCheckout() {
       await completeCheckout(data, p.order);
       return;
     }
+    if (data.code === 'customer_auth') {
+      renderCustomerCheckoutFallback(data.error);
+      return;
+    }
     if (data.code === 'quote_changed' && data.quote) {
       clearPendingCheckout();
       checkoutQuote = {
@@ -352,3 +362,18 @@ window.addEventListener('storage', event => {
   } catch (_) {}
   if ($('#cartOverlay')?.classList.contains('open') && !$('#downloadReceiptBtn')) renderCartDrawer();
 });
+
+// Authentication fallback preserves the original request ID, including ambiguous retries.
+async function customerTokenForCheckout() {
+  if (!window.DSBAccount?.enabled) return '';
+  let timer;
+  try { return await Promise.race([window.DSBAccount.token(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Sign-in timeout')),6000);})]); }
+  finally { clearTimeout(timer); }
+}
+function renderCustomerCheckoutFallback(message) {
+  renderPendingCheckout(message);
+  const button=document.createElement('button');button.type='button';button.className='ghost-btn';
+  button.textContent='Continue as guest / बिना खाते के जारी रखें';
+  button.onclick=()=>{if(checkoutBusy || !pendingCheckout)return;pendingCheckout.guest=true;try{localStorage.setItem(PENDING_CHECKOUT_KEY,JSON.stringify(pendingCheckout));}catch(_){}sendPendingCheckout();};
+  $('#cartContent').appendChild(button);
+}

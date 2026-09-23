@@ -1,0 +1,21 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const read=f=>fs.readFileSync(new URL('../'+f,import.meta.url),'utf8');
+const source=read('cart-ui-checkout.js');let requests=[],button;
+const c=vm.createContext({setTimeout,clearTimeout,CONFIG:{SHEET_API_URL:'https://example.test'},pendingCheckout:{requestId:'same-request',order:{}},checkoutBusy:false,PENDING_CHECKOUT_KEY:'pending',window:{DSBAccount:{enabled:false}},requestJson:async(url,options)=>{requests.push(JSON.parse(options.body));return{success:true};},renderPendingCheckout(){},document:{createElement:()=>({})},$:()=>({appendChild:b=>button=b}),localStorage:{setItem(){}},sendPendingCheckout(){}});
+vm.runInContext(source.slice(0,source.indexOf('function checkoutOrderFromForm')),c);
+vm.runInContext(source.slice(source.indexOf('// Authentication fallback preserves')),c);
+await c.postCheckout('addOrder',{order:{requestId:'same-request'}});assert.equal(requests.length,1);assert(!('idToken' in requests[0]));
+c.window.DSBAccount={enabled:true,token:async()=>{throw new Error('offline');}};
+assert.equal((await c.postCheckout('addOrder',{order:{}})).code,'customer_auth');assert.equal(requests.length,1,'failed auth must not place an order');
+c.renderCustomerCheckoutFallback('offline');button.onclick();assert.equal(c.pendingCheckout.requestId,'same-request');assert.equal(c.pendingCheckout.guest,true);
+await c.postCheckout('addOrder',{order:{requestId:c.pendingCheckout.requestId}});assert(!requests[1].idToken);assert.equal(requests[1].order.requestId,'same-request');
+c.pendingCheckout.guest=false;c.window.DSBAccount.token=async()=> 'token-fixture';
+await c.postCheckout('addOrder',{order:{requestId:'same-request'}});assert.equal(requests[2].idToken,'token-fixture');assert(!('idToken' in requests[2].order));
+// Real order creation: minimal transaction dependencies; test the committed record's ownership and immutable public items.
+const b=vm.createContext({console});vm.runInContext(read('code.gs'),b);let record;
+Object.assign(b,{withWriteLock_:f=>f(),normalizeAndValidateOrder_:()=>({ok:true,customerName:'Customer',phone:'9876543210',address:'Home',paymentMethod:'UPI'}),validRequestId_:()=>true,hashText_:()=> 'hash',transactionSheet_:()=>({}),findRow_:()=>0,getOrderSheets_:()=>({orders:{appendRow:r=>{record=r;}},orderHeads:[]}),priceOrder_:()=>({ok:true,quote:{quoteToken:'quote',correctedTotal:200},priced:{summary:'Item',items:[{name:'Item',qty:1,unitPrice:200,lineTotal:200,costPrice:1}]}}),rateLimit_(){},normalizeOrderAnalytics_:()=>({}),stockPlan_:()=>[],promoPlan_:()=>null,saveTransaction_:()=>1,SpreadsheetApp:{flush(){}},applyStockPlan_(){},orderSheetRow_:(_h,r)=>r,finishTransaction_(){}});
+assert.equal(b.addOrder({requestId:'same-request',quoteToken:'quote',uid:'forged'},'verified-alice').success,true);assert.equal(record.customeruid,'verified-alice');assert(!record.customeritems.includes('costPrice'));assert.equal(JSON.parse(record.customeritems)[0].unitPrice,200);
+b.addOrder({requestId:'same-request',quoteToken:'quote',uid:'forged'});assert.equal(record.customeruid,'');
+console.log('PASS: disabled/failed/customer checkout authentication, explicit guest fallback with same request ID, no persisted token, verified order ownership and public price snapshots.');

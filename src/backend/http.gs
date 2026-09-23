@@ -52,12 +52,19 @@ function doPostCore_(e) {
     if (body.action === 'orderResult') return jsonResponse(orderResult(body.requestId, body.phone));
     if (body.action === 'analyticsBatch') return jsonResponse(recordAnalyticsBatch_(body));
 
+    if (String(body.action || '').startsWith('customer.')) return jsonResponse(customerDispatch_(body));
+
     // Public actions — no admin key needed, customers use these from the site.
     if (body.action === 'addReview') {
       return jsonResponse(addReview(body.review || {}));
     }
     if (body.action === 'addOrder') {
-      return jsonResponse(addOrder(body.order || {}));
+      let uid = '';
+      if (body.idToken) {
+        try { uid = customerIdentity_(body.idToken).uid; }
+        catch (_) { return jsonResponse({success:false, code:'customer_auth', error:'We could not verify your account. Retry or continue as a guest.'}); }
+      }
+      return jsonResponse(addOrder(body.order || {}, uid));
     }
     if (body.action === 'trackOrder') {
       return jsonResponse(trackOrder(body.orderId, body.phone));
