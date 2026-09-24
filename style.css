@@ -802,6 +802,10 @@ a{
   flex:1;
   overflow-y:auto;
 }
+
+#customerAddressSlot{margin:12px 0;padding:14px;border:1px solid #d5e3dc;border-radius:12px;background:#f4f8f5;font-size:13px;color:#245348}.customer-cart-heading{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}.customer-address-picker{margin-top:12px}.customer-address-picker summary{cursor:pointer;padding:8px 0;font-weight:650}.customer-address-picker>div{display:grid;gap:8px;margin-top:8px}.customer-address-card{display:grid;gap:5px;width:100%;text-align:left;padding:12px;border:1px solid #d3ded8;border-radius:10px;background:white;color:#244b40;font:inherit;cursor:pointer}.customer-address-card[aria-pressed="true"]{border:2px solid #287963;background:#e8f5ed}.customer-address-card span{line-height:1.5;overflow-wrap:anywhere}.customer-address-card:focus-visible{outline:3px solid #b78c49;outline-offset:2px}
+
+#customerAddressSlot:empty{display:none}
 /* ---------- Footer ---------- */
 footer{
   background: var(--indigo);

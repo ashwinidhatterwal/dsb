@@ -3,7 +3,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const read=f=>fs.readFileSync(new URL('../'+f,import.meta.url),'utf8');
 const source=read('cart-ui-checkout.js');let requests=[],button;
-const c=vm.createContext({setTimeout,clearTimeout,CONFIG:{SHEET_API_URL:'https://example.test'},pendingCheckout:{requestId:'same-request',order:{}},checkoutBusy:false,PENDING_CHECKOUT_KEY:'pending',window:{DSBAccount:{enabled:false}},requestJson:async(url,options)=>{requests.push(JSON.parse(options.body));return{success:true};},renderPendingCheckout(){},document:{createElement:()=>({})},$:()=>({appendChild:b=>button=b}),localStorage:{setItem(){}},sendPendingCheckout(){}});
+const c=vm.createContext({customerCartText:en=>en,setTimeout,clearTimeout,CONFIG:{SHEET_API_URL:'https://example.test'},pendingCheckout:{requestId:'same-request',order:{}},checkoutBusy:false,PENDING_CHECKOUT_KEY:'pending',window:{DSBAccount:{enabled:false}},requestJson:async(url,options)=>{requests.push(JSON.parse(options.body));return{success:true};},renderPendingCheckout(){},document:{createElement:()=>({})},$:()=>({appendChild:b=>button=b}),localStorage:{setItem(){}},sendPendingCheckout(){}});
 vm.runInContext(source.slice(0,source.indexOf('function checkoutOrderFromForm')),c);
 vm.runInContext(source.slice(source.indexOf('// Authentication fallback preserves')),c);
 await c.postCheckout('addOrder',{order:{requestId:'same-request'}});assert.equal(requests.length,1);assert(!('idToken' in requests[0]));

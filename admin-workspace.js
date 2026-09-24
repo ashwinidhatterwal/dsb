@@ -103,6 +103,7 @@ function applyStaffRole() {
   const profile = ADMIN_PROFILE;
   if (!profile) return;
   $('.live-pill').textContent = profile.name + ' · ' + profile.role;
+  $$('[data-tab="customers"]').forEach(button=>button.hidden=profile.role !== 'admin');
   const aiConfigMenu = $('#aiConfigMenuItem');
   if (aiConfigMenu) aiConfigMenu.hidden = profile.role !== 'admin';
   if (profile.role === 'viewer') {

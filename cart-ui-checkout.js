@@ -373,7 +373,7 @@ async function customerTokenForCheckout() {
 function renderCustomerCheckoutFallback(message) {
   renderPendingCheckout(message);
   const button=document.createElement('button');button.type='button';button.className='ghost-btn';
-  button.textContent='Continue as guest / बिना खाते के जारी रखें';
+  button.textContent=customerCartText('Continue as guest','बिना खाते के जारी रखें');
   button.onclick=()=>{if(checkoutBusy || !pendingCheckout)return;pendingCheckout.guest=true;try{localStorage.setItem(PENDING_CHECKOUT_KEY,JSON.stringify(pendingCheckout));}catch(_){}sendPendingCheckout();};
   $('#cartContent').appendChild(button);
 }

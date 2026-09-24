@@ -38,6 +38,6 @@ assert(adminClient.includes('x.convertedVisitors * 100 / x.visitors'), 'Conversi
 // Version/cache busting so deployed clients actually receive QA fixes.
 assert(admin.includes('profile.version !== 26'), 'Admin must require backend version 26');
 assert(auth.includes('version: Number(body.options && body.options.requiredVersion) === 26 ? 26 : Number(body.options && body.options.requiredVersion) === 25 ? 25 : 24'), 'Backend must negotiate API version 26');
-assert(html.includes('admin.js?v=20260923reliability1'), 'Admin JS cache bust missing');
+assert(html.includes('admin.js?v=20260924customers2'), 'Admin JS cache bust missing');
 assert(html.includes('admin-analytics.js?v=20260923audit26'), 'Analytics admin cache bust missing');
 console.log('PASS: Step 2 analytics reliability, metric integrity, cache freshness and version sync.');

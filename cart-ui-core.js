@@ -159,7 +159,7 @@ async function openCart() {
     if (changes.removed.length || changes.adjusted.length) cartAdjustments = changes;
   }
   renderCartDrawer();
-  loadCustomerCheckoutDetails();
+  void loadCustomerCheckoutDetails(true);
   if (CartStore.takeRepairNotice()) showToast('Some saved cart data was damaged and has been removed.');
   lockPageForCart();
   $('#cartOverlay').classList.add('open');
@@ -270,6 +270,7 @@ function buildUpiLink(amount, orderId) {
 
 
 function forgetSavedCheckoutInfo() {
+  customerAddressDirty = true; customerAddressId = '';
   try { localStorage.removeItem(CHECKOUT_INFO_KEY); } catch (_) {}
   ['name','phone','address','pinCode'].forEach(key=>checkoutState[key]='');
   checkoutQuote = null;
@@ -278,34 +279,63 @@ function forgetSavedCheckoutInfo() {
 }
 
 let customerCheckoutDetails = null;
-async function loadCustomerCheckoutDetails() {
-  if (!window.DSBAccount?.returning || pendingCheckout || checkoutQuote) return;
+let customerAddressId = '', customerAddressDirty = false, customerDefaultApplied = false;
+let customerDetailsLoading = false, customerDetailsLoaded = false, customerDetailsError = false;
+function customerCartText(en, hi) { return window.DSB_I18N?.isHindi() ? hi : en; }
+function markCustomerAddressEdited() { customerAddressDirty = true; customerAddressId = ''; renderCustomerAddressChoices(); }
+function applyCustomerAddress(a) {
+  Object.assign(checkoutState,{name:a.name,phone:a.phone,address:a.address,pinCode:a.pinCode});
+  customerAddressId = a.id; customerAddressDirty = false; customerDefaultApplied = true;
+  ['custName','custPhone','custAddress','custPinCode'].forEach((id,i)=>{const input=document.getElementById(id);if(input)input.value=[a.name,a.phone,a.address,a.pinCode][i];});
+  saveCheckoutInfo();
+}
+async function loadCustomerCheckoutDetails(force = false) {
+  if (!window.DSBAccount?.enabled || customerDetailsLoading || (customerDetailsLoaded && !force) || pendingCheckout || checkoutQuote) return;
+  customerDetailsLoading = true; customerDetailsError = false; renderCustomerAddressChoices();
   try {
-    const result = await window.DSBAccount.getDetails();
-    if (!result || pendingCheckout || checkoutQuote || checkoutBusy) return;
-    customerCheckoutDetails = result;
-    const address = result.addresses.find(a=>a.isDefault) || result.addresses[0];
-    // Never overwrite a guest's details or edits made while this request was in flight.
-    if (address && !checkoutState.name && !checkoutState.phone && !checkoutState.address && !checkoutState.pinCode) {
-      Object.assign(checkoutState,{name:address.name,phone:address.phone,address:address.address,pinCode:address.pinCode});
-      ['custName','custPhone','custAddress','custPinCode'].forEach((id,i)=>{const input=document.getElementById(id);if(input)input.value=[address.name,address.phone,address.address,address.pinCode][i];});
+    // Restore Firebase identity before deciding whether to display the sign-in prompt.
+    await window.DSBAccount.init();
+    const result = window.DSBAccount.user ? await window.DSBAccount.getDetails(force) : null;
+    customerCheckoutDetails = result; customerDetailsLoaded = true;
+    if (result && !pendingCheckout && !checkoutQuote && !checkoutBusy && !customerAddressDirty && !customerDefaultApplied) {
+      const address = result.addresses.find(a=>a.isDefault) || result.addresses[0];
+      if (address) applyCustomerAddress(address);
     }
-    renderCustomerAddressChoices();
-  } catch (_) { /* Saved details are optional; the checkout form stays usable. */ }
+  } catch (_) { customerDetailsError = true; customerDetailsLoaded = true; }
+  finally { customerDetailsLoading = false; renderCustomerAddressChoices(); }
 }
 function renderCustomerAddressChoices() {
   const slot=document.getElementById('customerAddressSlot');
-  if(!slot || !customerCheckoutDetails?.addresses?.length)return;
-  slot.innerHTML='<label for="customerAddressChoice">Saved address / सेव किया गया पता</label><select id="customerAddressChoice"><option value="">Choose / चुनें</option>'+customerCheckoutDetails.addresses.map((a,i)=>`<option value="${i}">${escapeHtml(a.label)} — ${escapeHtml(a.pinCode)}</option>`).join('')+'</select>';
-  slot.querySelector('select').onchange=e=>{
-    if(e.target.value==='')return;
-    const a=customerCheckoutDetails.addresses[Number(e.target.value)];if(!a)return;
-    Object.assign(checkoutState,{name:a.name,phone:a.phone,address:a.address,pinCode:a.pinCode});
-    renderCartDrawer();
-  };
+  if (!slot || !window.DSBAccount?.enabled) return;
+  const t=customerCartText, account=window.DSBAccount;
+  if (customerDetailsLoading || !customerDetailsLoaded) { slot.innerHTML='<p role="status">'+t('Loading your account…','आपका खाता लोड हो रहा है…')+'</p>'; return; }
+  if (customerDetailsError) {
+    slot.innerHTML='<p>'+t('Saved details could not load. You can enter your address below.','सेव जानकारी लोड नहीं हुई। नीचे अपना पता भर सकते हैं।')+'</p><button type="button" class="ghost-btn" id="retryCustomerDetails">'+t('Retry','फिर कोशिश करें')+'</button>';
+    slot.querySelector('button').onclick=()=>loadCustomerCheckoutDetails(true); return;
+  }
+  if (!account.user) { slot.innerHTML='<a href="profile.html">'+t('Sign in to use saved details','सेव जानकारी के लिए साइन इन करें')+'</a>'; return; }
+  const addresses=customerCheckoutDetails?.addresses || [];
+  const selected=addresses.find(a=>a.id===customerAddressId);
+  slot.innerHTML='<div class="customer-cart-heading"><span>'+t('Signed in','साइन इन है')+' · '+escapeHtml(account.user.displayName || '')+'</span><a href="profile.html">'+t('My account','मेरा खाता')+'</a></div>'+
+    (addresses.length ? '<details class="customer-address-picker"><summary>'+t('Delivery address','डिलीवरी का पता')+' · '+escapeHtml(selected?.label || t('Your entered address','आपका भरा हुआ पता'))+'</summary><div role="group" aria-label="'+t('Saved addresses','सेव पते')+'">'+addresses.map(a=>'<button type="button" class="customer-address-card" data-address-id="'+escapeHtml(a.id)+'" aria-pressed="'+(a.id===customerAddressId)+'"><strong>'+escapeHtml(a.label)+(a.isDefault?' · '+t('Default','मुख्य'):'')+'</strong><span>'+escapeHtml(a.name)+' · '+escapeHtml(a.phone)+'</span><span>'+escapeHtml(a.address)+' · '+escapeHtml(a.pinCode)+'</span></button>').join('')+'</div></details>' : '<p>'+t('No saved addresses yet. Enter an address below or save one in My account.','अभी कोई पता सेव नहीं है। नीचे पता भरें या मेरे खाते में सेव करें।')+'</p>');
+  slot.querySelectorAll('[data-address-id]').forEach(button=>button.onclick=()=>{
+    const a=addresses.find(a=>a.id===button.dataset.addressId);if(a){applyCustomerAddress(a);renderCustomerAddressChoices();}
+  });
 }
+window.addEventListener('dsb:customer-change',()=>{
+  if(customerDetailsLoading)return;
+  customerDetailsLoaded=false;
+  if($('#cartOverlay')?.classList.contains('open'))void loadCustomerCheckoutDetails();
+});
 window.addEventListener('dsb:customer-cleared',()=>{
-  customerCheckoutDetails=null;lastReceipt=null;
+  customerCheckoutDetails=null;lastReceipt=null;customerDetailsLoaded=false;customerDefaultApplied=false;customerAddressDirty=false;customerAddressId='';
   Object.assign(checkoutState,{name:'',phone:'',address:'',pinCode:''});
   if(!pendingCheckout && !checkoutQuote && !checkoutBusy && $('#cartOverlay')?.classList.contains('open'))renderCartDrawer();
+});
+document.addEventListener('dsb:languagechange',renderCustomerAddressChoices);
+
+window.addEventListener('dsb:customer-details-changed',()=>{
+  customerDetailsLoaded=false;
+  if(!customerAddressDirty)customerDefaultApplied=false;
+  if($('#cartOverlay')?.classList.contains('open'))void loadCustomerCheckoutDetails(true);
 });

@@ -1,0 +1,4 @@
+PASS: build consistency and all 27 regression programs.
+New checks: account restoration, default-address selection, styled address choices, language isolation, edits during asynchronous loading, retries, admin customer search/aggregation and admin-role permission enforcement.
+Backend, authentication and DOM tests are mocked; no live browser visual certification or deployment is claimed.
+Deployment: replace code.gs and deploy a new version of the existing Apps Script web app, then publish website files. Keep working Firebase Script Properties.

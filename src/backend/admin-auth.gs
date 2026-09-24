@@ -41,6 +41,8 @@ function dispatchAdmin_(body, actor) {
     name: actor.name,
     role: actor.role
   };
+  if (action === 'adminCustomers') return adminCustomers_(body.options);
+  if (action === 'adminCustomerDetail') return adminCustomerDetail_(body.options && body.options.uid);
   if (action === 'adminProducts') {
     const products = getAllProducts(true);
     return body.options && body.options.linkPicker ? products.filter(p => !isArchived_(p)).map(p => ({id:p.id, name:p.name})) : products;

@@ -1,4 +1,4 @@
-/* Small shared bridge. Firebase is loaded only on the profile page or for returning members. */
+/* Small shared bridge. Firebase is loaded only on the profile page or when checkout restores account state. */
 (() => {
   'use strict';
   const marker = 'dsb_customer_signed_in';
@@ -74,8 +74,9 @@
     signIn() { const provider = new sdk.GoogleAuthProvider(); provider.setCustomParameters({prompt:'select_account'}); return sdk.signInWithPopup(auth,provider); },
     async signOut() { await init(); await sdk.signOut(auth); remember(false); clearPrivate(); },
     clearPrivate,
-    invalidate() { details = null; }
+    invalidate() { details = null; try {localStorage.setItem('dsb_customer_details_changed',String(Date.now()));} catch (_) {} }
   };
+  window.addEventListener('storage',event=>{if(event.key==='dsb_customer_details_changed'){details=null;window.dispatchEvent(new CustomEvent('dsb:customer-details-changed'));}});
   window.addEventListener('storage', event => { if (event.key === marker && event.newValue !== 'yes') clearPrivate(); });
   document.querySelectorAll('[data-customer-link]').forEach(a => { a.hidden = !enabled; });
 })();

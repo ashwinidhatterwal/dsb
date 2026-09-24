@@ -881,6 +881,7 @@ function switchTab(name) {
   if (name === 'dashboard' && LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
   if (name === 'analytics' && window.DSBAdminAnalytics) window.DSBAdminAnalytics.load();
   if (name === 'shop-tools' && window.DSBShopTools) window.DSBShopTools.load();
+  if (name === 'customers' && window.DSBAdminCustomers) window.DSBAdminCustomers.load();
   if (name === 'reviews' && window.DSBAdminReviews) window.DSBAdminReviews.load();
   if (name === 'ai-config' && window.DSBAIConfig) window.DSBAIConfig.loadPage();
   window.scrollTo({

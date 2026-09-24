@@ -39,10 +39,10 @@
   function ensureCartUi() {
     if (typeof window.openCart === 'function') return Promise.resolve();
     if (!cartUiPromise) {
-      cartUiPromise = loadScript('customer-account.js?v=20260923customer1')
-        .then(() => loadScript('cart-ui-core.js?v=20260923customer1'))
-        .then(() => loadScript('cart-ui-drawer.js?v=20260923customer1'))
-        .then(() => loadScript('cart-ui-checkout.js?v=20260923customer1'))
+      cartUiPromise = loadScript('customer-account.js?v=20260924customers2')
+        .then(() => loadScript('cart-ui-core.js?v=20260924customers2'))
+        .then(() => loadScript('cart-ui-drawer.js?v=20260924customers2'))
+        .then(() => loadScript('cart-ui-checkout.js?v=20260924customers2'))
         .catch(err => { cartUiPromise = null; throw err; });
     }
     return cartUiPromise;

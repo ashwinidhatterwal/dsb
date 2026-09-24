@@ -75,3 +75,10 @@ Live Google login, real Apps Script writes, cross-device operation, and browser 
 - scripts/check-customers.mjs + check-customer-checkout.mjs: account security and checkout integration regressions.
 
 References: https://firebase.google.com/docs/auth/web/google-signin ; https://firebase.google.com/docs/reference/rest/auth ; https://firebase.google.com/docs/auth/web/redirect-best-practices
+
+## Customer experience update
+
+- Checkout restores authentication before choosing account text. Default saved addresses are selected once per account/page unless the customer has edited the form. Styled address cards replace the native select; account controls follow the selected website language. Saved-detail load errors offer Retry and still allow manual checkout.
+- Admin three-dot menu > Customer accounts is a read-only directory restricted to the admin role. Search name/email/mobile, paginate 20 accounts at a time, expand saved addresses and latest ten orders. It lists shop-known customers, not a live export of every Firebase user. Existing Google users join the directory on their next verified profile visit; existing saved profiles and linked orders are also included.
+- New CustomerAccounts sheet records verified UID, email, display name and first profile-visit date. Saved-details deletion leaves this account directory and business orders; account closure remains a shop support request.
+- Deploy updated code.gs as a new version before publishing this update. Existing Firebase Script Properties stay as configured, including your working server API key.

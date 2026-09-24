@@ -431,7 +431,7 @@ function customerDispatch_(body) {
   try {
     const identity = customerIdentity_(body.idToken), uid = identity.uid;
     rateLimit_('customer:' + uid, 90, 600);
-    if (body.action === 'customer.profile.get') return {success:true, profile:customerProfile_(identity), addresses:customerAddressList_(uid)};
+    if (body.action === 'customer.profile.get') { recordCustomerAccount_(identity); return {success:true, profile:customerProfile_(identity), addresses:customerAddressList_(uid)}; }
     if (body.action === 'customer.orders.list') return Object.assign({success:true}, customerOrders_(uid, body.cursor));
     // Customer writes use the same script lock as order placement, without unrelated journal recovery.
     const lock = LockService.getScriptLock();
@@ -471,6 +471,41 @@ function customerDispatch_(body) {
       throw new Error('Unknown customer action.');
     } finally { lock.releaseLock(); }
   } catch (err) { return {success:false, code:'customer_error', error:String(err.message || 'Customer service unavailable.')}; }
+}
+
+// Account directory is separate from optional saved checkout details.
+function recordCustomerAccount_(identity) {
+  const ss=SpreadsheetApp.getActiveSpreadsheet();
+  let sheet=ss.getSheetByName('CustomerAccounts');
+  const row=sheet && findRow_(sheet,'uid',identity.uid);
+  if(row) return; // First verified profile visit only; no per-click account writes.
+  const lock=LockService.getScriptLock();
+  if(!lock.tryLock(3000)) return;
+  try {
+    sheet=customerSheet_('CustomerAccounts',['UID','Email','DisplayName','CreatedAt'],true);
+    if(!findRow_(sheet,'uid',identity.uid)) customerWrite_(sheet,0,{uid:identity.uid,email:identity.email,displayname:identity.name,createdat:new Date()});
+  } finally {lock.releaseLock();}
+}
+function adminCustomers_(options) {
+  const opts=options||{}, ss=SpreadsheetApp.getActiveSpreadsheet(), customers=Object.create(null);
+  ['CustomerAccounts','Customers','CustomerAddresses','Orders'].forEach(name=>{
+    const sheet=ss.getSheetByName(name);if(!sheet)return;
+    rowsAsObjects_(sheet).forEach(r=>{
+      const uid=String(name==='Orders'?r.customeruid||'':r.uid||'');if(!uid)return;
+      const c=customers[uid]||(customers[uid]={uid,name:'',email:'',phone:'',addressCount:0,orderCount:0,orderValue:0});
+      if(name==='CustomerAccounts'||name==='Customers') {c.name=String(r.displayname||c.name);c.email=String(r.email||c.email);c.phone=String(r.phone||c.phone);}
+      if(name==='CustomerAddresses'){c.addressCount++;c.name=c.name||String(r.recipientname||'');c.phone=c.phone||String(r.phone||'');}
+      if(name==='Orders'){c.orderCount++;c.orderValue+=Number(r.total)||0;c.name=c.name||String(r.customername||'');c.phone=c.phone||String(r.phone||'');}
+    });
+  });
+  const q=String(opts.query||'').trim().toLowerCase().slice(0,100);
+  const all=Object.values(customers).filter(c=>!q||[c.name,c.email,c.phone,c.uid].join(' ').toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name)||a.uid.localeCompare(b.uid));
+  const page=Math.max(0,Math.floor(Number(opts.page)||0)),size=20;
+  return {customers:all.slice(page*size,(page+1)*size),total:all.length,page,hasMore:(page+1)*size<all.length};
+}
+function adminCustomerDetail_(uid) {
+  uid=customerText_(uid,128,1);
+  return {addresses:customerAddressList_(uid),...customerOrders_(uid,null)};
 }
 
 /* cache responsibilities. Bundled into code.gs by scripts/build.mjs. */
@@ -4640,6 +4675,8 @@ function dispatchAdmin_(body, actor) {
     name: actor.name,
     role: actor.role
   };
+  if (action === 'adminCustomers') return adminCustomers_(body.options);
+  if (action === 'adminCustomerDetail') return adminCustomerDetail_(body.options && body.options.uid);
   if (action === 'adminProducts') {
     const products = getAllProducts(true);
     return body.options && body.options.linkPicker ? products.filter(p => !isArchived_(p)).map(p => ({id:p.id, name:p.name})) : products;
