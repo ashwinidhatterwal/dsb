@@ -4,6 +4,7 @@ Verified admin-chat.js from 5 source fragments.
 Admin AI tool-gateway, bounded vision analysis, proposal safety and creation checks passed.
 Admin surface/action regression passed.
 Admin API version sync regression passed.
+PASS: lazy admin startup, product/dashboard caching, selective recovery, local product updates, AI lazy loading and expanded timing coverage.
 PASS: analytics mobile clearance, icon product actions, and restored section scroll-to-top.
 AI product autofill checks passed.
 Unknown numeric values remain unknown.
@@ -31,23 +32,24 @@ PASS: Level 1 filters, recent products, similarity, assurance information and an
 PASS: Level 2 placement, verified reviews, delivery estimates, richer metadata and recommendation signals.
 PASS: dedicated order tracking, POST privacy, support/cancellation requests, admin handling and status lifecycle.
 index.html: 304.0 KB local assets, 79.1 KB gzipped JS/CSS
-product.html: 316.3 KB local assets, 82.3 KB gzipped JS/CSS
-catalog.html: 287.6 KB local assets, 74.3 KB gzipped JS/CSS
+product.html: 316.7 KB local assets, 82.4 KB gzipped JS/CSS
+catalog.html: 287.6 KB local assets, 74.4 KB gzipped JS/CSS
 about.html: 213.7 KB local assets, 49.8 KB gzipped JS/CSS
 contact.html: 213.7 KB local assets, 49.8 KB gzipped JS/CSS
 privacy.html: 213.7 KB local assets, 49.8 KB gzipped JS/CSS
 returns.html: 213.7 KB local assets, 49.8 KB gzipped JS/CSS
-track-order.html: 201.1 KB local assets, 45.5 KB gzipped JS/CSS
-admin.html: 313.1 KB local assets, 85.9 KB gzipped JS/CSS
+track-order.html: 201.2 KB local assets, 45.6 KB gzipped JS/CSS
+admin.html: 315.0 KB local assets, 86.5 KB gzipped JS/CSS
 Performance guardrails passed.
 PASS: Phase 1 report outputs, calendar/DST/reset boundaries, cancelled and recovered orders, full-population rankings, GA size pricing, checkout start deduplication and privacy translations.
 PASS: admin analytics rendering, full-list sort wiring, loading/error recovery and chunked report caching (mock DOM; no visual certification).
 PASS: custom report boundaries, dates, future/reversed ranges and completed-day labels.
 PASS: Phase 2/3 phone compatibility, costs, cancellation locking, durable dedup, timestamp/reset boundaries and interrupted archive recovery.
+PASS: structured product details render Brand/Material/Pack/Specifications and refresh when live catalogue data replaces cached data.
 PASS: phone text round trip, zero rejection, tracking identity, minimal link payload, shared reads and read/write timeout distinction.
 PASS: review moderation UI escapes user content, keeps negative ratings and exposes approval controls.
 PASS: moderated review visibility, legacy compatibility, stale transitions, owner permissions, key setup and admin access controls.
 PASS: HTML IDs/assets and standards-safe scroll behavior.
 PASS: Step 2 analytics reliability, metric integrity, cache freshness and version sync.
 PASS: syntax, pricing, discount, sorting, cart limits, checkout size/stock validation and static publishing.
-PASS: build consistency and all 27 regression programs.
+PASS: build consistency and all 29 regression programs.

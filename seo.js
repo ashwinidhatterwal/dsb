@@ -3,7 +3,7 @@ const DSB_SEO = (() => {
   const basePath = id => 'products/p-' + Array.from(new TextEncoder().encode(String(id)), b => b.toString(16).padStart(2, '0')).join('') + '.html';
   const categoryPath = category => 'categories/' + (String(category).trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'category') + '-' + Array.from(new TextEncoder().encode(String(category)), b => b.toString(16).padStart(2, '0')).join('') + '.html';
   const val = (p, k) => String(p[k] ?? '').trim();
-  const details = p => [['Brand', 'brand'], ['Material', 'material'], ['Pack / quantity', 'packsize'], ['Product details', 'specifications']].filter(([, k]) => val(p, k)).map(([label, k]) => [label, val(p, k)]);
+  const details = p => [['Brand', 'brand'], ['Material', 'material'], ['Pack / quantity', 'packsize'], ['Specifications', 'specifications']].filter(([, k]) => val(p, k)).map(([label, k]) => [label, val(p, k)]);
   const name = p => String(p.name || '').trim();
   const description = p => [val(p, 'description'), ...details(p).map(([k, v]) => k + ': ' + v)].filter(Boolean).join(' · ') || name(p) + ' at Dhatterwal Suhag Bhandar in Goluwala, Rajasthan. Contact the shop for further product details.';
   const absolute = (src, site) => {
@@ -63,7 +63,7 @@ const DSB_SEO = (() => {
       additionalProperty: [
         ...(val(p, 'subcategory') ? [['Type', val(p, 'subcategory')]] : []),
         ...(pricing(p).sizes.length ? [['Available sizes', pricing(p).sizes.join(', ')]] : []),
-        ...details(p).filter(([k]) => ['Pack / quantity', 'Product details'].includes(k))
+        ...details(p).filter(([k]) => ['Pack / quantity', 'Specifications'].includes(k))
       ].map(([name, value]) => ({
         '@type': 'PropertyValue',
         name,

@@ -16,6 +16,7 @@
     'Brand': 'ब्रांड',
     'Material': 'सामग्री',
     'Pack / quantity': 'पैक / मात्रा',
+    'Specifications': 'विशेषताएँ',
     'Colour': 'रंग',
     'Size': 'साइज़',
     'Could not add this item. Check size and stock.': 'उत्पाद नहीं जोड़ा जा सका। साइज़ और स्टॉक जाँचें।',

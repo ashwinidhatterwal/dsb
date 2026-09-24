@@ -13,6 +13,18 @@ function customerProductDescription(p) {
   const hindi = window.DSB_I18N && DSB_I18N.isHindi();
   return (hindi ? p.descriptionhindi : p.description) || p.description || p.descriptionhindi || 'Contact the shop for product details before ordering.';
 }
+function productDetailRows(p) {
+  return (window.DSBCommerce ? window.DSBCommerce.detailRows(p) : DSB_SEO.details(p)) || [];
+}
+function productDetailRowsHtml(p) {
+  return productDetailRows(p).map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('');
+}
+function renderProductDetails(p) {
+  const description = $('#pdRoot .pd-desc');
+  if (description) description.textContent = customerProductDescription(p);
+  const specs = $('#pdRoot .product-specs');
+  if (specs) specs.innerHTML = productDetailRowsHtml(p);
+}
 
 // renderStars() lives in utils.js now — shared with product cards.
 
@@ -141,7 +153,7 @@ function renderProduct(p) {
       <div class="pd-details">
         <div class="pd-detail-heading">Product details</div>
         <p class="pd-desc">${escapeHtml(customerProductDescription(p))}</p>
-        <dl class="product-specs">${(window.DSBCommerce ? window.DSBCommerce.detailRows(p) : DSB_SEO.details(p)).map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}</dl>
+        <dl class="product-specs">${productDetailRowsHtml(p)}</dl>
       </div>
       ${window.DSBCommerce ? window.DSBCommerce.assuranceHtml(p) : ''}
       ${window.DSBCommerce ? window.DSBCommerce.deliveryEstimatorHtml() : ''}
@@ -626,8 +638,7 @@ document.addEventListener('dsb:languagechange', () => {
   document.querySelectorAll('.pd-slide img').forEach(img => img.alt = customerProductName(p));
   const secondary = $('#pdRoot .pd-title-hindi');
   if (secondary) secondary.textContent = customerProductSecondaryName(p);
-  const description = $('#pdRoot .pd-desc');
-  if (description) description.textContent = customerProductDescription(p);
+  renderProductDetails(p);
   updateSeoTags(p);
   document.querySelectorAll('.card[data-id]').forEach(card => {
     const product = PRODUCT_BY_ID.get(card.dataset.id);
@@ -653,8 +664,9 @@ document.addEventListener('dsb:catalogchange', () => {
   renderPdActions(updated);
   const title = $('#pdRoot .pd-title');
   if (title) title.textContent = customerProductName(updated);
-  const description = $('#pdRoot .pd-desc');
-  if (description) description.textContent = customerProductDescription(updated);
+  const secondary = $('#pdRoot .pd-title-hindi');
+  if (secondary) secondary.textContent = customerProductSecondaryName(updated);
+  renderProductDetails(updated);
   const stock = $('#pdRoot .pd-stock');
   if (stock) {
     stock.textContent = isOutOfStock(updated) ? 'Out of stock' : lowStockLabel(updated) || 'In stock';

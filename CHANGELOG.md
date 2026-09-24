@@ -1,3 +1,11 @@
+# Product details live-refresh fix — 2026-09-24
+
+- Fixed the product page so live catalogue refreshes rebuild the structured details block instead of updating only title/description/stock. Brand, Material, Pack / quantity and Specifications now appear as soon as fresher product data replaces an older browser snapshot.
+- Centralized product-detail row rendering so initial render, language changes and background catalogue refreshes use the same code path.
+- Renamed the customer-facing structured `specifications` row from “Product details” to “Specifications” and added its Hindi UI translation.
+- Bumped the session catalogue cache key from v5 to v6 so already-open customers do not keep an older cached product schema after this deployment.
+- Added a regression check covering structured fields, live refresh wiring and cache-version invalidation.
+
 # Admin performance optimization — 2026-09-24
 
 - Admin login now authenticates first and reveals the workspace without waiting for Products, Orders, Dashboard and AI-model requests. Each section lazy-loads when opened.
