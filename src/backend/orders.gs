@@ -19,10 +19,14 @@ function getAllOrders(options) {
     allCount: all.length
   };
 }
-function getDashboardData() {
-  // Dashboard data is deliberately read fresh from Sheets. Admins sometimes
-  // edit/delete order rows directly in Google Sheets, which cannot invalidate
-  // Apps Script CacheService and could otherwise leave stale profit visible.
+function getDashboardData(options) {
+  options = options || {};
+  // Short cache removes duplicate startup/refresh scans. Manual Refresh passes
+  // forceFresh so direct Google Sheets edits are still visible immediately.
+  if (!options.forceFresh) {
+    const cached = cacheGetChunkedJson_(DASHBOARD_CACHE_KEY);
+    if (cached && typeof cached === 'object') return cached;
+  }
 
   const now = new Date();
   const tz = Session.getScriptTimeZone();
@@ -136,6 +140,7 @@ function getDashboardData() {
     sevenDaySales,
     telegram
   };
+  cachePutJson_(DASHBOARD_CACHE_KEY, dashboard, DASHBOARD_CACHE_TTL);
   return dashboard;
 }
 function updateOrderStatusUnlocked_(orderId, statusValue) {
@@ -313,9 +318,8 @@ function verifyPayment_(body, actor) {
     if (!['Unverified', 'Received', 'Refunded'].includes(state) || reference.length > 120) throw new Error('Invalid payment details.');
     if (state !== 'Unverified' && !reference) throw new Error('Enter a transaction reference or verification note.');
     const sheet = getSheet_(ORDERS_SHEET);
-    ['paymentstatus', 'paymentreference', 'paymentverifiedby', 'paymentverifiedat'].forEach(k => ensureColumn_(sheet, k));
-    const heads = headers_(sheet),
-      row = findRow_(sheet, 'orderid', String(body.orderId || ''));
+    const heads = ensureColumns_(sheet, ['paymentstatus', 'paymentreference', 'paymentverifiedby', 'paymentverifiedat']),
+      row = findRowWithHeaders_(sheet, heads, 'orderid', String(body.orderId || ''));
     if (!row) throw new Error('Order not found.');
     const current = sheet.getRange(row, heads.indexOf('paymentverifiedat') + 1).getValue();
     if ((current instanceof Date ? current.toISOString() : String(current || '')) !== String(body.expectedVerifiedAt || '')) throw new Error('Payment details changed. Refresh orders before verifying.');
@@ -329,5 +333,5 @@ function verifyPayment_(body, actor) {
     return {
       success: true
     };
-  });
+  }, { recoverTransactions: false });
 }

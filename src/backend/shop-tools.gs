@@ -12,28 +12,30 @@ function saveShipment_(body) {
     const carrier = String(body.carrier || '').trim(), reference = String(body.reference || '').trim();
     if (carrier.length > 80 || reference.length > 120) throw new Error('Shipment details are too long.');
     const link = safeShopLink_(body.trackingUrl, false);
-    const sheet = getSheet_(ORDERS_SHEET), row = findRow_(sheet, 'orderid', String(body.orderId || ''));
+    const sheet = getSheet_(ORDERS_SHEET);
+    const heads = ensureColumns_(sheet, ['shipmentcarrier','shipmentreference','shipmenturl','shipmentupdatedat']);
+    const row = findRow_(sheet, 'orderid', String(body.orderId || ''));
     if (!row) throw new Error('Order not found.');
-    ['shipmentcarrier','shipmentreference','shipmenturl','shipmentupdatedat'].forEach(k => ensureColumn_(sheet,k));
-    const heads = headers_(sheet), stampCol = heads.indexOf('shipmentupdatedat') + 1;
+    const stampCol = heads.indexOf('shipmentupdatedat') + 1;
     if (String(sheet.getRange(row,stampCol).getValue() || '') !== String(body.expectedUpdatedAt || '')) throw new Error('Shipment changed. Refresh before saving.');
     const data = { shipmentcarrier:carrier, shipmentreference:reference, shipmenturl:link, shipmentupdatedat:new Date().toISOString() };
     Object.keys(data).forEach(k => sheet.getRange(row,heads.indexOf(k)+1).setValue(sheetText_(data[k])));
     return { success:true };
-  });
+  }, { recoverTransactions: false });
 }
+const DSB_TIMED_ACTIONS_ = ['quoteOrder','addOrder','adminSession','adminProductsPage','adminOrders','adminDashboard','adminAnalytics','add','update','archiveProduct','deleteArchivedProduct','updateOrderStatus'];
 function recordOperationalTiming_(action, elapsed, outcome) {
-  if (!['quoteOrder','addOrder','adminDashboard','adminAnalytics'].includes(action) || Math.random() > .2) return;
+  if (!DSB_TIMED_ACTIONS_.includes(action) || Math.random() > .25) return;
   try {
     const key = 'dsb.timings.' + action;
     const values = cacheGetJson_(key) || [];
     values.push({ms:Math.max(0,elapsed),wait:DSB_REQUEST_LOCK_WAIT_MS_,ok:!outcome.error && outcome.success !== false,busy:outcome.code === 'busy',at:Date.now()});
     cachePutJson_(key,values.slice(-80),21600);
-  } catch (_) {} // Measurements never interrupt an order.
+  } catch (_) {} // Measurements never interrupt a shop request.
 }
 function operationalTimingSnapshot_() {
   const result = {};
-  ['quoteOrder','addOrder','adminDashboard','adminAnalytics'].forEach(action => {
+  DSB_TIMED_ACTIONS_.forEach(action => {
     const rows = (cacheGetJson_('dsb.timings.'+action) || []).filter(x=> Date.now()-x.at < 21600000);
     const sorted = rows.map(x=>x.ms).sort((a,b)=>a-b), waits=rows.map(x=>x.wait || 0).sort((a,b)=>a-b);
     const percentile = (a,p) => a.length ? a[Math.max(0,Math.ceil(a.length*p)-1)] : null;

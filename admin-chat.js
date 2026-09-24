@@ -99,6 +99,7 @@
   }
 
   function openChat() {
+    if (window.DSBAIConfig && !window.DSBAIConfig.state.models.length) window.DSBAIConfig.loadModels().catch(() => {});
     const drawer = qs('#adminAiDrawer');
     if (!drawer) return;
     drawer.inert = false;

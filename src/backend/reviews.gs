@@ -85,10 +85,7 @@ function addReview(r) {
     const existing = getCachedReviews_();
     if (purchase.verified && existing.some(row => String(row.verificationref || '') === purchase.ref)) throw new Error('This purchase has already been reviewed.');
     const sheet = getSheet_(REVIEWS_SHEET);
-    ensureColumn_(sheet, 'verified');
-    ensureColumn_(sheet, 'verificationRef');
-    ensureColumn_(sheet, 'moderationStatus');
-    const heads = headers_(sheet);
+    const heads = ensureColumns_(sheet, ['verified', 'verificationRef', 'moderationStatus']);
     const record = {
       id: 'REV-' + Utilities.getUuid().slice(0, 8),
       productid: productId,
@@ -109,7 +106,7 @@ function addReview(r) {
       verified: purchase.verified,
       pending: !purchase.verified
     };
-  });
+  }, { recoverTransactions: false });
 }
 
 function adminReviews_() {
@@ -127,10 +124,11 @@ function moderateReview_(body, actor) {
     const id = String(body.reviewId || '').trim();
     const target = String(body.status || '').trim();
     if (!id || !['Approved','Hidden'].includes(target)) throw new Error('Invalid moderation action.');
-    const sheet = getSheet_(REVIEWS_SHEET), row = findRow_(sheet, 'id', id);
+    const sheet = getSheet_(REVIEWS_SHEET);
+    const heads = ensureColumns_(sheet, ['moderationStatus']);
+    const row = findRowWithHeaders_(sheet, heads, 'id', id);
     if (!row) throw new Error('Review not found. Refresh the list.');
-    ensureColumn_(sheet, 'moderationStatus');
-    const heads = headers_(sheet), col = heads.indexOf('moderationstatus') + 1;
+    const col = heads.indexOf('moderationstatus') + 1;
     const current = String(sheet.getRange(row, col).getValue() || 'Approved');
     if (current === target) return { success: true, status: current, alreadyHandled: true };
     if (body.expectedStatus && String(body.expectedStatus) !== current) throw new Error('Review changed. Refresh before moderating.');
@@ -138,5 +136,5 @@ function moderateReview_(body, actor) {
     cacheRemove_(REVIEWS_CACHE_KEY);
     cacheRemove_(REVIEW_SUMMARY_CACHE_KEY);
     return { success: true, status: target };
-  });
+  }, { recoverTransactions: false });
 }

@@ -140,7 +140,9 @@ async function archiveProduct(product) {
       expected_revision: product._revision
     });
     showToast(archive ? 'Product archived — restore it from Archived.' : 'Product restored');
-    await Promise.all([loadProducts(false), loadArchive()]);
+    markDashboardStale();
+    if (document.querySelector('#tab-archive.active')) await loadArchive();
+    else await loadProducts(false);
   } catch (err) {
     showToast(err.message);
   } finally {
@@ -181,7 +183,7 @@ function renderPaymentControls() {
     };
   });
 }
-async function loadArchive() {
+async function loadArchive(forceFresh = false) {
   const sequence = ++archiveSequence;
   $('#archiveStatus').textContent = 'Loading archive…';
   $('#archivePrev').disabled = true;
@@ -191,7 +193,8 @@ async function loadArchive() {
       archived: true,
       query: $('#archiveSearch').value.trim(),
       sort: 'id-asc',
-      page: archivePage
+      page: archivePage,
+      forceFresh: forceFresh === true
     });
     if (sequence !== archiveSequence) return;
     archivePage = data.page;
@@ -220,7 +223,9 @@ async function permanentlyDeleteProduct(product) {
       expected_revision: product._revision
     });
     showToast('Product deleted');
-    await Promise.all([loadArchive(), loadProducts(false), loadDashboard()]);
+    markDashboardStale();
+    productResponse = null;
+    await loadArchive();
   } catch (err) {
     showToast(err.message || 'Delete failed');
     $('#archiveStatus').textContent = err.message || 'Delete failed';
@@ -263,9 +268,9 @@ document.addEventListener('DOMContentLoaded', () => {
     archiveSearchTimer = setTimeout(() => {
       archivePage = 0;
       loadArchive();
-    }, 250);
+    }, 350);
   };
-  $('#archiveRefresh').onclick = loadArchive;
+  $('#archiveRefresh').onclick = () => { archivePage = 0; loadArchive(true); };
   $('#archivePrev').onclick = () => {
     archivePage = Math.max(0, archivePage - 1);
     loadArchive();

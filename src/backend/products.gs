@@ -1,12 +1,16 @@
 /* products responsibilities. Bundled into code.gs by scripts/build.mjs. */
-function getAllProducts(includeCost) {
+function getAllProducts(includeCost, forceFresh) {
   // Admin data contains costPrice and must never be cached under the public key.
-  if (!includeCost) {
-    const cached = cacheGetChunkedJson_(CATALOG_CACHE_KEY);
+  const cacheKey = includeCost ? ADMIN_PRODUCTS_CACHE_KEY : CATALOG_CACHE_KEY;
+  if (!forceFresh) {
+    const cached = cacheGetChunkedJson_(cacheKey);
     if (Array.isArray(cached)) return cached;
   }
   const rows = rowsAsObjects_(getSheet_(PRODUCTS_SHEET));
-  if (includeCost) return rows;
+  if (includeCost) {
+    cachePutJson_(ADMIN_PRODUCTS_CACHE_KEY, rows, ADMIN_PRODUCTS_CACHE_TTL);
+    return rows;
+  }
   const publicRows = rows.filter(r => !isArchived_(r)).map(r => {
     const copy = {};
     ['id', 'name', 'namehindi', 'category', 'subcategory', 'price', 'mrp', 'image', 'images', 'description', 'stock', 'stockqty', 'tags', 'brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices', 'reellink', 'sizestock', 'sizes'].forEach(key => {
@@ -22,12 +26,13 @@ function addProduct(p, requestId) {
     validateProductFields_(p, true);
     const retired = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DeletedProductIds');
     if (p.id && retired && findRow_(retired, 'id', String(p.id).trim())) throw new Error('This product ID was retired. Choose a new ID.');
-    if (p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET), 'sizes');
+    const sheet = getSheet_(PRODUCTS_SHEET);
+    const optionalColumns = [];
+    if (p.sizes !== undefined) optionalColumns.push('sizes');
     ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices', 'reellink', 'sizestock'].forEach(k => {
-      if (p[k] !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET), k);
+      if (p[k] !== undefined) optionalColumns.push(k);
     });
-    const sheet = getSheet_(PRODUCTS_SHEET),
-      heads = headers_(sheet);
+    const heads = ensureColumns_(sheet, optionalColumns);
     let reservation = null;
     if (requestId) {
       if (!validRequestId_(requestId)) throw new Error('Invalid save request. Refresh the admin page.');
@@ -36,20 +41,13 @@ function addProduct(p, requestId) {
       if (!requests) {
         requests = ss.insertSheet('AdminProductRequests');
         requests.appendRow(['id', 'productid', 'fingerprint']);
-        try {
-          requests.hideSheet();
-        } catch (_) {}
+        try { requests.hideSheet(); } catch (_) {}
       }
-      const fingerprint = hashText_(JSON.stringify(p)),
-        row = findRow_(requests, 'id', requestId);
+      const fingerprint = hashText_(JSON.stringify(p)), row = findRow_(requests, 'id', requestId);
       if (row) {
         const values = requests.getRange(row, 1, 1, 3).getValues()[0];
         if (values[2] !== fingerprint) throw new Error('This save attempt belongs to different product details.');
-        reservation = {
-          requests,
-          id: String(values[1]),
-          existing: true
-        };
+        reservation = { requests, id: String(values[1]), existing: true };
       } else {
         let candidate = String(p.id || '').trim() || nextId_(sheet, 'DSB');
         if (!p.id) {
@@ -58,20 +56,13 @@ function addProduct(p, requestId) {
             candidate = 'DSB-' + String(n).padStart(4, '0');
           }
         }
-        if (findRow_(sheet, 'id', candidate) || findRow_(requests, 'productid', candidate)) throw new Error('That product ID is already used or reserved.');
+        if (findRowWithHeaders_(sheet, heads, 'id', candidate) || findRow_(requests, 'productid', candidate)) throw new Error('That product ID is already used or reserved.');
         if (!/^[A-Za-z0-9_-]{1,80}$/.test(candidate)) throw new Error('Use letters, numbers, hyphens or underscores for product IDs.');
         requests.appendRow([requestId, candidate, fingerprint]);
         SpreadsheetApp.flush();
-        reservation = {
-          requests,
-          id: candidate
-        };
+        reservation = { requests, id: candidate };
       }
-      if (reservation.existing && findRow_(sheet, 'id', reservation.id)) return {
-        success: true,
-        id: reservation.id,
-        replayed: true
-      };
+      if (reservation.existing && findRowWithHeaders_(sheet, heads, 'id', reservation.id)) return { success: true, id: reservation.id, replayed: true };
     }
     let id = reservation ? reservation.id : String(p.id || '').trim() || nextId_(sheet, 'DSB');
     if (!p.id && !reservation && retired) {
@@ -82,31 +73,30 @@ function addProduct(p, requestId) {
     }
     if (retired && findRow_(retired, 'id', id)) throw new Error('This product ID was retired. Choose a new ID.');
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) throw new Error('Use letters, numbers, hyphens or underscores for product IDs.');
-    if (findRow_(sheet, 'id', id)) throw new Error('That product ID already exists.');
-    sheet.appendRow(heads.map(h => sheetText_(h === 'id' ? id : p[h] !== undefined ? p[h] : '')));
+    if (findRowWithHeaders_(sheet, heads, 'id', id)) throw new Error('That product ID already exists.');
+    const record = {};
+    heads.forEach(h => record[h] = h === 'id' ? id : p[h] !== undefined ? p[h] : '');
+    sheet.appendRow(heads.map(h => sheetText_(record[h])));
     invalidatePublicCaches_();
-    return {
-      success: true,
-      id: id
-    };
-  });
+    return { success: true, id: id, product: { ...record, _revision: productRevision_(record) } };
+  }, { recoverTransactions: false });
 }
 function updateProduct(p) {
   return withWriteLock_(function () {
     validateProductFields_(p, false);
-    if (p.sizes !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET), 'sizes');
+    const sheet = getSheet_(PRODUCTS_SHEET);
+    const optionalColumns = [];
+    if (p.sizes !== undefined) optionalColumns.push('sizes');
     ['brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices', 'reellink', 'sizestock'].forEach(k => {
-      if (p[k] !== undefined) ensureColumn_(getSheet_(PRODUCTS_SHEET), k);
+      if (p[k] !== undefined) optionalColumns.push(k);
     });
-    const sheet = getSheet_(PRODUCTS_SHEET),
-      heads = headers_(sheet);
-    const row = findRow_(sheet, 'id', String(p.id || '').trim());
+    const heads = ensureColumns_(sheet, optionalColumns);
+    const row = findRowWithHeaders_(sheet, heads, 'id', String(p.id || '').trim());
     if (!row) throw new Error('Product not found.');
-    if (p.expected_revision) {
-      const current = {};
-      sheet.getRange(row, 1, 1, heads.length).getValues()[0].forEach((v, i) => current[heads[i]] = v);
-      if (productRevision_(current) !== p.expected_revision) throw new Error('Product changed since editing began. Refresh and reopen it before saving.');
-    }
+    const values = sheet.getRange(row, 1, 1, heads.length).getValues()[0];
+    const current = {};
+    values.forEach((v, i) => current[heads[i]] = v);
+    if (p.expected_revision && productRevision_(current) !== p.expected_revision) throw new Error('Product changed since editing began. Refresh and reopen it before saving.');
     ['stockqty', 'stock'].forEach(key => {
       const expected = p['expected_' + key];
       if (expected === undefined) {
@@ -117,52 +107,40 @@ function updateProduct(p) {
         delete p[key];
         return;
       }
-      const col = heads.indexOf(key);
-      if (col >= 0 && String(sheet.getRange(row, col + 1).getValue()) !== String(expected)) throw new Error('Stock changed since this form was opened. Reload products before editing stock.');
+      if (String(current[key] == null ? '' : current[key]) !== String(expected)) throw new Error('Stock changed since this form was opened. Reload products before editing stock.');
     });
     // Write only explicitly edited fields; do not rewrite unrelated formulas.
-    const edits = heads.map((h, i) => ({
-      col: i + 1,
-      value: sheetText_(p[h]),
-      edited: h !== 'id' && p[h] !== undefined
-    })).filter(x => x.edited);
+    const edits = heads.map((h, i) => ({ col: i + 1, key: h, value: sheetText_(p[h]), edited: h !== 'id' && p[h] !== undefined })).filter(x => x.edited);
     for (let i = 0; i < edits.length;) {
       let j = i + 1;
       while (j < edits.length && edits[j].col === edits[j - 1].col + 1) j++;
       sheet.getRange(row, edits[i].col, 1, j - i).setValues([edits.slice(i, j).map(x => x.value)]);
       i = j;
     }
+    const saved = {};
+    sheet.getRange(row, 1, 1, heads.length).getValues()[0].forEach((v, i) => saved[heads[i]] = v);
     invalidatePublicCaches_();
-    return {
-      success: true
-    };
-  });
+    return { success: true, product: { ...saved, _revision: productRevision_(saved) } };
+  }, { recoverTransactions: false });
 }
 function deleteProduct(id, expectedRevision) {
   id = String(id || '').trim();
   return withWriteLock_(function () {
-    const sheet = getSheet_(PRODUCTS_SHEET),
-      row = findRow_(sheet, 'id', String(id || '').trim());
+    const sheet = getSheet_(PRODUCTS_SHEET), heads = headers_(sheet), row = findRowWithHeaders_(sheet, heads, 'id', id);
     if (!row) throw new Error('Product not found. Refresh the archive.');
-    const heads = headers_(sheet),
-      product = {};
+    const product = {};
     sheet.getRange(row, 1, 1, heads.length).getValues()[0].forEach((v, i) => product[heads[i]] = v);
     if (!isArchived_(product)) throw new Error('Archive this product before deleting it.');
     if (!expectedRevision || productRevision_(product) !== expectedRevision) throw new Error('Product changed. Refresh the archive before deleting.');
     // Reserve only the ID so historical orders cannot affect a new product with the same ID.
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let reserved = ss.getSheetByName('DeletedProductIds');
-    if (!reserved) {
-      reserved = ss.insertSheet('DeletedProductIds');
-      reserved.appendRow(['id']);
-    }
-    if (!findRow_(reserved, 'id', String(id))) reserved.appendRow([sheetText_(String(id))]);
+    if (!reserved) { reserved = ss.insertSheet('DeletedProductIds'); reserved.appendRow(['id']); }
+    if (!findRow_(reserved, 'id', id)) reserved.appendRow([sheetText_(id)]);
     sheet.deleteRow(row);
     invalidatePublicCaches_();
-    return {
-      success: true
-    };
-  });
+    return { success: true };
+  }, { recoverTransactions: false });
 }
 function validateProductFields_(p, adding) {
   if (p.sizestock !== undefined) {
@@ -208,7 +186,8 @@ function productRevision_(p) {
   return hashText_(JSON.stringify(['id', 'name', 'namehindi', 'category', 'subcategory', 'price', 'mrp', 'costprice', 'image', 'images', 'description', 'stock', 'stockqty', 'tags', 'brand', 'material', 'packsize', 'specifications', 'gtin', 'descriptionhindi', 'sizeprices', 'reellink', 'sizestock', 'sizes', 'archived'].map(k => String(p[k] ?? ''))));
 }
 function adminProductsPage_(options) {
-  const all = getAllProducts(true),
+  options = options || {};
+  const all = getAllProducts(true, options.forceFresh === true),
     q = String(options.query || '').trim().toLowerCase().slice(0, 120),
     category = String(options.category || ''),
     stock = String(options.stock || 'all');
@@ -219,45 +198,34 @@ function adminProductsPage_(options) {
     return stock === 'all' || (stock === 'out' ? out : stock === 'low' ? tracked && Number(p.stockqty) > 0 && Number(p.stockqty) <= 5 : !out);
   });
   const sort = options.sort || 'id-asc';
-  const idCollator = new Intl.Collator('en', {
-    numeric: true,
-    sensitivity: 'base'
-  });
+  const idCollator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
   const compareId = (a, b) => idCollator.compare(String(a.id || ''), String(b.id || '')) || String(a.id || '').localeCompare(String(b.id || ''), 'en');
   list.sort((a, b) => sort === 'id-asc' ? compareId(a, b) : sort === 'id-desc' ? compareId(b, a) : (options.sort === 'price-asc' ? Number(a.price) - Number(b.price) : options.sort === 'price-desc' ? Number(b.price) - Number(a.price) : String(a.name || '').localeCompare(String(b.name || ''))) || compareId(a, b));
+  const archived = options.archived === true;
+  const sameArchive = all.filter(p => isArchived_(p) === archived);
   const total = list.length,
     page = Math.min(Math.max(0, Math.floor(Number(options.page) || 0)), Math.max(0, Math.ceil(total / 40) - 1));
   return {
-    products: list.slice(page * 40, (page + 1) * 40).map(p => ({
-      ...p,
-      _revision: productRevision_(p)
-    })),
+    products: list.slice(page * 40, (page + 1) * 40).map(p => ({ ...p, _revision: productRevision_(p) })),
     page,
     total,
-    allCount: all.filter(p => isArchived_(p) === (options.archived === true)).length,
-    categories: [...new Set(all.filter(p => isArchived_(p) === (options.archived === true)).map(p => p.category).filter(Boolean))].sort()
+    allCount: sameArchive.length,
+    categories: [...new Set(sameArchive.map(p => p.category).filter(Boolean))].sort()
   };
 }
 function archiveProduct_(body) {
   return withWriteLock_(function () {
     const sheet = getSheet_(PRODUCTS_SHEET);
-    ensureColumn_(sheet, 'archived');
-    const heads = headers_(sheet),
-      row = findRow_(sheet, 'id', String(body.id || ''));
+    const heads = ensureColumns_(sheet, ['archived']);
+    const row = findRowWithHeaders_(sheet, heads, 'id', String(body.id || ''));
     if (!row) throw new Error('Product not found.');
     const p = {};
     sheet.getRange(row, 1, 1, heads.length).getValues()[0].forEach((v, i) => p[heads[i]] = v);
     const desired = body.archived === true;
-    if (isArchived_(p) === desired) return {
-      success: true,
-      id: body.id
-    };
+    if (isArchived_(p) === desired) return { success: true, id: body.id };
     if (!body.expected_revision || productRevision_(p) !== body.expected_revision) throw new Error('Product changed. Refresh before archiving or restoring.');
     sheet.getRange(row, heads.indexOf('archived') + 1).setValue(desired ? 'yes' : '');
     invalidatePublicCaches_();
-    return {
-      success: true,
-      id: body.id
-    };
-  });
+    return { success: true, id: body.id };
+  }, { recoverTransactions: false });
 }

@@ -1,3 +1,15 @@
+# Admin performance optimization — 2026-09-24
+
+- Admin login now authenticates first and reveals the workspace without waiting for Products, Orders, Dashboard and AI-model requests. Each section lazy-loads when opened.
+- Admin product reads use a 30-second server-side cache. Product writes invalidate it immediately; the manual Refresh button bypasses it. Pagination/search no longer re-read the Products sheet on every request during the cache window.
+- Dashboard data now uses the existing 20-second cache. The Dashboard Refresh button bypasses the cache so direct Google Sheets edits can be checked immediately.
+- Product add/update/archive/delete no longer scan the order transaction journal before unrelated writes. Checkout, order status and inventory-changing flows retain transaction recovery.
+- Product schema checks are batched into one header read; update reads the product row once and returns the updated record so the admin can update the visible card without a full catalogue reload.
+- Order/status/product write flows no longer fan out into unnecessary Orders + Products + Dashboard refreshes. Affected views are marked stale and reload when opened.
+- AI model configuration is fetched when an AI surface is opened instead of during login. Product/archive search debounce increased from 250 ms to 350 ms.
+- Operational timing now samples admin session, product page, order list, dashboard and key write actions in addition to checkout/analytics.
+- Existing regression suite passes, with a performance-specific regression added for these guarantees. These are local/mock checks; live Apps Script latency still depends on Google cold starts, quotas, network and spreadsheet size.
+
 # Changelog and historical release notes
 
 This file consolidates superseded release-specific notes so the full checkpoint stays self-contained without carrying several overlapping Markdown files. Current operating/setup guidance lives in `SETUP.md`, `CUSTOMER-SETUP.md`, and `MAINTENANCE.md`.

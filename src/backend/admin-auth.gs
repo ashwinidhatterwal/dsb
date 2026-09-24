@@ -49,7 +49,7 @@ function dispatchAdmin_(body, actor) {
   }
   if (action === 'adminProductsPage') return adminProductsPage_(body.options || {});
   if (action === 'adminOrders') return getAllOrders(body.options);
-  if (action === 'adminDashboard') return getDashboardData();
+  if (action === 'adminDashboard') return getDashboardData(body.options || {});
   if (action === 'adminAnalytics') return getAnalyticsReport_(body.options || {});
   if (action === 'adminOperations') return adminOperations_();
   if (action === 'saveShipment') return saveShipment_(body);

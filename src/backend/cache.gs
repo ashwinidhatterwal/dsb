@@ -58,6 +58,7 @@ function invalidateAnalyticsCaches_() {
 }
 function invalidatePublicCaches_() {
   cacheRemove_(CATALOG_CACHE_KEY);
+  cacheRemove_(ADMIN_PRODUCTS_CACHE_KEY);
   cacheRemove_(REVIEWS_CACHE_KEY);
   cacheRemove_(REVIEW_SUMMARY_CACHE_KEY);
   cacheRemove_(PROMOS_CACHE_KEY);

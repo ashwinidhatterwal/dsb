@@ -45,7 +45,7 @@ function publicOrderRequests_(orderId) {
   }));
 }
 function submitOrderRequest_(payload) {
-  return withWriteLock_(function () { return submitOrderRequestUnlocked_(payload); });
+  return withWriteLock_(function () { return submitOrderRequestUnlocked_(payload); }, { recoverTransactions: false });
 }
 function submitOrderRequestUnlocked_(payload) {
   payload = payload || {};

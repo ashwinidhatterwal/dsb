@@ -128,7 +128,8 @@ async function resolveOrderRequest(requestId, requestStatus, resolutionNote) {
   const data = await res.json();
   if (data.error || data.success === false) throw new Error(data.error || 'Customer request was not updated.');
   showToast(data.autoCancelled ? 'Cancellation approved — order cancelled and stock restored' : 'Customer request updated');
-  await Promise.all([loadOrders(), loadDashboard(), data.autoCancelled ? loadProducts(false) : Promise.resolve()]);
+  markDashboardStale();
+  await loadOrders();
 }
 
 async function adminFetch(url, options = {}) {
@@ -191,7 +192,7 @@ function showToast(msg) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 1800);
 }
-async function loadProducts(refreshRelated = true) {
+async function loadProducts(refreshRelated = false, forceFresh = false) {
   const statusEl = $('#connectStatus'),
     sequence = ++productRequestSequence;
   $('#productsStatus').textContent = 'Refreshing products…';
@@ -203,7 +204,6 @@ async function loadProducts(refreshRelated = true) {
       ADMIN_PROFILE = profile;
       applyStaffRole();
       offerSavedDraft();
-      window.DSBAIConfig?.loadModels?.().catch(() => {});
     }
     const options = {
       query: $('#filterInput').value.trim(),
@@ -218,6 +218,7 @@ async function loadProducts(refreshRelated = true) {
       productQueryKey = queryKey;
     }
     options.page = productPage;
+    if (forceFresh) options.forceFresh = true;
     const data = await adminRead('adminProductsPage', options);
     if (sequence !== productRequestSequence) return false;
     if (!Array.isArray(data.products)) throw new Error('Invalid product response');
@@ -231,7 +232,7 @@ async function loadProducts(refreshRelated = true) {
     $('#productsStatus').textContent = 'Products up to date';
     renderProductList();
     renderCategoryOptions();
-    // First successful connect swaps the connect screen for the real app.
+    // Also supports direct/fallback product loading after authentication.
     $('#connectScreen').style.display = 'none';
     $('#adminApp').style.display = 'block';
   } catch (err) {
@@ -242,11 +243,23 @@ async function loadProducts(refreshRelated = true) {
   } finally {
     if (sequence === productRequestSequence) $('#refreshProductsBtn').disabled = false;
   }
-  if (refreshRelated) {
-    loadOrders();
-    loadDashboard();
-  }
+  // Related datasets are intentionally lazy-loaded by their own tabs.
+  // Keeping this argument preserves older callers without triggering fan-out.
+  void refreshRelated;
   return true;
+}
+function replaceProductLocally(product) {
+  if (!product || !product.id) return false;
+  const index = PRODUCTS.findIndex(p => String(p.id) === String(product.id));
+  if (index < 0) return false;
+  PRODUCTS[index] = product;
+  if (productResponse && Array.isArray(productResponse.products)) productResponse.products = PRODUCTS.slice();
+  renderProductList();
+  renderCategoryOptions();
+  return true;
+}
+function markDashboardStale() {
+  if (typeof LAST_DASHBOARD !== 'undefined') LAST_DASHBOARD = null;
 }
 function formatDateTime(value) {
   const d = new Date(value);
@@ -439,7 +452,8 @@ async function updateOrderStatus(orderId, newStatus) {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     showToast('Order updated');
-    await Promise.all([loadOrders(), loadDashboard(), loadProducts(false)]);
+    markDashboardStale();
+    await loadOrders();
   } catch (err) {
     alert('Could not update order: ' + err.message);
   } finally {
@@ -857,12 +871,17 @@ async function saveProductTask() {
     if (!isUpdate) sessionStorage.removeItem('dsb_admin_add_attempt');
     status(statusEl, isUpdate ? 'Product updated.' : `Product added as ${data.id}.`, true);
     showToast(isUpdate ? 'Product updated' : 'Product added');
+    const savedProduct = data && data.product;
+    markDashboardStale();
     clearForm(true);
     btn.disabled = false;
     btn.textContent = 'Save product';
     switchTab('products');
-    if (!(await loadProducts(false))) showToast('Product saved. List refresh failed; refresh before editing again.');
-    loadDashboard();
+    if (isUpdate && replaceProductLocally(savedProduct)) {
+      $('#productsStatus').textContent = 'Product updated';
+    } else if (!(await loadProducts(false))) {
+      showToast('Product saved. List refresh failed; refresh before editing again.');
+    }
   } catch (err) {
     status(statusEl, 'Save could not be confirmed: ' + err.message + ' Check the product list before retrying.', false);
   } finally {
@@ -878,7 +897,13 @@ function switchTab(name) {
     if (active) btn.setAttribute('aria-current', 'page');else btn.removeAttribute('aria-current');
   });
   if (name === 'archive') loadArchive();
-  if (name === 'dashboard' && LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
+  if (name === 'dashboard') {
+    if (LAST_DASHBOARD) renderDashboard(LAST_DASHBOARD);
+    else loadDashboard();
+  }
+  if (name === 'products' && !productResponse) loadProducts(false);
+  if (name === 'orders' && !orderResponse) loadOrders();
+  if (name === 'add' && !productResponse) loadProducts(false);
   if (name === 'analytics' && window.DSBAdminAnalytics) window.DSBAdminAnalytics.load();
   if (name === 'shop-tools' && window.DSBShopTools) window.DSBShopTools.load();
   if (name === 'customers' && window.DSBAdminCustomers) window.DSBAdminCustomers.load();
@@ -906,9 +931,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = $('#connectBtn');
     btn.disabled = true;
     btn.textContent = 'Connecting…';
-    await loadProducts();
-    btn.disabled = false;
-    btn.textContent = 'Connect';
+    try {
+      const profile = await adminRead('adminSession', { requiredVersion: 26 });
+      if (profile.version !== 26) throw new Error('Deploy the new code.gs version before opening this admin update.');
+      ADMIN_PROFILE = profile;
+      applyStaffRole();
+      offerSavedDraft();
+      $('#connectScreen').style.display = 'none';
+      $('#adminApp').style.display = 'block';
+      switchTab('dashboard');
+    } catch (err) {
+      status($('#connectStatus'), 'Could not connect: ' + err.message, false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Connect';
+    }
   });
   $('#saveBtn').addEventListener('click', saveProduct);
   $('#clearFormBtn').addEventListener('click', () => {
@@ -918,9 +955,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let productSearchTimer;
   $('#filterInput').addEventListener('input', () => {
     clearTimeout(productSearchTimer);
-    productSearchTimer = setTimeout(() => loadProducts(false), 250);
+    productSearchTimer = setTimeout(() => loadProducts(false), 350);
   });
-  $('#refreshProductsBtn').addEventListener('click', () => loadProducts(false));
+  $('#refreshProductsBtn').addEventListener('click', () => loadProducts(false, true));
   const workspaceSearch = $('.topbar-search input');
   workspaceSearch.placeholder = 'Find products…';
   workspaceSearch.addEventListener('keydown', e => {
@@ -963,7 +1000,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btn.disabled) return;
     btn.disabled = true;
     try {
-      const ok = await loadDashboard();
+      const ok = await loadDashboard(true);
       showToast(ok ? 'Dashboard refreshed' : 'Dashboard refresh failed. Try again.');
     } finally {
       btn.disabled = false;

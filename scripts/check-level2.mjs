@@ -19,7 +19,7 @@ assert(config.includes('DELIVERY_ESTIMATE_RULES'), 'Delivery estimate rules miss
 assert(product.includes('revOrderId') && product.includes('revPhone'), 'Optional review verification inputs missing');
 assert(product.includes('Verified purchase'), 'Verified review badge missing');
 assert(reviews.includes('reviewPurchaseVerification_') && reviews.includes('COMPLETED_STATUSES'), 'Delivered-order verification logic missing');
-assert(reviews.includes("ensureColumn_(sheet, 'verified')") && reviews.includes("ensureColumn_(sheet, 'verificationRef')"), 'Review schema migration missing');
+assert((reviews.includes("ensureColumn_(sheet, 'verified')") && reviews.includes("ensureColumn_(sheet, 'verificationRef')")) || reviews.includes("ensureColumns_(sheet, ['verified', 'verificationRef', 'moderationStatus'])"), 'Review schema migration missing');
 assert(reviews.includes('publicReview_') && !/return selected;/.test(reviews), 'Reviews must use public sanitizer');
 assert(commerce.includes('candidate.material') && commerce.includes('sourceWords') && commerce.includes('sourceSizes'), 'Level 2 recommendation signals missing');
 assert(seo.includes("category: [val(p, 'category'), val(p, 'subcategory')]") && seo.includes("['Available sizes'"), 'Richer product structured metadata missing');

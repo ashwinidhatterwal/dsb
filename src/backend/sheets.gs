@@ -57,11 +57,14 @@ function sheetText_(value) {
   // Prevent customer-controlled text becoming a spreadsheet formula.
   return typeof value === 'string' && /^[=+@\-\t\r]/.test(value) ? "'" + value : value;
 }
-function findRow_(sheet, column, value) {
-  const col = headers_(sheet).indexOf(column);
+function findRowWithHeaders_(sheet, heads, column, value) {
+  const col = heads.indexOf(String(column || '').trim().toLowerCase());
   if (col < 0 || sheet.getLastRow() < 2 || !value) return 0;
   const hit = sheet.getRange(2, col + 1, sheet.getLastRow() - 1, 1).createTextFinder(String(value)).matchEntireCell(true).matchCase(true).findNext();
   return hit ? hit.getRow() : 0;
+}
+function findRow_(sheet, column, value) {
+  return findRowWithHeaders_(sheet, headers_(sheet), column, value);
 }
 function rateLimit_(key, limit, seconds) {
   // Best-effort abuse throttling. Apps Script exposes no trustworthy client IP;
@@ -88,7 +91,7 @@ function rateLimit_(key, limit, seconds) {
 function validRequestId_(id) {
   return /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(String(id || ''));
 }
-function withWriteLock_(fn) {
+function withWriteLock_(fn, options) {
   const lock = LockService.getScriptLock();
   const waitStarted=Date.now(), acquired=lock.tryLock(10000);
   DSB_REQUEST_LOCK_WAIT_MS_ += Date.now()-waitStarted;
@@ -98,7 +101,9 @@ function withWriteLock_(fn) {
     error: 'The shop is busy. Please retry in a moment.'
   };
   try {
-    recoverTransactions_();
+    // Transaction recovery is essential before inventory/order operations, but
+    // unrelated product/review/settings writes should not scan the journal.
+    if (!options || options.recoverTransactions !== false) recoverTransactions_();
     return fn();
   } catch (err) {
     console.error(String(err));
@@ -114,8 +119,26 @@ function withWriteLock_(fn) {
 function parseSizes_(value) {
   return [...new Set(String(value || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean))];
 }
+function ensureColumns_(sheet, names) {
+  const heads = headers_(sheet);
+  const existing = new Set(heads);
+  const missing = [];
+  (names || []).forEach(name => {
+    const normalized = String(name || '').trim().toLowerCase();
+    if (normalized && !existing.has(normalized)) {
+      existing.add(normalized);
+      missing.push(String(name).trim());
+    }
+  });
+  if (missing.length === 1) {
+    sheet.getRange(1, sheet.getLastColumn() + 1).setValue(missing[0]);
+  } else if (missing.length > 1) {
+    sheet.getRange(1, sheet.getLastColumn() + 1, 1, missing.length).setValues([missing]);
+  }
+  return heads.concat(missing.map(name => name.toLowerCase()));
+}
 function ensureColumn_(sheet, name) {
-  if (headers_(sheet).indexOf(String(name).trim().toLowerCase()) < 0) sheet.getRange(1, sheet.getLastColumn() + 1).setValue(name);
+  ensureColumns_(sheet, [name]);
 }
 
 // Keep checkout payloads unchanged: canonicalization is for identity comparisons only.

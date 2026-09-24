@@ -15,6 +15,7 @@
   let aiReferenceUrls = [];
 
   function openDialog() {
+    if (window.DSBAIConfig && !window.DSBAIConfig.state.models.length) window.DSBAIConfig.loadModels().catch(() => {});
     const dialog = $('#aiFillDialog');
     if (!dialog) return;
     $('#aiFillStatus').textContent = '';

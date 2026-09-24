@@ -20,10 +20,10 @@ function animateNumber(el, target, prefix) {
   }
   el._numberFrame = requestAnimationFrame(step);
 }
-async function loadDashboard() {
+async function loadDashboard(forceFresh = false) {
   const sequence = ++dashboardRequestSequence;
   try {
-    const data = await adminRead('adminDashboard');
+    const data = await adminRead('adminDashboard', forceFresh ? { forceFresh: true } : undefined);
     if (sequence !== dashboardRequestSequence) return false;
     LAST_DASHBOARD = data;
     renderDashboard(data);
