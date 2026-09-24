@@ -52,7 +52,16 @@ const catalogHandler = productSource.match(/document\.addEventListener\('dsb:cat
 assert(catalogHandler.includes('renderProductDetails(updated);'), 'live catalogue refresh must rebuild structured product details');
 const languageHandler = productSource.match(/document\.addEventListener\('dsb:languagechange',[\s\S]*?document\.addEventListener\('dsb:catalogchange'/)?.[0] || '';
 assert(languageHandler.includes('renderProductDetails(p);'), 'language refresh must rebuild product details consistently');
-assert(dataSource.includes("const CATALOG_SESSION_KEY = 'dsb_catalog_v6';"), 'catalogue cache version must invalidate older incomplete session records');
-assert(!dataSource.includes("const CATALOG_SESSION_KEY = 'dsb_catalog_v5';"));
+assert(dataSource.includes("const CATALOG_SESSION_KEY = 'dsb_catalog_v7';"), 'catalogue cache version must invalidate older incomplete session records');
+assert(!dataSource.includes("const CATALOG_SESSION_KEY = 'dsb_catalog_v6';"));
+
+const productHtml = await read('product.html');
+for (const asset of ['i18n.js', 'seo.js', 'products-data.js', 'product.js']) {
+  assert(productHtml.includes(`${asset}?v=20260924details3`), `${asset} must use the product-details cache-busting release token`);
+}
+for (const page of ['index.html', 'catalog.html', 'about.html', 'contact.html', 'privacy.html', 'returns.html']) {
+  const html = await read(page);
+  if (html.includes('products-data.js')) assert(html.includes('products-data.js?v=20260924details3'), `${page} must not serve stale product catalogue code`);
+}
 
 console.log('PASS: structured product details render Brand/Material/Pack/Specifications and refresh when live catalogue data replaces cached data.');

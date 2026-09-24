@@ -62,7 +62,7 @@ function lowStockLabel(p) {
   if (p.stockQty <= 5) return `Only ${p.stockQty} left`;
   return '';
 }
-const CATALOG_SESSION_KEY = 'dsb_catalog_v6';
+const CATALOG_SESSION_KEY = 'dsb_catalog_v7';
 let catalogRequest = null,
   catalogLiveRequest = null;
 let CATALOG_META = {

@@ -1,3 +1,8 @@
+
+## 2026-09-24 — Product details deployment cache fix
+- Bumped customer-facing asset versions for the product-details fix so GitHub Pages/browser caches cannot keep serving the older product/catalogue scripts.
+- Advanced the catalogue session key to `dsb_catalog_v7` to discard any stale pre-fix product snapshot.
+- Extended regression coverage to fail if the product-details code changes are published under stale asset URLs.
 # Product details live-refresh fix — 2026-09-24
 
 - Fixed the product page so live catalogue refreshes rebuild the structured details block instead of updating only title/description/stock. Brand, Material, Pack / quantity and Specifications now appear as soon as fresher product data replaces an older browser snapshot.
