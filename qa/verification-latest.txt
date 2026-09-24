@@ -31,9 +31,9 @@ Image editor integration check passed.
 PASS: Level 1 filters, recent products, similarity, assurance information and analytics hooks.
 PASS: Level 2 placement, verified reviews, delivery estimates, richer metadata and recommendation signals.
 PASS: dedicated order tracking, POST privacy, support/cancellation requests, admin handling and status lifecycle.
-index.html: 304.0 KB local assets, 79.1 KB gzipped JS/CSS
-product.html: 316.7 KB local assets, 82.4 KB gzipped JS/CSS
-catalog.html: 287.6 KB local assets, 74.4 KB gzipped JS/CSS
+index.html: 304.1 KB local assets, 79.1 KB gzipped JS/CSS
+product.html: 316.8 KB local assets, 82.4 KB gzipped JS/CSS
+catalog.html: 287.7 KB local assets, 74.4 KB gzipped JS/CSS
 about.html: 213.7 KB local assets, 49.8 KB gzipped JS/CSS
 contact.html: 213.7 KB local assets, 49.8 KB gzipped JS/CSS
 privacy.html: 213.7 KB local assets, 49.8 KB gzipped JS/CSS
@@ -47,9 +47,10 @@ PASS: custom report boundaries, dates, future/reversed ranges and completed-day 
 PASS: Phase 2/3 phone compatibility, costs, cancellation locking, durable dedup, timestamp/reset boundaries and interrupted archive recovery.
 PASS: structured product details render Brand/Material/Pack/Specifications and refresh when live catalogue data replaces cached data.
 PASS: phone text round trip, zero rejection, tracking identity, minimal link payload, shared reads and read/write timeout distinction.
+PASS: browser global exposes DSB_SEO and storefront product details include structured fields.
 PASS: review moderation UI escapes user content, keeps negative ratings and exposes approval controls.
 PASS: moderated review visibility, legacy compatibility, stale transitions, owner permissions, key setup and admin access controls.
 PASS: HTML IDs/assets and standards-safe scroll behavior.
 PASS: Step 2 analytics reliability, metric integrity, cache freshness and version sync.
 PASS: syntax, pricing, discount, sorting, cart limits, checkout size/stock validation and static publishing.
-PASS: build consistency and all 29 regression programs.
+PASS: build consistency and all 30 regression programs.

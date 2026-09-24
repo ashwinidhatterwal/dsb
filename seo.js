@@ -122,3 +122,5 @@ const DSB_SEO = (() => {
   };
 })();
 if (typeof module !== 'undefined') module.exports = DSB_SEO;
+
+if (typeof window !== 'undefined') window.DSB_SEO = DSB_SEO;

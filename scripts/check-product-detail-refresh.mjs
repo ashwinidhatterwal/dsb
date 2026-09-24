@@ -24,7 +24,8 @@ const context = vm.createContext({
   window: {},
   isOutOfStock: () => false
 });
-vm.runInContext(seoSource + '\nwindow.DSB_SEO = DSB_SEO;', context, { filename: 'seo.js' });
+vm.runInContext(seoSource, context, { filename: 'seo.js' });
+assert(context.window.DSB_SEO, 'seo.js must expose DSB_SEO on window for storefront-commerce.js');
 vm.runInContext(commerceSource, context, { filename: 'storefront-commerce.js' });
 
 const fixture = {
@@ -57,11 +58,11 @@ assert(!dataSource.includes("const CATALOG_SESSION_KEY = 'dsb_catalog_v6';"));
 
 const productHtml = await read('product.html');
 for (const asset of ['i18n.js', 'seo.js', 'products-data.js', 'product.js']) {
-  assert(productHtml.includes(`${asset}?v=20260924details3`), `${asset} must use the product-details cache-busting release token`);
+  assert(productHtml.includes(`${asset}?v=20260924details4`), `${asset} must use the product-details cache-busting release token`);
 }
 for (const page of ['index.html', 'catalog.html', 'about.html', 'contact.html', 'privacy.html', 'returns.html']) {
   const html = await read(page);
-  if (html.includes('products-data.js')) assert(html.includes('products-data.js?v=20260924details3'), `${page} must not serve stale product catalogue code`);
+  if (html.includes('products-data.js')) assert(html.includes('products-data.js?v=20260924details4'), `${page} must not serve stale product catalogue code`);
 }
 
 console.log('PASS: structured product details render Brand/Material/Pack/Specifications and refresh when live catalogue data replaces cached data.');

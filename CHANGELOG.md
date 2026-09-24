@@ -1,3 +1,9 @@
+## 2026-09-24 — Product structured-details browser-scope fix
+- Fixed the actual storefront rendering bug: `seo.js` declared `DSB_SEO` as a top-level `const`, while `storefront-commerce.js` read `window.DSB_SEO`. In browsers, a top-level `const` is not a `window` property, so Brand, Material, Pack / quantity and Specifications were silently skipped even though the product data was present.
+- `seo.js` now explicitly exposes `DSB_SEO` on `window` in browsers while remaining safe for Node-based publishing/tests.
+- Bumped `seo.js`, `storefront-commerce.js`, `products-data.js`, `product.js` and related storefront asset tokens to `20260924details4` where used so the corrected browser code is fetched immediately.
+- Corrected the regression test so it no longer manually injects `window.DSB_SEO`; added a dedicated browser-global regression that reproduces the real loading behavior.
+
 
 ## 2026-09-24 — Product details deployment cache fix
 - Bumped customer-facing asset versions for the product-details fix so GitHub Pages/browser caches cannot keep serving the older product/catalogue scripts.
