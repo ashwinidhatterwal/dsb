@@ -8,7 +8,7 @@ This build adds profile.html to the reliability + admin image-editor build. This
 - Editable name/mobile, up to five saved addresses, default address and checkout autofill when the checkout fields are empty. Customers can select another saved address and edit before ordering.
 - Account-linked orders, ten per page, status, price breakup, historical address and payment method.
 - Downloadable HTML order slips and browser Print / Save as PDF using the existing receipt generator. UPI slips explicitly do not confirm payment.
-- Delete saved profile details/addresses after a recent sign-in. This does not delete Firebase identity or business order records. Account closure requests go to the shop.
+- Delete the customer account after a recent sign-in. The profile, saved addresses and customer-directory entry are removed; retained store orders are detached from the deleted account, and the browser attempts to remove the Firebase identity.
 - Local checkout/receipt details are cleared on sign-out. Unresolved checkout attempts are retained to prevent duplicate orders.
 - No cart/history cloud sync and no automatic linking of guest or previous orders. Signing in after an order does not claim that guest order.
 
@@ -61,7 +61,7 @@ Publish the storefront after the backend is deployed, then run these live checks
 
 ## Validation completed and limits
 
-Automated checks cover syntax/build consistency, existing regression programs, identity/project/expiry/revocation checks, address ownership and retry idempotency, paginated order ownership, public order field filtering, saved-data deletion, and same-request guest fallback. Firebase, Sheets and checkout persistence are mocked in the new tests. They are not live certification.
+Automated checks cover syntax/build consistency, existing regression programs, identity/project/expiry/revocation checks, address ownership and retry idempotency, paginated order ownership, public order field filtering, full account deletion/unlinking, and same-request guest fallback. Firebase, Sheets and checkout persistence are mocked in the new tests. They are not live certification.
 
 Live Google login, real Apps Script writes, cross-device operation, and browser layout/printing remain release gates. This workspace's Chromium download failed, so no visual-browser pass is claimed. Initial guest pages do not load Firebase or call customer APIs. Signed-in requests currently perform one online token lookup each; this adds latency and Apps Script URL Fetch usage. Measure real devices/API timings during the release gate; no percentage performance claim is made.
 
@@ -80,5 +80,5 @@ References: https://firebase.google.com/docs/auth/web/google-signin ; https://fi
 
 - Checkout restores authentication before choosing account text. Default saved addresses are selected once per account/page unless the customer has edited the form. Styled address cards replace the native select; account controls follow the selected website language. Saved-detail load errors offer Retry and still allow manual checkout.
 - Admin three-dot menu > Customer accounts is a read-only directory restricted to the admin role. Search name/email/mobile, paginate 20 accounts at a time, expand saved addresses and latest ten orders. It lists shop-known customers, not a live export of every Firebase user. Existing Google users join the directory on their next verified profile visit; existing saved profiles and linked orders are also included.
-- New CustomerAccounts sheet records verified UID, email, display name and first profile-visit date. Saved-details deletion leaves this account directory and business orders; account closure remains a shop support request.
+- The CustomerAccounts sheet records verified UID, email, display name and first profile-visit date. Account deletion removes that directory row and saved customer data, then clears the account UID from retained order records so a later sign-in cannot reclaim the old history.
 - Deploy updated code.gs as a new version before publishing this update. Existing Firebase Script Properties stay as configured, including your working server API key.

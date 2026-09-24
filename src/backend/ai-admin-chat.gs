@@ -150,45 +150,9 @@ function aiAdminAgentPrompt_(message, history, sessionState, actor, toolTrace, i
 function callAiAdminChatProvider_(config, prompt, imageUrls) {
   imageUrls = sanitizeAiAdminImageUrls_(imageUrls);
   if (imageUrls.length && config.vision === false) throw new Error('The selected AI model is configured without vision support. Choose a vision-capable model or remove the attached photos.');
-  if (config.apiType === 'chat_completions') {
-    const content = [{ type:'text', text:prompt }];
-    imageUrls.forEach(function(url){
-      const prepared = config.isGemini ? aiGeminiInlineImageUrl_(url) : url;
-      const image = { url:prepared };
-      if (!config.isGemini && config.imageDetail) image.detail = config.imageDetail;
-      content.push({ type:'image_url', image_url:image });
-    });
-    const payload = { model:config.model,messages:[{ role:'user',content:content }],max_tokens:config.maxOutputTokens,response_format:{ type:'json_object' } };
-    if (config.reasoningEffort && config.reasoningEffort !== 'none') payload.reasoning_effort = config.reasoningEffort;
-    let data;
-    try { data = aiFetchJson_(config,payload); }
-    catch (err) {
-      const m = String(err && err.message || '');
-      if (!/response_format|reasoning_effort|unsupported|unknown parameter|invalid parameter|HTTP\s*400|INVALID_ARGUMENT/i.test(m)) throw err;
-      delete payload.response_format; delete payload.reasoning_effort;
-      payload.messages[0].content[0].text += '\nReturn valid JSON only.';
-      data = aiFetchJson_(config,payload);
-    }
-    const finishReason = aiChatFinishReason_(data);
-    if (/length|max_tokens|max_output_tokens/i.test(finishReason)) throw new Error('AI chat response was cut off. Try a shorter request.');
-    const text = extractChatCompletionText_(data);
-    if (!text) throw new Error('AI chat returned no reply.');
-    return text;
-  }
-
-  const responseContent = [{ type:'input_text',text:prompt }];
-  imageUrls.forEach(function(url){ responseContent.push({ type:'input_image',detail:config.imageDetail || 'low',image_url:url }); });
-  const payload = { model:config.model,store:false,max_output_tokens:config.maxOutputTokens,input:[{ role:'user',content:responseContent }],text:{ format:{ type:'json_object' } } };
-  if (config.reasoningEffort && config.reasoningEffort !== 'none') payload.reasoning = { effort:config.reasoningEffort };
-  let data;
-  try { data = aiFetchJson_(config,payload); }
-  catch (err) {
-    const m = String(err && err.message || '');
-    if (!payload.reasoning || !/reasoning|effort|unsupported|unknown parameter|invalid parameter|HTTP\s*400/i.test(m)) throw err;
-    delete payload.reasoning;
-    data = aiFetchJson_(config,payload);
-  }
-  const text = extractOpenAiOutputText_(data);
-  if (!text) throw new Error('AI chat returned no reply.');
-  return text;
+  return callAiStructuredJson_(config, prompt, imageUrls, {
+    noTextMessage: 'AI chat returned no reply.',
+    cutoffMessage: 'AI chat response was cut off. Try a shorter request.',
+    fallbackJsonReminder: true
+  });
 }

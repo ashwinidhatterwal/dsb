@@ -1,4 +1,4 @@
-> Current release: see AUDIT-COMPLETION.md for API 26, new shop tools, setup and outstanding live checks.
+> Current source/checkpoint guidance: see `MAINTENANCE.md` and `CUSTOMER-SETUP.md`. Historical release notes are consolidated in `CHANGELOG.md`.
 
 # Phase 1 update - analytics correctness
 
@@ -160,67 +160,40 @@ production uploads and deployment permissions were not browser-tested here.
 
 The admin product editor can generate a reviewable product draft from the main product photo, a few notes, and fields you already filled in. It never saves a generated product automatically.
 
-1. Create an OpenAI API key for your API project.
-2. In the Google Apps Script project, open **Project settings** > **Script properties** > **Edit script properties**.
-3. Add `AI_API_KEY` with the provider API key as its value. (`OPENAI_API_KEY` is still accepted for backward compatibility.)
-4. Add `AI_MODEL` with the model id you want to use.
-5. Add `AI_BASE_URL` with the provider's OpenAI-compatible API base, for example `https://api.openai.com/v1`.
-6. Add `AI_API_TYPE` as either `responses` or `chat_completions`.
-5. Replace/redeploy the generated root `code.gs` so the AI backend action is available.
+AI provider setup is managed only from **Admin → ⋮ → AI configuration**:
 
-Never put `AI_API_KEY` (or any provider key) in `admin.html`, JavaScript, GitHub, or browser-side configuration. The browser sends only the authenticated product request to Apps Script; Apps Script calls the configured AI provider server-side.
+1. Open **AI configuration** and choose **Add connection**.
+2. Enter a connection name, HTTPS base URL, API type (`responses` or `chat_completions`) and API key.
+3. Choose image detail and the connection's maximum output-token limit.
+4. Add one or more provider model IDs, enable the effort levels that model supports, and mark vision support correctly.
+5. Use **Test connection**, then save the connection.
+6. Deploy the included root `code.gs` as a new Apps Script web-app version whenever backend code changes.
+
+The API key is stored server-side in Apps Script under an internal `AI_CONN_KEY_<connection-id>` Script Property. Connection metadata is stored in `AI_CONNECTIONS_JSON_V1`. Never copy provider keys into `admin.html`, browser JavaScript, GitHub, or other public files.
 
 After every update that changes `code.gs`, copy the new root `code.gs` into the Apps Script project and create a new web-app deployment/version before testing new backend actions. If the admin shows **AI backend is not deployed yet** (or an older **unknown action** message), the GitHub frontend is newer than the deployed Apps Script backend.
 
 In **Admin > Add product**, choose/upload the main product photo, optionally add one or more **AI-only reference photos** inside the AI dialog, enter any facts you know (for example `brass, ₹240, sizes 2.4, 2.6, 2.8`), then press **Generate with AI**. AI-only reference photos help the model inspect another angle, packaging, a label, or a close-up, but they are not saved to the product gallery. Review the generated fields before choosing **Apply to product form**, then use the normal **Save product** button.
 
-### Switching AI providers or models without editing code
+### Switching AI providers or models
 
-After this version is deployed, change only Apps Script **Script properties**:
+Do this from **Admin → ⋮ → AI configuration**; direct legacy AI Script Properties are no longer read by the backend. You can keep several connections and models configured at once, enable/disable them independently, and select an enabled model from Product AI or DSB AI.
 
-- `AI_API_KEY` — provider API key
-- `AI_BASE_URL` — OpenAI-compatible API base URL (the code appends `/responses` or `/chat/completions` unless the full endpoint is already supplied)
-- `AI_MODEL` — exact model id from that provider
-- `AI_API_TYPE` — `responses` or `chat_completions`
+For OpenAI, a typical base URL is `https://api.openai.com/v1`. For Gemini's OpenAI-compatible endpoint, use `https://generativelanguage.googleapis.com/v1beta/openai` with `chat_completions`. Other compatible providers should use their documented HTTPS base URL and exact model IDs.
 
-Changing only `AI_MODEL` is enough to switch between compatible models on the same provider. Changing provider normally means updating all four properties. The configured model must support image/vision input if you want product-photo analysis. Chat-completions providers that do not support JSON Schema are retried once with prompt-enforced JSON.
+### AI speed and quality tuning
 
-Example for the native OpenAI setup:
+Configure **Image detail** and **Max output tokens** on each AI connection. `low` image detail is appropriate for normal product photos; use `auto` or `high` only when tiny packaging text or fine details matter. If a provider truncates long bilingual drafts, increase that connection's max-output-token setting, up to the supported 5000-token cap.
 
-```text
-AI_BASE_URL=https://api.openai.com/v1
-AI_API_TYPE=responses
-AI_MODEL=gpt-5.6-luna
-AI_API_KEY=your-secret-key
-```
-
-For another OpenAI-compatible provider, use that provider's base URL and exact model id instead.
-
-
-### AI speed tuning (optional)
-`AI_IMAGE_DETAIL=low` is the fast default and is recommended for normal product photos. Use `auto` or `high` only when the model must read tiny packaging text. `AI_MAX_OUTPUT_TOKENS=5000` is the default; increase it only if your provider frequently truncates drafts. The admin sends lightweight Cloudinary derivatives to AI without changing storefront image quality.
+Reasoning/effort is configured per model. Product AI and DSB AI expose only the effort levels enabled for the selected model, so unsupported values are not sent.
 
 ### Gemini/OpenAI-compatible reliability
 
-For Gemini through the OpenAI-compatible endpoint, use `AI_API_TYPE=chat_completions` and `AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`. The backend automatically prefers Gemini JSON-Schema structured output and uses low reasoning effort by default for faster product extraction. Optional `AI_REASONING_EFFORT` values include `low`, `medium`, or `high`; `low` is recommended here. If a provider truncates long bilingual drafts, raise `AI_MAX_OUTPUT_TOKENS` to `1600`.
+For Gemini through the OpenAI-compatible endpoint, configure the connection with API type `chat_completions` and base URL `https://generativelanguage.googleapis.com/v1beta/openai`. The backend prefers Gemini JSON-Schema structured output, omits the OpenAI-specific image `detail` hint, and can retry with a compatibility payload when a provider rejects structured-output parameters. Gemini image URLs are fetched server-side and sent as inline image data without changing the product image stored on the storefront.
 
-### Gemini compatibility note
+### Legacy AI Script Properties
 
-For `AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai` with `AI_API_TYPE=chat_completions`, the backend sends Gemini's documented `image_url.url` shape and omits the OpenAI-specific image `detail` hint. If a Gemini model rejects structured-output parameters with HTTP 400, DSB retries once with a minimal JSON-instruction payload and keeps server-side draft validation enabled.
-
-### Gemini image compatibility
-
-When `AI_BASE_URL` points to `generativelanguage.googleapis.com`, the backend fetches the already-compressed AI image and sends it to Gemini as an inline base64 image. This follows Gemini's OpenAI-compatible vision request format and does not change the product image stored on the storefront.
-
-### Per-product AI quality
-
-The admin AI dialog now has **Fast / Better / Best** quality controls. These override `AI_REASONING_EFFORT` only for that one Generate request:
-
-- **Fast** → `low` (recommended for normal product entry)
-- **Better** → `medium`
-- **Best** → `high` (slowest; use for difficult/ambiguous products)
-
-`AI_REASONING_EFFORT` in Script Properties remains the backend fallback for clients that do not send a per-request selection. No redeploy is needed just to change the Script Property.
+The old direct-property AI fallback has been removed. These old keys are no longer read by the application and may be deleted manually from Apps Script after confirming your AI Configuration connections work: `AI_API_KEY`, `OPENAI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`, `OPENAI_MODEL`, `AI_API_TYPE`, `AI_IMAGE_DETAIL`, `AI_MAX_OUTPUT_TOKENS`, and `AI_REASONING_EFFORT`. Do **not** delete `AI_CONNECTIONS_JSON_V1` or any `AI_CONN_KEY_*` entries used by the current AI Configuration page.
 
 ## Admin AI chat
 
@@ -279,13 +252,12 @@ Collection is lightweight and anonymous: events are batched in the browser and i
 
 ## AI configuration
 
-The admin panel now includes **⋮ → AI configuration**. This is the preferred way to manage AI providers.
+The admin panel includes **⋮ → AI configuration**, which is the only supported runtime AI configuration path.
 
 - Add any number of OpenAI-compatible API connections.
 - Each connection stores its own HTTPS base URL, API type (`chat_completions` or `responses`) and API key.
 - Add one or more models under each connection and choose which effort levels and vision support each model exposes.
 - Use **Test connection** before saving or after changing a provider/model.
-- DSB AI and Product AI automatically use the enabled models from this page; each remembers its own last model and effort selection.
-- API keys are stored only in Apps Script Script Properties under internal `AI_CONN_KEY_*` properties. The browser receives only a `hasApiKey` flag, never the stored key.
-
-Existing `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL` and `AI_API_TYPE` Script Properties remain supported as a legacy fallback until at least one enabled connection is configured.
+- DSB AI and Product AI automatically use enabled models from this page; each remembers its own last model and effort selection.
+- API keys remain server-side in internal `AI_CONN_KEY_*` Script Properties; metadata lives in `AI_CONNECTIONS_JSON_V1`. The browser receives only safe model metadata and a `hasApiKey` flag, never the stored key.
+- Old direct AI properties are ignored by the application and can be deleted manually once the configured connections are verified.

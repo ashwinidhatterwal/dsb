@@ -18,7 +18,7 @@
   const formatType = type => ({'image/jpeg':'JPEG','image/png':'PNG','image/webp':'WebP'}[type] || String(type || 'Image').replace('image/','').toUpperCase());
   const safeBaseName = name => String(name || 'product-photo').replace(/\.[^.]+$/, '').replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'product-photo';
 
-  let dialog, canvas, ctx, resultEl;
+  let dialog, canvas, ctx, resultEl, focusControl, focusInput, focusOutput, hintEl;
   let currentInput = null;
   let bitmap = null;
   let sourceFile = null;
@@ -26,7 +26,9 @@
   let ratio = 0;
   let crop = null;
   let dragging = false;
+  let dragMode = '';
   let dragStart = null;
+  let dragCropStart = null;
   let preview = { w: 1, h: 1 };
 
   function ensureDialog() {
@@ -51,6 +53,11 @@
             <button type="button" data-ratio="1.3333333333">4:3</button>
           </div>
         </div>
+        <div class="image-editor-focus" data-focus-control hidden>
+          <label for="imageEditorFocus">Focus zoom</label>
+          <input id="imageEditorFocus" type="range" min="1" max="4" step="0.05" value="1" aria-label="Focus zoom">
+          <output for="imageEditorFocus">1.0×</output>
+        </div>
         <div class="image-editor-stage-wrap"><div class="image-editor-stage"><canvas class="image-editor-canvas"></canvas></div></div>
         <div class="image-editor-hint">Drag over the photo to choose the crop area. Reset crop keeps the full image.</div>
         <div class="image-editor-foot">
@@ -62,24 +69,38 @@
     canvas = $('.image-editor-canvas', dialog);
     ctx = canvas.getContext('2d');
     resultEl = $('#imageEditorResult', dialog);
+    focusControl = $('[data-focus-control]', dialog);
+    focusInput = $('#imageEditorFocus', dialog);
+    focusOutput = $('output[for="imageEditorFocus"]', dialog);
+    hintEl = $('.image-editor-hint', dialog);
 
     $('.image-editor-close', dialog).addEventListener('click', closeEditor);
     $('.image-editor-cancel', dialog).addEventListener('click', closeEditor);
     $('.image-editor-apply', dialog).addEventListener('click', applyEdit);
-    $('[data-reset]', dialog).addEventListener('click', () => { crop = fullCrop(); render(); });
+    $('[data-reset]', dialog).addEventListener('click', () => { crop = ratio ? centeredCrop(ratio) : fullCrop(); syncFocusControl(); render(); });
     dialog.addEventListener('click', e => { if (e.target === dialog) closeEditor(); });
     dialog.addEventListener('close', releaseBitmap);
     dialog.querySelectorAll('[data-rotate]').forEach(btn => btn.addEventListener('click', () => {
       angle = (angle + Number(btn.dataset.rotate) + 360) % 360;
       crop = null;
       render(true);
+      syncFocusControl();
     }));
     dialog.querySelectorAll('[data-ratio]').forEach(btn => btn.addEventListener('click', () => {
       ratio = Number(btn.dataset.ratio) || 0;
       dialog.querySelectorAll('[data-ratio]').forEach(x => x.classList.toggle('active', x === btn));
       crop = centeredCrop(ratio);
+      syncFocusControl();
       render();
     }));
+    focusInput.addEventListener('input', () => {
+      if (!ratio || !crop) return;
+      const zoom = Math.max(1, Math.min(4, Number(focusInput.value) || 1));
+      const center = {x: crop.x + crop.w / 2, y: crop.y + crop.h / 2};
+      crop = cropAtZoom(ratio, zoom, center);
+      focusOutput.value = `${zoom.toFixed(1)}×`;
+      render();
+    });
 
     canvas.addEventListener('pointerdown', pointerDown);
     canvas.addEventListener('pointermove', pointerMove);
@@ -98,6 +119,34 @@
     let w = preview.w, h = w / r;
     if (h > preview.h) { h = preview.h; w = h * r; }
     return { x: (preview.w - w) / 2, y: (preview.h - h) / 2, w, h };
+  }
+
+  function cropAtZoom(r, zoom, center) {
+    const max = centeredCrop(r);
+    const z = Math.max(1, Math.min(4, Number(zoom) || 1));
+    const w = max.w / z, h = max.h / z;
+    const cx = center?.x ?? preview.w / 2, cy = center?.y ?? preview.h / 2;
+    return clampCrop({x: cx - w / 2, y: cy - h / 2, w, h});
+  }
+
+  function pointInsideCrop(p) {
+    return !!crop && p.x >= crop.x && p.x <= crop.x + crop.w && p.y >= crop.y && p.y <= crop.y + crop.h;
+  }
+
+  function syncFocusControl() {
+    if (!focusControl || !focusInput || !focusOutput) return;
+    focusControl.hidden = !ratio;
+    if (!ratio) {
+      focusInput.value = '1';
+      focusOutput.value = '1.0×';
+      if (hintEl) hintEl.textContent = 'Drag over the photo to choose the crop area. Reset crop keeps the full image.';
+      return;
+    }
+    const max = centeredCrop(ratio);
+    const zoom = crop?.w ? Math.max(1, Math.min(4, max.w / crop.w)) : 1;
+    focusInput.value = String(zoom);
+    focusOutput.value = `${zoom.toFixed(1)}×`;
+    if (hintEl) hintEl.textContent = 'Drag the crop box over the subject. Use Focus zoom to crop tighter while keeping the selected aspect ratio.';
   }
 
   function drawRotated(targetCtx, targetW, targetH, img, degrees) {
@@ -123,6 +172,8 @@
     if (!crop || resetCrop) crop = ratio ? centeredCrop(ratio) : fullCrop();
     crop = clampCrop(crop);
     drawCropOverlay();
+    syncFocusControl();
+    canvas.style.cursor = ratio ? 'grab' : 'crosshair';
     updateResultText();
   }
 
@@ -143,8 +194,18 @@
     ctx.fill('evenodd');
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2;
-    ctx.setLineDash([7, 5]);
+    ctx.setLineDash([]);
     ctx.strokeRect(crop.x + 1, crop.y + 1, Math.max(0, crop.w - 2), Math.max(0, crop.h - 2));
+    ctx.globalAlpha = .58;
+    ctx.lineWidth = 1;
+    for (const third of [1/3, 2/3]) {
+      ctx.beginPath(); ctx.moveTo(crop.x + crop.w * third, crop.y); ctx.lineTo(crop.x + crop.w * third, crop.y + crop.h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(crop.x, crop.y + crop.h * third); ctx.lineTo(crop.x + crop.w, crop.y + crop.h * third); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    const handle = Math.max(5, Math.min(9, Math.min(crop.w, crop.h) * .045));
+    ctx.fillStyle = '#fff';
+    [[crop.x,crop.y],[crop.x+crop.w,crop.y],[crop.x,crop.y+crop.h],[crop.x+crop.w,crop.y+crop.h]].forEach(([x,y])=>ctx.fillRect(x-handle/2,y-handle/2,handle,handle));
     ctx.restore();
   }
 
@@ -160,29 +221,37 @@
     if (!bitmap) return;
     dragging = true;
     dragStart = canvasPoint(e);
+    dragCropStart = crop ? {...crop} : null;
+    dragMode = ratio && crop ? 'move' : 'select';
+    canvas.style.cursor = dragMode === 'move' ? 'grabbing' : 'crosshair';
     canvas.setPointerCapture?.(e.pointerId);
-    crop = { x: dragStart.x, y: dragStart.y, w: 1, h: 1 };
+    if (dragMode === 'select') crop = { x: dragStart.x, y: dragStart.y, w: 1, h: 1 };
   }
 
   function pointerMove(e) {
-    if (!dragging || !dragStart) return;
     const p = canvasPoint(e);
+    if (!dragging || !dragStart) {
+      canvas.style.cursor = ratio && pointInsideCrop(p) ? 'grab' : 'crosshair';
+      return;
+    }
+    if (dragMode === 'move' && dragCropStart) {
+      crop = clampCrop({
+        x: dragCropStart.x + p.x - dragStart.x,
+        y: dragCropStart.y + p.y - dragStart.y,
+        w: dragCropStart.w,
+        h: dragCropStart.h
+      });
+      render();
+      return;
+    }
     let dx = p.x - dragStart.x, dy = p.y - dragStart.y;
     let w = Math.abs(dx), h = Math.abs(dy);
-    if (ratio) {
-      if (w / Math.max(h, 1) > ratio) h = w / ratio;
-      else w = h * ratio;
-      w = Math.min(w, dragStart.x, preview.w - dragStart.x, Math.max(dragStart.x, preview.w - dragStart.x)) || w;
-    }
     let x = dx >= 0 ? dragStart.x : dragStart.x - w;
     let y = dy >= 0 ? dragStart.y : dragStart.y - h;
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
     if (x + w > preview.w) w = preview.w - x;
     if (y + h > preview.h) h = preview.h - y;
-    if (ratio && w > 8 && h > 8) {
-      if (w / h > ratio) w = h * ratio; else h = w / ratio;
-    }
     crop = clampCrop({ x, y, w: Math.max(8, w), h: Math.max(8, h) });
     render();
   }
@@ -190,8 +259,12 @@
   function pointerUp(e) {
     if (!dragging) return;
     dragging = false;
+    dragMode = '';
+    dragStart = null;
+    dragCropStart = null;
     canvas.releasePointerCapture?.(e.pointerId);
     if (!crop || crop.w < 12 || crop.h < 12) crop = ratio ? centeredCrop(ratio) : fullCrop();
+    canvas.style.cursor = ratio ? 'grab' : 'crosshair';
     render();
   }
 
@@ -213,7 +286,7 @@
     releaseBitmap();
     sourceFile = file;
     currentInput = input;
-    angle = 0; ratio = 0; crop = null;
+    angle = 0; ratio = 0; crop = null; dragMode = ''; dragStart = null; dragCropStart = null;
     dialog.querySelectorAll('[data-ratio]').forEach(x => x.classList.toggle('active', x.dataset.ratio === '0'));
     $('#imageEditorSource', dialog).textContent = `${file.name} · ${formatBytes(file.size)}`;
     try {
@@ -275,7 +348,7 @@
   }
 
   function closeEditor() { if (dialog?.open) dialog.close(); }
-  function releaseBitmap() { if (bitmap?.close) bitmap.close(); bitmap = null; sourceFile = null; currentInput = null; dragging = false; }
+  function releaseBitmap() { if (bitmap?.close) bitmap.close(); bitmap = null; sourceFile = null; currentInput = null; dragging = false; dragMode = ''; dragStart = null; dragCropStart = null; }
 
   async function inspectFile(file) {
     if (!file) return null;

@@ -5,6 +5,7 @@ import vm from 'node:vm';
 const order = JSON.parse(fs.readFileSync('src/build-order.json', 'utf8'));
 const aiSources = order.backend.filter(file => file.includes('/ai-admin-'));
 const backend = aiSources.map(file => fs.readFileSync(file, 'utf8')).join('\n');
+const providerBackend = fs.readFileSync('src/backend/ai-product.gs', 'utf8');
 const auth = fs.readFileSync('src/backend/admin-auth.gs', 'utf8');
 const html = fs.readFileSync('admin.html', 'utf8');
 const client = fs.readFileSync('admin-chat.js', 'utf8');
@@ -47,7 +48,7 @@ assert.equal(patch.evil, undefined);
 
 assert(html.includes('id="adminAiAttach"') && html.includes('id="adminAiImageInput"') && html.includes('id="adminAiImagePreview"'), 'Admin AI image attachment controls are missing');
 assert(client.includes('pendingImageUrls') && client.includes('uploadFileToCloudinary') && client.includes('imageUrls'), 'Admin AI client does not upload/send chat images');
-assert(backend.includes('sanitizeAiAdminImageUrls_') && backend.includes("type:'image_url'") && backend.includes("type:'input_image'"), 'Admin AI backend does not support vision chat images');
+assert(backend.includes('sanitizeAiAdminImageUrls_') && backend.includes('callAiStructuredJson_') && providerBackend.includes("type: 'image_url'") && providerBackend.includes("type: 'input_image'"), 'Admin AI backend does not support shared vision chat images');
 
 const products = [
   {id:'DSB-0008',name:'Red Bridal Bangle Set',tags:'bridal, red',description:'Old copy',image:'https://example.com/a.jpg',images:'https://example.com/a2.jpg',price:220,stockqty:5,stock:'in stock'},

@@ -8,7 +8,7 @@ const reviews = read('src/backend/reviews.gs');
 const http = read('src/backend/http.gs');
 const config = read('src/backend/config.gs');
 const seo = read('seo.js');
-const style = read('src/styles/level2-commerce.css');
+const style = read('src/styles/delivery-and-reviews.css');
 
 assert(home.indexOf('recentlyViewedSection') < home.indexOf('popularPicksSection'), 'Recently viewed should appear before home recommendation rails');
 assert(commerce.includes('deliveryEstimatorHtml') && commerce.includes('bindDeliveryEstimator'), 'Delivery estimator module missing');

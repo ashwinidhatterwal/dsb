@@ -73,6 +73,21 @@
     // init completes before enabling the sign-in button, preserving the browser user gesture.
     signIn() { const provider = new sdk.GoogleAuthProvider(); provider.setCustomParameters({prompt:'select_account'}); return sdk.signInWithPopup(auth,provider); },
     async signOut() { await init(); await sdk.signOut(auth); remember(false); clearPrivate(); },
+    async deleteAccount() {
+      await init();
+      const user = auth?.currentUser;
+      if (!user) throw new Error('Please sign in again. / कृपया फिर से साइन इन करें।');
+      await request('customer.account.delete', {confirm:'DELETE_ACCOUNT'});
+      remember(false); clearPrivate();
+      try {
+        await sdk.deleteUser(user);
+      } catch (err) {
+        try { await sdk.signOut(auth); } catch (_) {}
+        const e = new Error('Your saved account data was deleted and you were signed out, but the sign-in identity could not be removed. Sign in again and retry account deletion.');
+        e.code = 'customer/auth-delete-incomplete';
+        throw e;
+      }
+    },
     clearPrivate,
     invalidate() { details = null; try {localStorage.setItem('dsb_customer_details_changed',String(Date.now()));} catch (_) {} }
   };

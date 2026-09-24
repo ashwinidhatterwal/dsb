@@ -127,14 +127,6 @@ function playAddFlourish(imgEl, {
 }
 
 /* ---------------- Order tracking navigation ---------------- */
-function trackOrderUrl(orderId) {
-  const id = String(orderId || '').trim();
-  return id ? `track-order.html?orderId=${encodeURIComponent(id)}` : 'track-order.html';
-}
-function goToTrackOrder(orderId) {
-  window.location.href = trackOrderUrl(orderId);
-}
-
 let cartScrollLockY = 0;
 function lockPageForCart() {
   // position:fixed is more reliable than overflow:hidden on Android browsers.

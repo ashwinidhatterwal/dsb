@@ -80,13 +80,6 @@ function aiPublicModels_() {
       });
     });
   });
-  if (!result.length) {
-    const legacyKey = String(secret_('AI_API_KEY', secret_('OPENAI_API_KEY', '')) || '').trim();
-    const legacyModel = String(secret_('AI_MODEL', secret_('OPENAI_MODEL', '')) || '').trim();
-    if (legacyKey && legacyModel) {
-      result.push({ configId: 'legacy', connectionId: 'legacy', connectionName: 'Legacy Script Properties', label: legacyModel, model: legacyModel, efforts: ['low','medium','high'], defaultEffort: 'low', vision: true });
-    }
-  }
   return result;
 }
 

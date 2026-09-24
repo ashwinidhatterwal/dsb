@@ -51,8 +51,15 @@ user.localId='alice';
 result=req('customer.orders.list',{uid:'bob'});assert.equal(result.orders.length,1);assert.equal(result.orders[0].orderId,'A');assert.equal(result.orders[0].subtotal,200);assert(!JSON.stringify(result).includes('costPrice'));assert(!JSON.stringify(result).includes('costprice'));
 for(let i=0;i<15;i++)sheets.Orders.appendRow(['A'+i,'alice','[]',1,0,0,0,0]);
 result=req('customer.orders.list');assert.equal(result.orders.length,10);assert(result.nextCursor);assert.equal(req('customer.orders.list',{cursor:result.nextCursor}).orders.length,6);
-assert.equal(req('customer.saved.delete',{confirm:'no'}).success,false);
-assert.equal(req('customer.saved.delete',{confirm:'DELETE_SAVED_DETAILS'}).success,true);assert.equal(req('customer.profile.get').addresses.length,0);assert.equal(sheets.Orders.rows.length,18);
+// Full account deletion removes the directory/profile/addresses and unlinks retained store orders.
+assert.equal(req('customer.profile.save',{profile:{name:'Alice Again',phone:'09876543210'}}).success,true);
+assert.equal(req('customer.address.save',{address}).success,true);
+assert.equal(req('customer.account.delete',{confirm:'no'}).success,false);
+result=req('customer.account.delete',{confirm:'DELETE_ACCOUNT'});assert.equal(result.success,true);assert.equal(result.removed.profiles,1);assert.equal(result.removed.addresses,1);assert.equal(result.removed.directory,1);assert.equal(result.removed.ordersUnlinked,16);
+assert.equal((sheets.Customers?.rows.length||0),1);assert.equal((sheets.CustomerAddresses?.rows.length||0),1);assert.equal((sheets.CustomerAccounts?.rows.length||0),1);
+assert.equal(sheets.Orders.rows.slice(1).filter(r=>r[1]==='alice').length,0,'deleted account must no longer own retained orders');
+assert.equal(req('customer.orders.list').orders.length,0,'old orders must not reappear if the same auth identity signs in again');
+const fresh=req('customer.profile.get');assert.equal(fresh.profile.name,'','fresh profile must not repopulate the Google display name into saved details');assert.equal(fresh.addresses.length,0);
 // HTTP gateway passes verified identity separately; client UID and idToken cannot reach stored order payload.
 let seen;c.jsonResponse=x=>x;c.addOrder=(order,uid)=>{seen={order,uid};return{success:true};};
 c.doPostCore_({postData:{contents:JSON.stringify({action:'addOrder',idToken:token(),order:{customerUID:'bob',uid:'bob'}})}});assert.equal(seen.uid,'alice');
@@ -61,4 +68,4 @@ status=400;assert.equal(c.doPostCore_({postData:{contents:JSON.stringify({action
 for(const name of ['index.html','product.html','catalog.html'])assert(read(name).includes('customer-account.js'));
 assert(read('cart-ui-checkout.js').includes('pendingCheckout.guest=true'));
 assert(read('src/backend/checkout.gs').includes('customeruid: customerUid'));
-console.log('PASS: customer token/project/revocation checks, UID isolation, ownership, address retries, pagination, private order projection, saved-data deletion, and guest gateway (mocked Firebase/Sheets).');
+console.log('PASS: customer token/project/revocation checks, UID isolation, ownership, address retries, pagination, private order projection, full account deletion/unlinking, and guest gateway (mocked Firebase/Sheets).');

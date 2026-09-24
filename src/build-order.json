@@ -33,16 +33,16 @@
     "src/styles/dialogs-and-checkout.css",
     "src/styles/footer-and-loading.css",
     "src/styles/product-and-shared-ui.css",
-    "src/styles/legacy-theme.css",
+    "src/styles/theme-motion-and-overlays.css",
     "src/styles/modal-layout.css",
     "src/styles/loader-and-localization.css",
     "src/styles/checkout-and-controls.css",
     "src/styles/storefront-layout.css",
     "src/styles/catalog-and-photo-effects.css",
     "src/styles/home-brand-and-actions.css",
-    "src/styles/level1-commerce.css",
-    "src/styles/level2-commerce.css",
-    "src/styles/level3-commerce.css"
+    "src/styles/product-discovery-and-assurance.css",
+    "src/styles/delivery-and-reviews.css",
+    "src/styles/order-lifecycle.css"
   ],
   "adminChat": [
     "src/admin-ai/core.js",

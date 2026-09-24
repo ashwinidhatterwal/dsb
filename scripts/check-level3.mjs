@@ -14,7 +14,7 @@ assert(http.includes("body.action === 'trackOrder'") && http.includes("body.acti
 assert(!http.includes("e.parameter.orderId") && !http.includes("e.parameter.phone"), 'GET tracking route should be removed to keep phone out of URLs');
 assert(track.includes("method: 'POST'") && track.includes("action: 'trackOrder'") && !track.includes('?action=trackOrder&orderId='), 'Dedicated tracker must use POST');
 assert(page.includes('id="trackPageForm"') && page.includes('track-order.js'), 'Dedicated tracking page missing');
-assert(core.includes('track-order.html?orderId=') && !core.includes('function openTrackOrder'), 'Cart core should navigate to dedicated tracker only');
+assert(!core.includes('function openTrackOrder') && !core.includes('trackOrderUrl') && !core.includes('goToTrackOrder'), 'Cart core should not retain legacy tracking navigation helpers');
 assert(checkout.includes("window.location.assign('thank-you.html')") && thank.includes('track-order.html?orderId='), 'Order confirmation must open Thank You page with dedicated tracker link');
 assert(orders.includes('Invalid status transition from') && orders.includes('orderRequestsByOrderIds_'), 'Order lifecycle/request admin feed missing');
 assert(admin.includes('ORDER_STATUS_TRANSITIONS_CLIENT') && admin.includes('orderRequestsHtml') && admin.includes('resolveOrderRequest'), 'Admin Level 3 controls missing');

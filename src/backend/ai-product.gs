@@ -1,14 +1,7 @@
 /* AI product draft generation. Bundled into code.gs by scripts/build.mjs.
- * Provider/model selection is controlled by Apps Script Script Properties.
- * Secrets stay server-side and are never sent to the browser.
- *
- * Preferred properties:
- *   AI_API_KEY   - provider API key
- *   AI_BASE_URL  - e.g. https://api.openai.com/v1 or another OpenAI-compatible base
- *   AI_MODEL     - provider model id
- *   AI_API_TYPE  - responses | chat_completions
- *
- * Backward compatibility: OPENAI_API_KEY and OPENAI_MODEL are still accepted.
+ * Provider/model selection comes exclusively from Admin → AI Configuration.
+ * Connection metadata is stored in AI_CONNECTIONS_JSON_V1 and API keys in
+ * per-connection AI_CONN_KEY_* Script Properties; secrets never reach browsers.
  */
 function generateAiProductDraft_(body, actor) {
   const startedAt = Date.now(); aiBudget_();
@@ -32,11 +25,15 @@ function generateAiProductDraft_(body, actor) {
   referenceUrls.forEach(function(url) { imageUrls.push(url); });
   if (imageUrls.length && config.vision === false) throw new Error('The selected AI model is configured without vision support. Choose a vision-capable model or remove the photos.');
 
-  const result = config.apiType === 'chat_completions'
-    ? callAiChatCompletions_(config, prompt, imageUrls)
-    : callAiResponses_(config, prompt, imageUrls);
+  const outputText = callAiStructuredJson_(config, prompt, imageUrls, {
+    schema: aiProductSchema_(),
+    schemaName: 'dsb_product_draft',
+    chatPromptSuffix: '\n\nReturn exactly one JSON object with keys "draft" and "warnings". No markdown or commentary.',
+    noTextMessage: 'AI generation returned no product draft.',
+    cutoffMessage: 'AI response was cut off before the product draft finished. Increase Max output tokens in Admin → AI Configuration (up to 5000) or use shorter notes.'
+  });
 
-  const parsed = aiParseStructuredOutput_(result.outputText);
+  const parsed = aiParseStructuredOutput_(outputText);
 
   const draft = cleanAiDraft_(parsed.draft || {});
   if (!Object.keys(draft).length) throw new Error('AI could not confidently fill any supported product fields. Add a little more information and try again.');
@@ -62,47 +59,18 @@ function sanitizeAiReasoningEffort_(value, supported) {
 }
 
 function aiProviderConfig_(modelConfigId) {
-  const selected = aiConfiguredProvider_(modelConfigId);
-  if (selected) return selected;
-
-  const configured = aiPublicModels_();
-  if (modelConfigId && modelConfigId !== 'legacy') throw new Error('The selected AI model is no longer available. Refresh AI configuration.');
-  if (!modelConfigId && configured.length && configured[0].configId !== 'legacy') {
-    const first = aiConfiguredProvider_(configured[0].configId);
-    if (first) return first;
+  const selectedId = String(modelConfigId || '').trim();
+  if (selectedId) {
+    const selected = aiConfiguredProvider_(selectedId);
+    if (selected) return selected;
+    throw new Error('The selected AI model is no longer available. Refresh AI configuration.');
   }
 
-  // Backward-compatible fallback for existing deployments that still use the
-  // original Script Properties instead of the new AI Configuration page.
-  const apiKey = String(secret_('AI_API_KEY', secret_('OPENAI_API_KEY', '')) || '').trim();
-  if (!apiKey) throw new Error('AI is not configured. Add a connection in Admin → AI Configuration.');
-  const baseUrl = String(secret_('AI_BASE_URL', 'https://api.openai.com/v1') || '').trim().replace(/\/+$/, '');
-  if (!/^https:\/\//i.test(baseUrl)) throw new Error('AI_BASE_URL must be an HTTPS URL.');
-  const model = String(secret_('AI_MODEL', secret_('OPENAI_MODEL', 'gpt-5.6-luna')) || '').trim();
-  if (!model) throw new Error('AI_MODEL is empty.');
-  const apiType = aiNormalizeApiType_(secret_('AI_API_TYPE', 'responses'));
-  const detailRaw = String(secret_('AI_IMAGE_DETAIL', 'low') || 'low').trim().toLowerCase();
-  const imageDetail = /^(low|high|auto)$/.test(detailRaw) ? detailRaw : 'low';
-  const tokenRaw = Number(secret_('AI_MAX_OUTPUT_TOKENS', '5000'));
-  const maxOutputTokens = Number.isFinite(tokenRaw) ? Math.max(700, Math.min(5000, Math.floor(tokenRaw))) : 5000;
-  const isGemini = aiIsGeminiBaseUrl_(baseUrl);
-  const reasoningRaw = String(secret_('AI_REASONING_EFFORT', isGemini ? 'low' : '') || '').trim().toLowerCase();
-  return {
-    apiKey: apiKey,
-    baseUrl: baseUrl,
-    endpoint: aiEndpoint_(baseUrl, apiType),
-    model: model,
-    apiType: apiType,
-    providerLabel: aiProviderLabel_(baseUrl),
-    imageDetail: imageDetail,
-    maxOutputTokens: maxOutputTokens,
-    isGemini: isGemini,
-    reasoningEffort: AI_EFFORT_VALUES.indexOf(reasoningRaw) !== -1 ? reasoningRaw : '',
-    modelConfigId: 'legacy',
-    modelLabel: model,
-    supportedEfforts: ['low','medium','high'],
-    vision: true
-  };
+  const configured = aiPublicModels_();
+  if (!configured.length) throw new Error('AI is not configured. Add and enable a connection in Admin → AI Configuration.');
+  const first = aiConfiguredProvider_(configured[0].configId);
+  if (!first) throw new Error('No usable AI model is configured. Check Admin → AI Configuration.');
+  return first;
 }
 
 function aiEndpoint_(baseUrl, apiType) {
@@ -123,100 +91,96 @@ function aiRequestHeaders_(config) {
   return { Authorization: 'Bearer ' + config.apiKey };
 }
 
-function callAiResponses_(config, prompt, imageUrls) {
+function callAiStructuredJson_(config, prompt, imageUrls, options) {
+  options = options || {};
+  imageUrls = Array.isArray(imageUrls) ? imageUrls : [];
+  const schema = options.schema || null;
+  const schemaName = String(options.schemaName || 'dsb_json').replace(/[^a-z0-9_-]/gi, '_').slice(0, 64) || 'dsb_json';
+  const noTextMessage = options.noTextMessage || 'AI returned no reply.';
+  const cutoffMessage = options.cutoffMessage || 'AI response was cut off. Try a shorter request.';
+
+  if (config.apiType === 'chat_completions') {
+    const content = [{ type: 'text', text: prompt + String(options.chatPromptSuffix || '') }];
+    imageUrls.forEach(function(url) {
+      const prepared = config.isGemini ? aiGeminiInlineImageUrl_(url) : url;
+      const image = { url: prepared };
+      if (!config.isGemini && config.imageDetail) image.detail = config.imageDetail;
+      content.push({ type: 'image_url', image_url: image });
+    });
+    const payload = {
+      model: config.model,
+      messages: [{ role: 'user', content: content }],
+      max_tokens: config.maxOutputTokens
+    };
+
+    // Gemini supports strict JSON Schema here; other OpenAI-compatible gateways
+    // use the broadly supported json_object mode. Both Product AI and DSB AI use
+    // this single transport path so provider compatibility fixes stay in sync.
+    const schemaMode = schema && config.isGemini ? 'json-schema' : 'json-object';
+    if (schema && config.isGemini) {
+      payload.response_format = {
+        type: 'json_schema',
+        json_schema: { name: schemaName, strict: true, schema: schema }
+      };
+    } else {
+      payload.response_format = { type: 'json_object' };
+    }
+    if (config.reasoningEffort && config.reasoningEffort !== 'none') payload.reasoning_effort = config.reasoningEffort;
+
+    const cache = CacheService.getScriptCache();
+    const key = aiCapabilityKey_(config, schemaMode + ':' + schemaName);
+    const structuredUnsupported = cache.get(key) === 'unsupported';
+    if (structuredUnsupported) delete payload.response_format;
+
+    let data;
+    try {
+      data = aiFetchJson_(config, payload);
+    } catch (err) {
+      const message = String(err && err.message || '');
+      const structuredProblem = /response_format|json_object|json_schema|schema|reasoning_effort|effort|unsupported|unknown parameter|invalid parameter/i.test(message);
+      const compatibilityBadRequest = /HTTP\s*400|INVALID_ARGUMENT|bad request/i.test(message);
+      if (structuredUnsupported || (!structuredProblem && !compatibilityBadRequest)) throw err;
+      cache.put(key, 'unsupported', 21600);
+      delete payload.response_format;
+      delete payload.reasoning_effort;
+      if (options.fallbackJsonReminder) payload.messages[0].content[0].text += '\nReturn valid JSON only.';
+      data = aiFetchJson_(config, payload);
+    }
+
+    const finishReason = aiChatFinishReason_(data);
+    if (/length|max_tokens|max_output_tokens/i.test(finishReason)) throw new Error(cutoffMessage);
+    const text = extractChatCompletionText_(data);
+    if (!text) throw new Error(noTextMessage);
+    return text;
+  }
+
   const content = [{ type: 'input_text', text: prompt }];
   imageUrls.forEach(function(url) {
-    content.push({ type: 'input_image', detail: config.imageDetail, image_url: url });
+    content.push({ type: 'input_image', detail: config.imageDetail || 'low', image_url: url });
   });
+  const format = schema
+    ? { type: 'json_schema', name: schemaName, strict: true, schema: schema }
+    : { type: 'json_object' };
   const payload = {
     model: config.model,
     store: false,
     max_output_tokens: config.maxOutputTokens,
     input: [{ role: 'user', content: content }],
-    text: { format: { type: 'json_schema', name: 'dsb_product_draft', strict: true, schema: aiProductSchema_() } }
+    text: { format: format }
   };
   if (config.reasoningEffort && config.reasoningEffort !== 'none') payload.reasoning = { effort: config.reasoningEffort };
-  let data;
-  try { data = aiFetchJson_(config, payload); }
-  catch (err) {
-    const message = String(err && err.message || '');
-    if (!payload.reasoning || !/reasoning|effort|unsupported|unknown parameter|invalid parameter|HTTP\s*400/i.test(message)) throw err;
-    delete payload.reasoning;
-    data = aiFetchJson_(config, payload);
-  }
-  const outputText = extractOpenAiOutputText_(data);
-  if (!outputText) throw new Error('AI generation returned no product draft.');
-  return { outputText: outputText };
-}
-
-function callAiChatCompletions_(config, prompt, imageUrls) {
-  const content = [{ type: 'text', text: prompt + '\n\nReturn exactly one JSON object with keys "draft" and "warnings". No markdown or commentary.' }];
-  imageUrls.forEach(function(url) {
-    // Gemini's OpenAI-compatible vision examples use inline data URLs. Convert
-    // the already-compressed AI-only Cloudinary derivative server-side so the
-    // provider receives the documented image transport. Other providers keep
-    // normal HTTPS image URLs and may use the optional detail hint.
-    const imageUrl = config.isGemini ? aiGeminiInlineImageUrl_(url) : url;
-    const image = { url: imageUrl };
-    if (!config.isGemini && config.imageDetail) image.detail = config.imageDetail;
-    content.push({ type: 'image_url', image_url: image });
-  });
-
-  const payload = {
-    model: config.model,
-    messages: [{ role: 'user', content: content }],
-    max_tokens: config.maxOutputTokens
-  };
-
-  // Gemini's OpenAI-compatible endpoint supports JSON Schema structured
-  // output. Prefer it there because it prevents malformed/truncated envelopes.
-  // Other compatible providers stay on the smaller json_object mode.
-  const schemaMode = config.isGemini ? 'json-schema' : 'json-object';
-  if (config.isGemini) {
-    payload.response_format = {
-      type: 'json_schema',
-      json_schema: {
-        name: 'dsb_product_draft',
-        strict: true,
-        schema: aiProductSchema_()
-      }
-    };
-  } else {
-    payload.response_format = { type: 'json_object' };
-  }
-  if (config.reasoningEffort && config.reasoningEffort !== 'none') payload.reasoning_effort = config.reasoningEffort;
-
-  const cache = CacheService.getScriptCache();
-  const key = aiCapabilityKey_(config, schemaMode);
-  const structuredUnsupported = cache.get(key) === 'unsupported';
-  if (structuredUnsupported) delete payload.response_format;
-
   let data;
   try {
     data = aiFetchJson_(config, payload);
   } catch (err) {
     const message = String(err && err.message || '');
-    const structuredProblem = /response_format|json_object|json_schema|schema|reasoning_effort|effort|unsupported|unknown parameter|invalid parameter/i.test(message);
-    const compatibilityBadRequest = /HTTP\s*400|INVALID_ARGUMENT|bad request/i.test(message);
-    if (structuredUnsupported || (!structuredProblem && !compatibilityBadRequest)) throw err;
-
-    // Compatibility fallback: retry once with the smallest documented Gemini/OpenAI
-    // payload. This avoids trapping users on a model-specific 400 while keeping the
-    // normal path fast. Prompt instructions still require JSON and cleanAiDraft_
-    // remains the authoritative server-side validator.
-    cache.put(key, 'unsupported', 21600);
-    delete payload.response_format;
-    delete payload.reasoning_effort;
+    if (!payload.reasoning || !/reasoning|effort|unsupported|unknown parameter|invalid parameter|HTTP\s*400/i.test(message)) throw err;
+    delete payload.reasoning;
     data = aiFetchJson_(config, payload);
   }
-
-  const finishReason = aiChatFinishReason_(data);
-  const outputText = extractChatCompletionText_(data);
-  if (!outputText) throw new Error('AI generation returned no product draft.');
-  if (/length|max_tokens|max_output_tokens/i.test(finishReason)) {
-    throw new Error('AI response was cut off before the product draft finished. Increase AI_MAX_OUTPUT_TOKENS (up to 5000) or use shorter notes.');
-  }
-  return { outputText: outputText };
+  const text = extractOpenAiOutputText_(data);
+  if (!text) throw new Error(noTextMessage);
+  return text;
 }
 
 function aiChatFinishReason_(data) {
@@ -377,7 +341,7 @@ function aiParseStructuredOutput_(value) {
       } catch (_) {}
     }
   }
-  throw new Error('AI generation returned invalid structured data. Try again; if it repeats, set AI_MAX_OUTPUT_TOKENS up to 5000.');
+  throw new Error('AI generation returned invalid structured data. Try again; if it repeats, increase Max output tokens in Admin → AI Configuration (up to 5000).');
 }
 
 function aiExtractBalancedJsonObject_(text) {

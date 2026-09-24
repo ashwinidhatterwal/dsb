@@ -4,6 +4,17 @@
 
 Upload the whole project, including `.github`, `scripts`, and `src`, to the existing repository. The root HTML, JavaScript, CSS and `code.gs` are ready to deploy. Copy only root `code.gs` into the existing Apps Script project, then redeploy at the same URL. Do not also paste the backend source files into Apps Script: that would duplicate declarations.
 
+## 24 September cleanup baseline
+
+This checkpoint keeps the **full project in one package**: deployable root files, maintained `src/`, regression `scripts/`, `.github` publishing workflow, and one current QA log. The cleanup deliberately removed only verified dead/obsolete paths. It did not remove customer features, SEO product publishing, the sitemap, local sample data, or regression coverage.
+
+- App/PWA PNG assets and the social sharing card are palette-optimized at their original dimensions.
+- The obsolete `customer.saved.delete` route is gone; account closure uses only `customer.account.delete`.
+- Product AI and DSB Admin AI share one provider transport (`callAiStructuredJson_`) so Responses/chat-completions compatibility logic is maintained once.
+- Historical style filenames were renamed by responsibility without changing cascade order.
+- Historical release Markdown files are consolidated into `CHANGELOG.md`; the current check output is `qa/verification-latest.txt`.
+- The old Script-Property AI fallback remains intentionally for deployment compatibility. Remove it only after the AI Configuration page is confirmed as the sole production configuration path.
+
 ## Source and generated files
 
 - Edit backend features in `src/backend/`. Each file groups one responsibility.
@@ -49,7 +60,7 @@ The Add product screen includes **Paste from ChatGPT**. It accepts JSON, simple 
 
 Start with `src/styles/storefront-layout.css` for current card dimensions and responsive layout; it includes the `6/5` photo-container ratio. Home-specific buttons and hero decoration are in `home-brand-and-actions.css`. Photo zoom and catalogue layouts are in `catalog-and-photo-effects.css`. Earlier base components supply shared defaults.
 
-`legacy-theme.css` and the other compatibility sections remain in explicit order because moving their selectors could alter specificity and mobile behaviour. They are isolated, not blindly reordered. Keep narrow-screen rules beside their existing cascade position until tested in a browser.
+`theme-motion-and-overlays.css` and the other compatibility-derived sections remain in explicit order because moving their selectors could alter specificity and mobile behaviour. They are isolated and named by responsibility rather than historical release stage. Keep narrow-screen rules beside their existing cascade position until tested in a browser.
 
 ## Backend map
 
@@ -79,7 +90,7 @@ Keep `src/`, `scripts/`, and `.github/`: they are the maintained sources, checks
 and publishing workflow. Root `code.gs` and `style.css` are generated deployment
 files, not obsolete duplicates. `sample-products.json` is the configured local
 preview fallback. Keep `THIRD-PARTY-NOTICES.txt` for bundled software attribution.
-Use `SETUP.md` for shop operations and this file for code maintenance. Release-specific update notes are intentionally not kept in the repository once merged.
+Use `SETUP.md` for shop operations and this file for code maintenance. Release-specific notes are consolidated in `CHANGELOG.md` instead of being kept as multiple overlapping files.
 
 The following obsolete files were removed from this ZIP. Uploading a ZIP's
 contents to an existing GitHub repository does not delete old repository files;
@@ -105,7 +116,7 @@ remove these same paths there if you want the repository to match:
 
 ## AI product draft architecture
 
-`admin-ai.js` owns only the AI generation UI and sends an authenticated `aiProductDraft` request to Apps Script. It reuses `admin-autofill.js` for preview/apply so there is one review path for pasted and generated data. The dialog can also accept AI-only reference photos, which help analysis but are not saved to the product gallery. Keep that temporary reference-photo state inside `admin-ai.js` rather than spreading it through `admin.js`. `src/backend/ai-product.gs` owns the provider adapter, Responses/Chat-Completions request formats, structured-output schema, reference-photo sanitization, and response parsing. Runtime provider/model selection comes from `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`, and `AI_API_TYPE` Script Properties; legacy `OPENAI_API_KEY`/`OPENAI_MODEL` remain supported. Keep secrets out of repository files.
+`admin-ai.js` owns only the AI generation UI and sends an authenticated `aiProductDraft` request to Apps Script. It reuses `admin-autofill.js` for preview/apply so there is one review path for pasted and generated data. The dialog can also accept AI-only reference photos, which help analysis but are not saved to the product gallery. Keep that temporary reference-photo state inside `admin-ai.js` rather than spreading it through `admin.js`. `src/backend/ai-config.gs` is the sole runtime provider/model configuration layer: metadata is stored in `AI_CONNECTIONS_JSON_V1` and provider secrets in per-connection `AI_CONN_KEY_*` Script Properties. `src/backend/ai-product.gs` owns the shared Responses/Chat-Completions transport, structured-output schema, reference-photo sanitization, and response parsing. The retired direct AI Script Properties must not be reintroduced. Keep secrets out of repository files.
 
 AI generation is deliberately non-destructive: it does not write Sheets, save products, or overwrite the editor until the user reviews the draft and presses Apply. Commercial facts such as price, stock, MRP and cost price are instructed to remain blank unless supported by user-provided/existing facts.
 
@@ -136,7 +147,7 @@ The first commerce-maturity upgrade deliberately keeps customer-facing logic iso
 
 - `storefront-commerce.js` owns recently viewed products, similarity ranking, richer product detail rows and shopping-assurance copy.
 - `storefront-analytics.js` is the only analytics API storefront code should call. It does **not** load a third-party tracker; it forwards to `window.plausible` or `window.gtag` only if one is configured later.
-- `src/styles/level1-commerce.css` owns Level 1 storefront styles and is compiled into `style.css` by `scripts/build.mjs`.
+- `src/styles/product-discovery-and-assurance.css` owns product filtering, assurance and recent-product styles and is compiled into `style.css` by `scripts/build.mjs`.
 - `app.js` owns catalogue filter state (category, subcategory, price, stock and sorting) and URL persistence.
 
 Do not duplicate recently-viewed storage, recommendation scoring, policy/assurance copy, or analytics-provider calls inside page scripts. Extend these modules instead.
@@ -149,7 +160,7 @@ Regression command for this layer: `node scripts/check-level1.mjs`.
 - `storefront-commerce.js` owns recently viewed, similar-product ranking, product detail rows and the customer delivery-estimate widget.
 - `src/backend/delivery.gs` owns PIN-code delivery estimate rules. Edit `DELIVERY_ESTIMATE_RULES` in `src/backend/config.gs`; estimates are guidance after shop confirmation, not courier guarantees.
 - `src/backend/reviews.gs` owns verified-purchase review validation. A review is marked verified only when order ID + phone match a Delivered/Fulfilled order containing that exact product.
-- `src/styles/level2-commerce.css` owns Level 2 customer-facing styles.
+- `src/styles/delivery-and-reviews.css` owns delivery-estimate and review-verification styles.
 - Keep review verification identifiers private: the public reviews endpoint exposes only `verified: true/false`, never order ID, phone or the internal verification hash.
 
 ## Level 3 order lifecycle
@@ -272,16 +283,16 @@ of the full audit.
 
 Remaining phases, each delivered as a separate build:
 1. Phase 1 (this build): analytics/tracking correctness and privacy copy.
-2. Phase 2 (implemented; see PHASE-2-3-RELEASE.md): compatible phone/promo identity handling, missing-cost accounting,
+2. Phase 2 (implemented; see `CHANGELOG.md`): compatible phone/promo identity handling, missing-cost accounting,
    cancellation-request concurrency, and record migration/recovery tests.
-3. Phase 3 (implemented; see PHASE-2-3-RELEASE.md): analytics reset/ingestion concurrency, retention/aggregation,
+3. Phase 3 (implemented; see `CHANGELOG.md`): analytics reset/ingestion concurrency, retention/aggregation,
    reduced repeated Sheet work and operational health/backup procedures.
 4. Phase 4: browser-verified accessibility/UI cleanup and selected shop features
    such as shipment references, UTM links, optional size stock and reel links.
    External account configuration must be verified where relevant.
 
 The reset/ingestion race and bounded retry deduplication described in the audit
-are addressed by the Phase 2/3 release described in PHASE-2-3-RELEASE.md. Daily unique visitor counts must not simply be summed to
+are addressed by the Phase 2/3 release described in `CHANGELOG.md`. Daily unique visitor counts must not simply be summed to
 produce multi-day unique totals. Never remove raw/recovery history without a
 validated retention/archive plan.
 
@@ -297,4 +308,4 @@ shows the 100 newest priority rows; moderate to reveal older rows. Review rating
 does not determine moderation. Review body caches on customer devices expire within
 30 seconds and summary caches within 60 seconds. Cloudinary server-side restrictions
 are configured in the Cloudinary account; the browser size limit is convenience only.
-See STAGE-3-RELEASE.md for staging and rollback steps.
+Historical staging/rollback notes are preserved in `CHANGELOG.md`.

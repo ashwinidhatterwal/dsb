@@ -19,11 +19,13 @@ assert(client.includes('referenceUrls') && client.includes('aiReferenceUrls'), '
 assert(client.includes('window.DSBAutofill.applyToForm') && client.includes('window.DSBAutofill.canonicalize'), 'AI draft does not apply through the shared autofill library');
 assert(autofill.includes('applyToForm') && autofill.includes('tryParseInput'), 'Autofill parse/apply API is missing');
 assert(!backend.includes('sk-'), 'Potential API key literal found in AI backend');
-assert(backend.includes("secret_('AI_API_KEY'"), 'Generic AI API key is not read from Script Properties');
-assert(backend.includes("secret_('AI_BASE_URL'"), 'AI base URL is not configurable');
-assert(backend.includes("secret_('AI_MODEL'"), 'AI model is not configurable');
-assert(backend.includes("secret_('AI_API_TYPE'"), 'AI API type is not configurable');
-assert(backend.includes('callAiResponses_') && backend.includes('callAiChatCompletions_'), 'Both supported API adapters are required');
+assert(backend.includes('AI_CONNECTIONS_JSON_V1') && backend.includes('AI_CONN_KEY_'), 'AI Configuration storage is missing');
+for (const legacyKey of ['AI_API_KEY','OPENAI_API_KEY','AI_BASE_URL','AI_MODEL','OPENAI_MODEL','AI_API_TYPE','AI_IMAGE_DETAIL','AI_MAX_OUTPUT_TOKENS','AI_REASONING_EFFORT']) {
+  assert(!backend.includes(`secret_('${legacyKey}'`), `Legacy AI Script Property fallback remains: ${legacyKey}`);
+}
+assert(!backend.includes("configId: 'legacy'") && !backend.includes('Legacy Script Properties'), 'Legacy AI model exposure remains');
+assert(backend.includes('function callAiStructuredJson_'), 'Shared AI provider transport is required');
+assert(backend.includes("config.apiType === 'chat_completions'") && backend.includes('max_output_tokens'), 'Shared transport must support both chat-completions and Responses APIs');
 assert(backend.includes("store: false"), 'Responses request should explicitly disable storage');
 assert(backend.includes('sanitizeAiReferenceUrls_'), 'AI backend reference photo sanitizer is missing');
 
@@ -62,8 +64,7 @@ assert.equal(context.stripJsonFence_('```json\n{"ok":true}\n```'), '{"ok":true}'
 assert(client.includes('aiOptimizedImageUrl') && client.includes('w_1280,c_limit'), 'AI image optimization is missing');
 assert(client.includes('startProgress') && client.includes('elapsed'), 'Live AI elapsed-time progress is missing');
 assert(client.includes('timeoutMs: 120000'), 'AI client timeout should be bounded');
-assert(backend.includes("secret_('AI_IMAGE_DETAIL'"), 'AI image detail is not configurable');
-assert(backend.includes("secret_('AI_MAX_OUTPUT_TOKENS'"), 'AI output token cap is not configurable');
+assert(backend.includes('connection.imageDetail') && backend.includes('connection.maxOutputTokens'), 'AI connection tuning must come from AI Configuration');
 assert(backend.includes('Math.min(5000'), 'AI output token ceiling should allow up to 5000 tokens'); // 5000-token ceiling
 assert(backend.includes("payload.response_format = { type: 'json_object' }"), 'Non-Gemini chat-completions should retain compact JSON object mode');
 assert(!backend.includes('max_tokens: 2200'), 'Old oversized chat token budget remains');

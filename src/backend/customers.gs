@@ -41,7 +41,7 @@ function customerAddresses_(create) { return customerSheet_('CustomerAddresses',
 function customerRows_(sheet, uid) { return sheet ? rowsAsObjects_(sheet).filter(r => String(r.uid) === uid) : []; }
 function customerProfile_(identity) {
   const p = customerRows_(customerProfiles_(false), identity.uid)[0];
-  return {name: p ? String(p.displayname || '') : identity.name, phone: p ? String(p.phone || '') : '', email: identity.email};
+  return {name: p ? String(p.displayname || '') : '', phone: p ? String(p.phone || '') : '', email: identity.email};
 }
 function customerAddressList_(uid) {
   return customerRows_(customerAddresses_(false), uid).map(a => ({id: String(a.addressid), name: String(a.recipientname), phone: String(a.phone), address: String(a.address), pinCode: String(a.pincode), label: String(a.label), isDefault: String(a.isdefault) === 'yes'}));
@@ -121,17 +121,43 @@ function customerDispatch_(body) {
         sheet.deleteRow(findRow_(sheet,'addressid',own.id));
         return {success:true, addresses:customerAddressList_(uid)};
       }
-      if (body.action === 'customer.saved.delete') {
-        if (body.confirm !== 'DELETE_SAVED_DETAILS' || Date.now()/1000 - identity.authTime > 300) throw new Error('Sign out and sign in again before deleting saved details.');
-        const addresses = customerAddresses_(false);
-        customerAddressList_(uid).forEach(a => addresses.deleteRow(findRow_(addresses,'addressid',a.id)));
-        const profiles = customerProfiles_(false), row = profiles && findRow_(profiles,'uid',uid);
-        if (row) profiles.deleteRow(row);
-        return {success:true}; // Order records and sign-in identity are deliberately retained.
+      if (body.action === 'customer.account.delete') {
+        if (body.confirm !== 'DELETE_ACCOUNT' || Date.now()/1000 - identity.authTime > 300) throw new Error('For your security, sign out and sign in again before deleting your account.');
+        const removed = deleteCustomerAccountData_(uid);
+        return {success:true, removed}; // Client removes the Firebase sign-in identity immediately after this succeeds.
       }
       throw new Error('Unknown customer action.');
     } finally { lock.releaseLock(); }
   } catch (err) { return {success:false, code:'customer_error', error:String(err.message || 'Customer service unavailable.')}; }
+}
+
+
+function deleteCustomerRowsByUid_(sheet, uid) {
+  if (!sheet || sheet.getLastRow() < 2) return 0;
+  const heads = headers_(sheet), col = heads.indexOf('uid');
+  if (col < 0) return 0;
+  const rows = sheet.getRange(2, col + 1, sheet.getLastRow() - 1, 1).createTextFinder(uid).matchEntireCell(true).matchCase(true).findAll()
+    .map(hit => hit.getRow()).sort((a,b) => b-a);
+  rows.forEach(row => sheet.deleteRow(row));
+  return rows.length;
+}
+function unlinkCustomerOrders_(uid) {
+  const sheet = getSheet_(ORDERS_SHEET), heads = headers_(sheet), col = heads.indexOf('customeruid');
+  if (col < 0 || sheet.getLastRow() < 2) return 0;
+  const rows = sheet.getRange(2, col + 1, sheet.getLastRow() - 1, 1).createTextFinder(uid).matchEntireCell(true).matchCase(true).findAll()
+    .map(hit => hit.getRow());
+  rows.forEach(row => sheet.getRange(row, col + 1).setValue(''));
+  return rows.length;
+}
+function deleteCustomerAccountData_(uid) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const removed = {
+    addresses: deleteCustomerRowsByUid_(customerAddresses_(false), uid),
+    profiles: deleteCustomerRowsByUid_(customerProfiles_(false), uid),
+    directory: deleteCustomerRowsByUid_(ss.getSheetByName('CustomerAccounts'), uid),
+    ordersUnlinked: unlinkCustomerOrders_(uid)
+  };
+  return removed;
 }
 
 // Account directory is separate from optional saved checkout details.
