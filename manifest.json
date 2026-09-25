@@ -1,7 +1,7 @@
 {
   "name": "Suhag Bhandar",
   "short_name": "Suhag Bhandar",
-  "description": "Bangles, lingerie, cosmetics, hair care, snacks, stationery and daily essentials — order online with WhatsApp support.",
+  "description": "Official online shop for Dhatterwal Suhag Bhandar in Goluwala — bangles, jewellery, cosmetics, personal care, stationery and everyday essentials.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

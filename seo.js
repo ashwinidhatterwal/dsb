@@ -79,9 +79,12 @@ const DSB_SEO = (() => {
         availability: (out || (size && val(p,'sizestock') && !val(p,'sizestock').split(',').some(entry=>{const [key,qty]=entry.split('=');return key.trim()===size && Number(qty)>0;}))) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
         itemCondition: 'https://schema.org/NewCondition',
         seller: {
-          '@type': 'Organization',
+          '@type': ['OnlineStore', 'Store'],
+          '@id': site + '/#store',
           name: 'Dhatterwal Suhag Bhandar',
+          alternateName: ['Suhag Bhandar', 'DSB'],
           url: site + '/',
+          logo: site + '/icon-512.png',
           sameAs: ['https://www.instagram.com/dhatterwalsuhag/']
         }
       });
