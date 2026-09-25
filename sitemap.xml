@@ -1810,6 +1810,11 @@
     <image:image><image:loc>https://res.cloudinary.com/malfl6xv/image/upload/v1790243008/esphenohe86habwclrp3.jpg</image:loc></image:image>
   </url>
   <url>
+    <loc>https://suhagbhandar.in/products/p-4453422d30323938.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://suhagbhandar.in/categories/personal-care-506572736f6e616c2043617265.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -3291,6 +3296,11 @@
   </url>
   <url>
     <loc>https://suhagbhandar.in/hi/products/p-4453422d30323937.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://suhagbhandar.in/hi/products/p-4453422d30323938.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
