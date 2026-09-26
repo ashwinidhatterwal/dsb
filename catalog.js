@@ -24,17 +24,14 @@
       '@type': 'ItemList',
       'name': 'Dhatterwal Suhag Bhandar product catalogue',
       'numberOfItems': products.length,
+      // catalog.html is a summary page. Keep the catalogue schema as a pure
+      // ItemList and let each destination product page carry its own complete
+      // Product + Offer markup. This avoids Google treating hundreds of
+      // incomplete catalogue-list Product nodes as invalid product snippets.
       'itemListElement': products.map((p, i) => ({
         '@type': 'ListItem',
         'position': i + 1,
-        'url': productUrl(p),
-        'item': {
-          '@type': 'Product',
-          'name': p.name,
-          'image': absoluteImage(p.image),
-          'sku': p.id,
-          'url': productUrl(p)
-        }
+        'url': productUrl(p)
       }))
     });
     document.head.appendChild(el);

@@ -7,6 +7,7 @@ const home = await read('index.html');
 const about = await read('about.html');
 const contact = await read('contact.html');
 const catalog = await read('catalog.html');
+const catalogJs = await read('catalog.js');
 const seo = await read('seo.js');
 const staticProducts = await read('.github/scripts/static-products.mjs');
 
@@ -23,6 +24,8 @@ assert(about.includes('broader than bridal or suhag products'), 'About page must
 assert(catalog.includes('id="catalogPageLd"'), 'catalogue must have a static CollectionPage node');
 assert(seo.includes("'@id': site + '/#store'"), 'Product offers must reference the same canonical seller @id');
 assert(staticProducts.includes('id="catalogItemListLd"'), 'published catalogue must include a server-rendered ItemList');
+assert(!staticProducts.includes("item:{'@type':'Product'"), 'catalogue summary ItemList must not embed incomplete Product nodes');
+assert(!catalogJs.includes("'item': {\n          '@type': 'Product'"), 'live catalogue ItemList must not embed incomplete Product nodes');
 assert(staticProducts.includes('og:site_name'), 'generated SEO pages must preserve the canonical site name');
 
 // Syntax check the browser SEO helper after identity changes.

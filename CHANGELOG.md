@@ -1,3 +1,11 @@
+# 2026-09-26 — Product snippet catalogue schema fix
+
+- Fixed the All Products catalogue `ItemList` so summary-page entries contain only `ListItem` position + product URL, instead of embedding incomplete `Product` nodes.
+- Individual product pages remain the single source of complete `Product` + `Offer` structured data.
+- Updated both server-rendered catalogue publishing and live catalogue JSON-LD injection.
+- Bumped the `catalog.js` cache key so crawlers do not reuse the old injector.
+- Added a regression guard for this Search Console failure mode.
+
 ## 2026-09-24 — Product structured-details browser-scope fix
 - Fixed the actual storefront rendering bug: `seo.js` declared `DSB_SEO` as a top-level `const`, while `storefront-commerce.js` read `window.DSB_SEO`. In browsers, a top-level `const` is not a `window` property, so Brand, Material, Pack / quantity and Specifications were silently skipped even though the product data was present.
 - `seo.js` now explicitly exposes `DSB_SEO` on `window` in browsers while remaining safe for Node-based publishing/tests.
