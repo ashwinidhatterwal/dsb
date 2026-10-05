@@ -1981,6 +1981,12 @@
     <image:image><image:loc>https://res.cloudinary.com/malfl6xv/image/upload/v1790905203/am5wuqvbssh9xxobbneh.jpg</image:loc></image:image>
   </url>
   <url>
+    <loc>https://suhagbhandar.in/products/p-4453422d30333232.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <image:image><image:loc>https://res.cloudinary.com/malfl6xv/image/upload/v1791184860/lqr1jittwotsdq0hxs8h.jpg</image:loc></image:image>
+  </url>
+  <url>
     <loc>https://suhagbhandar.in/categories/personal-care-506572736f6e616c2043617265.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -2032,6 +2038,11 @@
   </url>
   <url>
     <loc>https://suhagbhandar.in/categories/fashion-accessories-46617368696f6e204163636573736f72696573.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://suhagbhandar.in/categories/beauty--personal-care-426561757479202620506572736f6e616c2043617265.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3587,6 +3598,11 @@
   </url>
   <url>
     <loc>https://suhagbhandar.in/hi/products/p-4453422d30333231.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://suhagbhandar.in/hi/products/p-4453422d30333232.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
