@@ -58,7 +58,8 @@ assert(!dataSource.includes("const CATALOG_SESSION_KEY = 'dsb_catalog_v6';"));
 
 const productHtml = await read('product.html');
 for (const asset of ['i18n.js', 'seo.js', 'products-data.js', 'product.js']) {
-  assert(productHtml.includes(`${asset}?v=20260924details4`), `${asset} must use the product-details cache-busting release token`);
+  const version = asset === 'i18n.js' ? '20261016payments' : '20260924details4';
+  assert(productHtml.includes(`${asset}?v=${version}`), `${asset} must use its current cache-busting release token`);
 }
 for (const page of ['index.html', 'catalog.html', 'about.html', 'contact.html', 'privacy.html', 'returns.html']) {
   const html = await read(page);

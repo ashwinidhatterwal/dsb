@@ -76,7 +76,7 @@ const ALLOWED_PAYMENT_METHODS = ['Cash on Delivery', 'UPI'];
 // DELIVERY_FREE_ABOVE. Set a charge to 0 to disable it.
 const DELIVERY_FREE_ABOVE = 499; // ₹ — orders at/above this merchandise value get free delivery
 const DELIVERY_CHARGE = 40; // ₹ — delivery fee below the threshold
-const COD_CHARGE = 20; // ₹ — extra fee when Cash on Delivery is selected
+const COD_CHARGE = 50; // ₹ — extra fee when Cash on Delivery is selected
 // Customer-facing delivery guidance. Keep more-specific prefixes before broader ones.
 // These are estimates after shop confirmation, not courier guarantees.
 const DELIVERY_ESTIMATE_RULES = [

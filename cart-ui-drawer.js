@@ -108,8 +108,8 @@ function renderCartDrawer() {
         <div class="field">
           <label>Payment method</label>
           <div class="pay-options">
-            ${showUpi ? `<label class="pay-option pay-option-upi"><input type="radio" name="payMethod" value="UPI" ${checkoutState.paymentMethod === 'UPI' ? 'checked' : ''}> <span class="pay-option-copy"><span>Pay via UPI</span>${upiSaving > 0 ? `<small class="upi-saving">Save ${money(upiSaving)} compared with COD</small>` : ''}</span></label>` : ''}
-            <label class="pay-option"><input type="radio" name="payMethod" value="COD" ${checkoutState.paymentMethod === 'COD' ? 'checked' : ''}> <span>Cash on Delivery</span></label>
+            ${showUpi ? `<label class="pay-option pay-option-upi"><input type="radio" name="payMethod" value="UPI" ${checkoutState.paymentMethod === 'UPI' ? 'checked' : ''}> <span class="pay-option-copy"><span class="pay-option-title"><span>Pay via UPI</span><small class="payment-recommended">Recommended</small></span>${upiSaving > 0 ? `<small class="upi-saving">Save ${money(upiSaving)} compared with COD</small>` : ''}</span></label>` : ''}
+            <label class="pay-option"><input type="radio" name="payMethod" value="COD" ${checkoutState.paymentMethod === 'COD' ? 'checked' : ''}> <span class="pay-option-copy"><span>Cash on Delivery</span>${upiSaving > 0 ? `<small class="payment-surcharge">${money(upiSaving)} extra</small>` : ''}</span></label>
           </div>
           ${showUpi && checkoutState.paymentMethod === 'UPI' ? '<p class="hint">UPI payment opens after your order is saved with the confirmed total.</p>' : ''}
         </div>

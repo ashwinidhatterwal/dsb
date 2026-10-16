@@ -415,6 +415,26 @@ html[lang="hi"] .hero-compact .hero-title{
   font-weight:600;
   line-height:1.4;
 }
+.pay-option-title{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:6px 8px;
+}
+.payment-recommended{
+  border-radius:999px;
+  padding:3px 8px;
+  background:#e8f4eb;
+  color:#23653c;
+  font-size:11px;
+  line-height:1.4;
+}
+.payment-surcharge{
+  color:var(--muted,#665b61);
+  font-size:12px;
+  font-weight:500;
+  line-height:1.4;
+}
 .pay-option:has(input:checked){
   border-color:#bd135c;
   background:#fff5f9;
