@@ -44,7 +44,6 @@ android {
         debug {
             applicationIdSuffix '.preview'
             versionNameSuffix '-preview'
-            resValue 'string', 'app_name', 'Suhag Bhandar Test'
         }
         release {
             if (hasReleaseSigning) signingConfig signingConfigs.production
