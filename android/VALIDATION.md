@@ -1,5 +1,9 @@
 # Production release validation — 16 October 2026
 
+## GitHub runner setup correction
+
+GitHub Android run `38857581358` on uploaded main `a3c298f` failed before any Android compilation: `setup-android` used its default `tools platform-tools` input and SDK Manager reported `Failed to find package 'tools'`. The 32 website regressions and both certificate tests passed in that same run; website deployment also succeeded. Both checks/release setup steps now explicitly request `platform-tools`, followed by the existing explicit installation of platform 36 and build tools 36.0.0. This fixes the confirmed obsolete-package request without changing app code, signing secrets or website behaviour. A GitHub run of this correction is still required after the owner pushes it; the earlier local Android build/signature verification below remains the app-code evidence.
+
 ## Source and changes
 
 - Latest GitHub main fetched and rechecked: `fa7aa23` (`Set COD fee to 50 and recommend UPI`). Production changes are supplied in this full source package; they have not been pushed or deployed by this audit.
