@@ -13,6 +13,17 @@ for(const entry of await fs.readdir('.', {withFileTypes:true})){
   await fs.copyFile(entry.name,path.join(destination,entry.name));
 }
 await fs.writeFile(path.join(destination,'.nojekyll'),'');
+// Android TWA verification must survive the storefront-only publication.
+// Copy only the public association file; never publish Android project files.
+const assetLinksPath = '.well-known/assetlinks.json';
+try {
+  const assetLinks = JSON.parse(await fs.readFile(assetLinksPath, 'utf8'));
+  if (!Array.isArray(assetLinks)) throw new Error('assetlinks.json must be an array');
+  await fs.mkdir(path.join(destination, '.well-known'), {recursive:true});
+  await fs.writeFile(path.join(destination, assetLinksPath), JSON.stringify(assetLinks, null, 2)+'\n');
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+}
 console.log('Prepared public storefront files.');
 
 const config=await fs.readFile('config.js','utf8');
