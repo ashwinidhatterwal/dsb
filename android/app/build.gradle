@@ -1,15 +1,44 @@
 plugins { id 'com.android.application' }
 
+def signingNames = ['ANDROID_KEYSTORE_PATH', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']
+def signingValues = signingNames.collectEntries { [(it): System.getenv(it)] }
+def hasReleaseSigning = signingValues.values().every { it != null && !it.isEmpty() }
+
+def validateProductionSigning = tasks.register('validateProductionSigning') {
+    doLast {
+        if (!hasReleaseSigning) {
+            throw new GradleException('Release signing is required. Set all four ANDROID_* signing environment variables; see android/README.md.')
+        }
+        if (!file(signingValues.ANDROID_KEYSTORE_PATH).isFile()) {
+            throw new GradleException('ANDROID_KEYSTORE_PATH does not point to a keystore file.')
+        }
+    }
+}
+
 android {
     namespace 'in.suhagbhandar.app'
     compileSdk 36
+    buildToolsVersion '36.0.0'
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
     defaultConfig {
-        // Provisional until the owner approves the permanent Play Store identity.
         applicationId 'in.suhagbhandar.app'
         minSdk 24
         targetSdk 36
-        versionCode 2
-        versionName '0.1.1'
+        versionCode 3
+        versionName '1.0.0'
+    }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            production {
+                storeFile file(signingValues.ANDROID_KEYSTORE_PATH)
+                storePassword signingValues.ANDROID_KEYSTORE_PASSWORD
+                keyAlias signingValues.ANDROID_KEY_ALIAS
+                keyPassword signingValues.ANDROID_KEY_PASSWORD
+            }
+        }
     }
     buildTypes {
         debug {
@@ -18,7 +47,8 @@ android {
             resValue 'string', 'app_name', 'Suhag Bhandar Test'
         }
         release {
-            // Intentionally unsigned. A production key is an owner decision.
+            if (hasReleaseSigning) signingConfig signingConfigs.production
+            debuggable false
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -31,6 +61,13 @@ android {
             jvmArgs '--add-opens=java.base/java.io=ALL-UNNAMED',
                 '--add-exports=java.base/jdk.internal.access=ALL-UNNAMED'
         }
+    }
+}
+
+// Never silently produce an unsigned upload artifact when secrets are missing.
+tasks.configureEach {
+    if (name in ['assembleRelease', 'bundleRelease', 'packageRelease', 'packageReleaseBundle', 'validateSigningRelease']) {
+        dependsOn validateProductionSigning
     }
 }
 

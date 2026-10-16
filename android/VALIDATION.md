@@ -1,28 +1,34 @@
-# Preview validation — 16 October 2026
+# Production release validation — 16 October 2026
 
-- Baseline fetched directly from GitHub: `f754844ec301f131d40223c5013227d6f5fddcec`; it matched the live site's publication metadata at retrieval.
-- `node scripts/run-checks.mjs`: **passed**, build consistency plus all **32 regression programs**, including an isolated publishing run for the Android association. No real orders/messages were sent.
-- `:app:assembleDebug :app:lintDebug`: **passed** with Java 21, SDK 36 and Gradle 8.13. Lint: **0 errors, 8 warnings** (backup configuration recommendation, legacy launcher shape, optional monochrome icon and bitmap density location).
-- `:app:bundleRelease`: **passed**, including resource shrinking/R8 and release vital lint. Output is deliberately unsigned; no production signing identity selected.
-- Test APK: `DSB-Android-0.1.1-preview.apk`, **4,975,513 bytes**.
-- APK SHA-256: `0d56469035be0e871ce8784f157bf3d732782ba39ba72cf2a334fc8937de6519`.
-- APK signature verification: **passed**, APK Signature Scheme v2, minimum Android API 24.
-- Packaged identity inspected: `in.suhagbhandar.app.preview`, version `0.1.1-preview`, target API 36, label `Suhag Bhandar Test`.
-- Compiled `asset_statements` inspected with `aapt2`; JSON retains its quotes and points to `https://suhagbhandar.in`.
-- Website association fingerprints generated from the **actual APK signing certificate**, not a placeholder; root candidate and preview copy match.
-- `git diff --check`, JavaScript syntax and Python syntax checks passed.
+## Source and changes
 
-## Still required
+- Latest GitHub main fetched and rechecked: `fa7aa23` (`Set COD fee to 50 and recommend UPI`). Production changes are supplied in this full source package; they have not been pushed or deployed by this audit.
+- App release: **1.0.0**, version code **3**, package **in.suhagbhandar.app**. The existing preview remains a separate package.
+- Retained the working TWA architecture, startup component registration, HTTPS-only shop host, full product-link scope, existing normal shop icon and website features.
+- Added environment-based mandatory release signing, manual main-branch release job, signed APK/AAB artifacts, artifact signature/identity/permission checks, checksums, mapping files and public certificate output.
+- Pinned GitHub Actions to resolved commit SHAs, restricted token permissions, prevented credential persistence during checkout and removed the temporary signing key after release jobs. Pull request/check builds do not receive production signing secrets.
+- Added explicit cloud/device-transfer exclusions, monochrome themed icon, proper bitmap resource placement, and line-ending/credential/build-file ignore rules.
+- Replaced obsolete preview instructions and removed their duplicate association file. The live preview statement in root `.well-known/assetlinks.json` remains intact. Production certificates must be merged after the owner's real signing key is available.
 
-The website verification candidate has **not been deployed**. Until deployment and browser validation, the app may show browser chrome. The owner must approve that publication.
+## Completed verification
 
-No Android emulator/device execution or live checkout, Google OAuth, UPI, printing, downloading or WhatsApp acceptance was performed. The acceptance checklist in README.md must be completed on a phone. No Play Store upload/review has occurred.
+- `node scripts/run-checks.mjs`: build consistency plus **32 website regression programs passed**. These use isolated fixtures/mocks and sent no real orders or messages.
+- Certificate generator regressions passed: preserve existing preview/web statements, append production certificates, avoid duplicates on repeated updates, preserve files on invalid certificate input.
+- GitHub workflow validation with **actionlint 1.7.7** passed. Python syntax checks and `git diff --check` passed.
+- Android debug and release unit tests run on simulated API **24, 28, 35 and 36**. Coverage: startup with no compatible browser, settings component registration, splash and launcher icon rasterization, product URL routing, preservation of path/query, rejection of unrelated HTTPS launch URLs. **56 checks passed**: 28 debug and 28 release, with zero failures/errors.
+- Debug APK assembly and lint for both variants passed. Lint has **0 errors, 5 cosmetic legacy launcher-icon shape warnings**: the five existing Android 7 PNG density variants retain the original full-background brand artwork. Modern adaptive/themed icons are configured. No lint issue was suppressed.
+- Real `bundleRelease` with no signing credentials failed at `validateProductionSigning`, as intended.
+- Actual signed `assembleRelease` and `bundleRelease` succeeded, including R8/resource shrinking, using a **disposable local verification key**. This is not the owner's production key; these local APK/AAB files are not distributed in the source ZIP.
+- `verify-release.py` passed against both actual signed outputs: APK verification, AAB verification, matching signing certificate, release identity/version, non-debuggable state, expected API levels and permissions, required App Links components, disabled cleartext and backup flags.
+- Local verification APK: approximately **673 KB**; AAB approximately **936 KB**. Owner signatures/build metadata may change these sizes slightly. No native `.so` libraries are packaged.
+- Live Apps Script checkout config was read during the audit and returned `codCharge: 50`, `deliveryCharge: 40`, `deliveryFreeAbove: 499`.
 
-GitHub denied branch creation with HTTP 403 (resource not accessible by integration). No remote branch, pull request or website deployment was created. The complete source ZIP is the handoff for these changes.
+## Owner-dependent release steps
 
-## Launch regression fixed
+1. Generate/retain the permanent private signing key and add the four GitHub Secrets described in `README.md`.
+2. Push this source and run the manual production workflow on `main`. No Play upload or website association publication is automated.
+3. Add the actual release APK certificate to the current website association for direct installs. For Google Play, also add the **Play app signing certificate**; it can differ from the upload certificate. Preserve existing statements.
+4. Test the actual production-signed/Play-installed build on a phone: no URL bar on the shop, product-link entry, account/address restoration, UPI handoff/return, COD, receipts/printing, WhatsApp, back/keyboard/rotation and offline/retry. The owner confirmed the preview works; this audit does not claim physical-device acceptance of the new production identity or a real payment.
+5. Complete Play listing, privacy/Data safety and testing/review requirements. No Play acceptance or universal device compatibility is claimed.
 
-- The original APK omitted `ManageDataLauncherActivity`. Browser Helper calls `PackageManager.setComponentEnabledSetting` for this component during every launcher startup on API 25+. The regression test demonstrated `NameNotFoundException` for the missing component in the original manifest. No crash log was collected from the user’s phone, so this is a confirmed source defect rather than a claim that all possible device causes are excluded.
-- Registered the activity and its website metadata; retained the same browser-based architecture, app ID and signing certificate. Version code increased from 1 to 2, version name to 0.1.1-preview.
-- All **six Robolectric runtime checks pass** on simulated Android 15/API 35 and Android 16/API 36: required component registration, launcher startup without a compatible browser, and splash rasterization. The component-registration test failed before the manifest fix and passes afterward.
-- Android emulator boot could not be completed in this environment. No physical-device test is claimed.
+Production readiness here means that source/build/signing checks are in place and verified; the owner's actual signing certificate and phone acceptance remain required before public rollout.

@@ -1,0 +1,22 @@
+# Android build state and private signing credentials
+.gradle/
+**/build/
+local.properties
+*.jks
+*.keystore
+keystore.properties
+*.p12
+*.pem
+*.key
+*.apk
+*.aab
+__pycache__/
+*.pyc
+# clasp credentials belong on the owner's device
+.clasprc.json
+.clasp.json
+# Generated website publishing files
+_site/
+.catalog-build.json
+.catalog-build-meta.json
+

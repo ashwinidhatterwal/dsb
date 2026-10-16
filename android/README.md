@@ -1,68 +1,106 @@
-# Suhag Bhandar Android app — preview 0.1.1
+# Suhag Bhandar Android 1.0.0
 
-This is the approved website-based Android app, built with Google's Android Browser Helper and a Trusted Web Activity (TWA). It opens `https://suhagbhandar.in/` using a compatible browser. A verified TWA hides the browser address bar, while retaining system status/navigation bars. On an unverified installation or unsupported browser, Custom Tabs/browser UI can appear.
+Production source based on GitHub main `fa7aa23` (16 October 2026). The approved Trusted Web Activity (TWA) architecture stays in place: the app opens the live shop at https://suhagbhandar.in/ through a compatible browser and uses the website's catalogue, accounts and checkout.
 
-## Current build
+- Production identity: `in.suhagbhandar.app`, version **1.0.0**, version code **3**.
+- Preview identity: `in.suhagbhandar.app.preview`, label **Suhag Bhandar Test**. Production installs separately from the preview.
+- Android 7.0+ (API 24); compile/target API 36. Java 21, Gradle 8.13, AGP 8.13.2, Android Browser Helper 2.7.4.
+- Existing DSB icon, brand colours and splash screen; optional monochrome cart icon for themed launchers. System status/navigation bars remain visible.
+- No app background service or sensitive device permissions. The browser manages site sessions, downloads, website permissions and online connectivity.
+- Shop/product URLs on the verified HTTPS host are covered by App Links, including legacy query links and generated product pages. Embedded browsers and the user's Android link preferences can affect where a link opens.
 
-- Website baseline: `ashwinidhatterwal/dsb`, commit `f754844ec301f131d40223c5013227d6f5fddcec`.
-- Display name: **Suhag Bhandar Test** (preview); existing DSB shop icon and colours.
-- Preview application ID: `in.suhagbhandar.app.preview`.
-- Provisional release ID: `in.suhagbhandar.app` — owner approval required before production release.
-- Android 7.0+ (API 24); target/compile API 36.
-- AGP 8.13.2, Gradle 8.13, Java 21 for startup tests (Java 17 is sufficient for build-only), Android Browser Helper 2.7.4; wrapper distribution SHA-256 pinned.
-- Website UI controls Hindi/English, shopping, accounts and checkout. No copied catalogue or separate backend.
-- No background sync, notification, contacts, location or storage permission added. Internet is the only requested app permission. The browser handles website permissions and sessions.
-- Shopping requires internet, as it does on the current website. No offline checkout added.
+## Generate your signing key in Termux
 
-## Build
-
-Install Java 21 and Android SDK platform 36/build tools 36.0.0. Set `ANDROID_HOME` or a local `local.properties` containing `sdk.dir=/your/sdk/path`.
+Skip generation if you already have the key intended for this production app. Keep a private backup of the keystore and passwords. Do not commit or share them. The preview signing key is not used for production.
 
 ```sh
-./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+pkg install openjdk-21
+mkdir -p "$HOME/dsb-keys"
+keytool -genkeypair -v -keystore "$HOME/dsb-keys/dsb-upload.jks" \
+  -storetype JKS -alias dsb-upload -keyalg RSA -keysize 3072 -validity 10000
 ```
 
-Output: `app/build/outputs/apk/debug/app-debug.apk`. A manual GitHub Actions workflow is supplied at `../.github/workflows/android-app.yml`. CI-generated debug APKs use a different debug certificate unless a persistent test signing key is deliberately configured; do not expect them to update an APK built on another machine.
-
-`./gradlew :app:bundleRelease` builds an **unsigned** release bundle. This is not a Play Store upload artifact. Production signing, final app ID, Play App Signing and store submission require the owner's next decision. No production keystore has been created or included.
-
-## Website verification — deployment required
-
-Fullscreen trust requires a public HTTPS file at:
-`https://suhagbhandar.in/.well-known/assetlinks.json`.
-
-The supplied preview association must match the exact APK's signing certificate and application ID. The candidate file is supplied under `website-verification/` and the website root `.well-known/`. It is prepared for review, not deployed by this package.
-
-Inspect an APK using the Android SDK:
+Answer the keytool prompts. Use a strong password; using the same password for the key and keystore is supported. Export the keystore for the GitHub secret:
 
 ```sh
-apksigner verify --verbose --print-certs app-debug.apk
+base64 < "$HOME/dsb-keys/dsb-upload.jks" | tr -d '\n' > "$HOME/dsb-keys/dsb-upload-base64.txt"
 ```
 
-Generate a matching public association:
+In GitHub repository **Settings → Secrets and variables → Actions → New repository secret**, add:
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Complete contents of `~/dsb-keys/dsb-upload-base64.txt` |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | `dsb-upload` (or your existing alias) |
+| `ANDROID_KEY_PASSWORD` | Key password; same as keystore password if you chose that |
+
+The Base64 file is also private key material. Keep it out of the repository and messages. Passwords are supplied as environment variables, not build arguments or checked-in Gradle properties. CI restores the key only in its temporary directory and removes it even after a failed build.
+
+## Build using GitHub Actions
+
+1. Upload/extract this full source over your repo, including `.github` and `.gitattributes`, then commit and push to `main`.
+2. Open **Actions → Build DSB Android app → Run workflow**. Select `main`, enable **Build signed production APK and Play Store AAB**, then run.
+3. The checks job first runs all website regressions, certificate merge tests, Android unit tests for debug/release, debug assembly, and lint for both variants.
+4. The release job signs the APK and AAB with your secrets. It rejects missing credentials; verifies both signatures, matching certificates, production identity/version, non-debuggable APK, Android API levels, expected permissions and App Links manifest entries.
+5. Download **dsb-android-production**. It contains the release APK, Play upload AAB, R8 mapping, checksums, public certificate fingerprint, metadata and a candidate website association. Download within 14 days; back up mapping files alongside each published version.
+
+If you extract over an existing checkout, remove the three retired paths as well (ZIP extraction does not delete old files). Run this from the repository root before committing:
 
 ```sh
-python3 scripts/assetlinks.py --package in.suhagbhandar.app.preview \
-  --sha256 ACTUAL_APK_CERTIFICATE_SHA256 \
-  --output ../.well-known/assetlinks.json
+git rm --ignore-unmatch UPLOAD-INSTRUCTIONS.txt \
+  android/website-verification/assetlinks.preview.json \
+  android/app/src/main/res/drawable/shop_icon.png
 ```
 
-The publishing script now copies only this association from `.well-known`. It continues excluding Android source, keys and other subdirectories. When moving to Play Store, use the **Play app signing certificate**, not the upload certificate, in the production association. Preserve any existing statements when adding another app/certificate; the generator creates a single-app file and does not merge an existing file.
+The shop bitmap is now included at `android/app/src/main/res/drawable-nodpi/shop_icon.png`.
 
-The small `pwa-install.js` change suppresses the install banner inside the installed app. Web pages have an updated version query for that script. No backend deployment is required.
+Pushes/pull requests run checks without release signing secrets. Signed releases are manual and restricted to `main`. The workflow does not publish to Google Play or change your website association automatically.
 
-## Phone acceptance checklist
+CI debug APK signing differs from the previously supplied preview APK. It may require uninstalling a differently signed preview. Production updates must retain the production package and signing identity; increase versionCode for each Play upload.
 
-After verification is published, install the provided APK with an updated TWA-capable browser (Chrome is the primary test target). Verify the public association contains the exact APK certificate and has no redirects/sign-in wall. Browser verification can be cached; clear the site's verification state/reinstall if necessary.
+## Remove the URL bar and enable product links in production
 
-Check: cold launch and relaunch; no address bar on shop pages; product links open the right item; Hindi/English; search/filter/cart; Google sign-in and restored account; default address; guest checkout; UPI app launch and return; WhatsApp; receipt download and print; back navigation; rotation/keyboard; lost internet and retry. Do not place chargeable real orders without the owner's test instruction. Third-party Google/UPI pages may correctly display browser or external-app UI.
+A new production package/key needs a new website association. The preview association in `.well-known/assetlinks.json` remains valid and is preserved.
 
-Passing compilation, lint and website regression checks does not prove live payment/login behaviour. This environment has not completed Android device acceptance. No Play Store approval claim is made.
+For **directly installed release APKs**, copy the generated `assetlinks-direct-install.json` from the production artifact to the website root `.well-known/assetlinks.json`, then commit/push and wait for GitHub Pages deployment. That candidate contains the actual release certificate and preserves the existing preview association from this source revision. If associations have changed since building, use the merge command below on the current file instead of replacing it with an old candidate.
 
-## 0.1.1 startup fix
+For **Google Play installs**, get the SHA-256 of the **app signing key certificate** from Play Console's App signing page. The upload key and the Play app signing key can differ. Add the Play certificate to the current file:
 
-Registered Android Browser Helper’s ManageDataLauncherActivity, which LauncherActivity enables/disables during startup on Android 7.1+. The earlier manifest omitted it. Added six Robolectric checks across API 35 and 36 for required component registration, activity startup without a browser, and splash rasterization. API 36 tests need Java 21 and the configured JVM module access flags. These tests simulate Android; a physical-device check remains required. The APK retains the previous signing certificate and preview application ID, allowing installation as an update.
+```sh
+python android/scripts/assetlinks.py --package in.suhagbhandar.app \
+  --sha256 'PASTE_REAL_PLAY_APP_SIGNING_SHA256' \
+  --merge .well-known/assetlinks.json --output .well-known/assetlinks.json
+```
 
-## Website checkout update — 16 October 2026
+Commit/push and deploy the website. The generator merges certificates and preserves other associations; it never invents a certificate. Only public fingerprints belong in this file. Verify https://suhagbhandar.in/.well-known/assetlinks.json returns the production package/certificate over HTTPS without redirects.
 
-The website root now builds on GitHub main `cf7c38a385fb2287a3ebb5edc7aad093de8c49f7`. See `../RELEASE-COD50-UPI.md` for the ₹50 COD/UPI checkout deployment. Android 0.1.1 code and signing identity are unchanged; existing App Links support already covers shared product URLs. No APK rebuild is needed.
+Install the relevant APK or Play test build and test its product links/no URL bar again. Android/browser verification can take time and be cached. Enable **Open supported links** in Android app settings. Third-party Google sign-in, UPI, WhatsApp and unrelated sites can legitimately open external apps or browser UI. Keep the previous test association until those installations are retired.
+
+## Local build
+
+Install Java 21, Android SDK platform 36 and build tools 36.0.0; set `ANDROID_HOME`.
+
+```sh
+cd android
+bash gradlew :app:testDebugUnitTest :app:testReleaseUnitTest :app:assembleDebug :app:lintDebug :app:lintRelease
+```
+
+For release, set `ANDROID_KEYSTORE_PATH` (absolute path), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` in your private environment, then run:
+
+```sh
+bash gradlew :app:assembleRelease :app:bundleRelease
+python3 scripts/verify-release.py
+```
+
+No production signing key or private signing values are included in this source. Local unsigned release packaging is intentionally blocked. Unit tests/lint remain usable without a key.
+
+## Final phone acceptance and store setup
+
+The owner has confirmed the preview app works. Before public release, test the actual production-signed APK or Play test build: cold launch/relaunch, product link entry, both languages, search, cart, address/account restoration, UPI handoff and return, COD quote, receipt download/print, WhatsApp, back navigation, keyboard, rotation, offline/retry. Check the app on an Android 9 device as well as the current phone if available. Unit tests cannot verify a real bank app or browser OAuth handoff.
+
+The website backend must serve the intended checkout policy: UPI recommended/default, COD surcharge ₹50. `clasp push` alone does not update an Apps Script web-app deployment; deploy a **New version** on the existing deployment if its live fee ever remains ₹20 after a future source update. The live endpoint was checked during this audit and returned `codCharge: 50`. This app always uses the live website/backend.
+
+Use Play App Signing for the AAB. Complete the Play listing, real screenshots, store/privacy/contact links, content rating and Data safety disclosures based on the website's real collection (accounts, address/orders, analytics and third-party services). Website-based packaging does not remove those disclosures. No automated Play submission is configured.
+
+See `VALIDATION.md` for checks actually completed and remaining owner-dependent release steps.
