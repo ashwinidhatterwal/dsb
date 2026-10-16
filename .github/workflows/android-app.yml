@@ -53,13 +53,15 @@ jobs:
       - name: Build, test and lint both variants (no production secrets)
         working-directory: android
         run: bash gradlew :app:testDebugUnitTest :app:testReleaseUnitTest :app:assembleDebug :app:lintDebug :app:lintRelease --no-daemon
-      - name: Upload test APK
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: dsb-android-preview
-          path: android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 14
+      - name: Explain production download
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          Android checks passed. Routine pushes publish test reports only.
+
+          To download an installable production APK, run this workflow manually on main with the production option enabled and all four signing secrets configured. Download dsb-android-production, then publish its public certificate association on the website once. Keep the same signing key for subsequent releases.
+
+          A fresh runner debug APK uses a different certificate and is not verified by the existing website association. It is deliberately not offered as an app download.
+          SUMMARY
       - name: Upload test and lint reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
