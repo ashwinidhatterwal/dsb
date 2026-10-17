@@ -1,6 +1,6 @@
 # Suhag Bhandar Android 1.0.1
 
-Production source based on GitHub main `2c0820c` (fetched 17 October 2026). The approved Trusted Web Activity (TWA) architecture stays in place: the app opens the live shop at https://suhagbhandar.in/ through a compatible browser and uses the website's catalogue, accounts and checkout.
+Production source based on GitHub main `2c0820c` (fetched 17 October 2026). The approved Trusted Web Activity (TWA) architecture stays in place: the app opens the live shop at https://suhagbhandar.in/ through a compatible browser and uses the website's catalogue and guest checkout.
 
 - Production identity: `in.suhagbhandar.app`, version **1.0.1**, version code **4**.
 - Preview identity: `in.suhagbhandar.app.preview`, label **Suhag Bhandar**. Production installs separately from the preview.
@@ -75,7 +75,7 @@ python android/scripts/assetlinks.py --package in.suhagbhandar.app \
 
 Commit/push and deploy the website. The generator merges certificates and preserves other associations; it never invents a certificate. Only public fingerprints belong in this file. Verify https://suhagbhandar.in/.well-known/assetlinks.json returns the production package/certificate over HTTPS without redirects.
 
-Install the relevant APK or Play test build and test its product links/no URL bar again. Android/browser verification can take time and be cached. Enable **Open supported links** in Android app settings. Third-party Google sign-in, UPI, WhatsApp and unrelated sites can legitimately open external apps or browser UI. Keep the previous test association until those installations are retired.
+Install the relevant APK or Play test build and test its product links/no URL bar again. Android/browser verification can take time and be cached. Enable **Open supported links** in Android app settings. Third-party UPI, WhatsApp and unrelated sites can legitimately open external apps or browser UI. Keep the previous test association until those installations are retired.
 
 ## Local build
 
@@ -97,10 +97,10 @@ No production signing key or private signing values are included in this source.
 
 ## Final phone acceptance and store setup
 
-The owner has confirmed the preview app works. Before public release, test the actual production-signed APK or Play test build: cold launch/relaunch, product link entry, both languages, search, cart, address/account restoration, UPI handoff and return, COD quote, receipt download/print, WhatsApp, back navigation, keyboard, rotation, offline/retry. Check the app on an Android 9 device as well as the current phone if available. Unit tests cannot verify a real bank app or browser OAuth handoff.
+The owner has confirmed the preview app works. Before public release, test the actual production-signed APK or Play test build: cold launch/relaunch, product link entry, both languages, search, cart, address/saved delivery details, UPI handoff and return, COD quote, receipt download/print, WhatsApp, back navigation, keyboard, rotation, offline/retry. Check the app on an Android 9 device as well as the current phone if available. Unit tests cannot verify a real bank app or browser OAuth handoff.
 
 The website backend must serve the intended checkout policy: UPI recommended/default, COD surcharge ₹50. `clasp push` alone does not update an Apps Script web-app deployment; deploy a **New version** on the existing deployment if its live fee ever remains ₹20 after a future source update. The live endpoint was checked during this audit and returned `codCharge: 50`. This app always uses the live website/backend.
 
-Use Play App Signing for the AAB. Complete the Play listing, real screenshots, store/privacy/contact links, content rating and Data safety disclosures based on the website's real collection (accounts, address/orders, analytics and third-party services). Website-based packaging does not remove those disclosures. No automated Play submission is configured.
+Use Play App Signing for the AAB. Complete the Play listing, real screenshots, store/privacy/contact links, content rating and Data safety disclosures based on the website's real collection (delivery details/orders, analytics and third-party services). Website-based packaging does not remove those disclosures. No automated Play submission is configured.
 
 See `VALIDATION.md` for checks actually completed and remaining owner-dependent release steps.

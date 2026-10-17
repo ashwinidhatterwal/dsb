@@ -1,4 +1,4 @@
-Verified code.gs from 25 source files.
+Verified code.gs from 24 source files.
 Verified style.css from 16 source files.
 Verified admin-chat.js from 5 source fragments.
 Admin AI tool-gateway, bounded vision analysis, proposal safety and creation checks passed.
@@ -12,6 +12,7 @@ PASS: analytics in-flight flush preserves newly queued events.
 PASS: batched anonymous analytics, admin analytics view, privacy guards, formula safety and backend versioning.
 PASS: size stock validation, order/recovery/cancellation/reactivation, shipment conflicts, permissions, UTM encoding, safe links, AI budgets and resumable batches.
 Autofill parser checks passed.
+PASS: canonical DSB brand/entity identity is consistent across homepage, About, Contact, catalogue and product offers.
 Chat client integration passed: attachment persistence, chat request, review fields, selective Apply and reset.
 Fresh-context regressions passed: reset during AI request/upload, draft clearing and empty next-request history.
 Editable review passed: manual name/description/price, blank unknown values, and required price validation.
@@ -19,27 +20,21 @@ Telegram notification sent successfully for order TEST.
 Telegram notification sent successfully for order TEST.
 PASS: PIN validation, address compatibility, Telegram/admin price breakdown and priced item summaries (mocked transport; no messages sent).
 PASS: conservative cleanup, documentation and build-order checks.
-PASS: disabled/failed/customer checkout authentication, explicit guest fallback with same request ID, no persisted token, verified order ownership and public price snapshots.
-PASS: restored account state, selected default, styled address picker, edit preservation including async race, Hindi-only controls, retry recovery, bounded customer directory and admin-only access.
-Firebase customer authentication failed: HTTP_400
-Firebase customer authentication failed: API_KEY_HTTP_REFERRER_BLOCKED
-Firebase customer authentication failed: INVALID_ID_TOKEN
-Firebase customer authentication failed: HTTP_403
-Firebase customer authentication failed: HTTP_400
-PASS: customer token/project/revocation checks, UID isolation, ownership, address retries, pagination, private order projection, full account deletion/unlinking, and guest gateway (mocked Firebase/Sheets).
+PASS: guest-only checkout with stable request IDs, stale-token compatibility, account code/UI removal, no account ownership writes, and protected admin management.
 Image editor integration check passed.
 PASS: Level 1 filters, recent products, similarity, assurance information and analytics hooks.
 PASS: Level 2 placement, verified reviews, delivery estimates, richer metadata and recommendation signals.
 PASS: dedicated order tracking, POST privacy, support/cancellation requests, admin handling and status lifecycle.
-index.html: 304.1 KB local assets, 79.1 KB gzipped JS/CSS
-product.html: 316.8 KB local assets, 82.4 KB gzipped JS/CSS
-catalog.html: 287.7 KB local assets, 74.4 KB gzipped JS/CSS
-about.html: 213.7 KB local assets, 49.8 KB gzipped JS/CSS
-contact.html: 213.7 KB local assets, 49.8 KB gzipped JS/CSS
-privacy.html: 213.7 KB local assets, 49.8 KB gzipped JS/CSS
-returns.html: 213.7 KB local assets, 49.8 KB gzipped JS/CSS
-track-order.html: 201.2 KB local assets, 45.6 KB gzipped JS/CSS
-admin.html: 315.0 KB local assets, 86.5 KB gzipped JS/CSS
+PASS: authoritative ₹50 COD fee, zero UPI surcharge, default/recommended UPI, COD choice retention, stale-quote protection and product App Links configuration.
+index.html: 292.9 KB local assets, 74.8 KB gzipped JS/CSS
+product.html: 305.5 KB local assets, 78.1 KB gzipped JS/CSS
+catalog.html: 276.6 KB local assets, 70.2 KB gzipped JS/CSS
+about.html: 214.5 KB local assets, 49.8 KB gzipped JS/CSS
+contact.html: 214.5 KB local assets, 49.8 KB gzipped JS/CSS
+privacy.html: 214.5 KB local assets, 49.8 KB gzipped JS/CSS
+returns.html: 214.5 KB local assets, 49.8 KB gzipped JS/CSS
+track-order.html: 202.1 KB local assets, 45.5 KB gzipped JS/CSS
+admin.html: 311.2 KB local assets, 84.8 KB gzipped JS/CSS
 Performance guardrails passed.
 PASS: Phase 1 report outputs, calendar/DST/reset boundaries, cancelled and recovered orders, full-population rankings, GA size pricing, checkout start deduplication and privacy translations.
 PASS: admin analytics rendering, full-list sort wiring, loading/error recovery and chunked report caching (mock DOM; no visual certification).
@@ -54,3 +49,5 @@ PASS: HTML IDs/assets and standards-safe scroll behavior.
 PASS: Step 2 analytics reliability, metric integrity, cache freshness and version sync.
 PASS: syntax, pricing, discount, sorting, cart limits, checkout size/stock validation and static publishing.
 PASS: build consistency and all 30 regression programs.
+
+Browser verification: BLOCKED before page load by environment socket permission restriction (Chromium ProcessSingleton). No visual browser result claimed; no production orders/messages placed.

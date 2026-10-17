@@ -27,6 +27,7 @@ function renderCartDrawer() {
         <div class="cart-empty"><div class="cart-empty-icon">🛍️</div><strong>Your cart is empty</strong><br><span>Add a few things from the shop and they will appear here.</span></div>
       </div>`;
     $('#cartClose').addEventListener('click', closeCart);
+    $('#forgetCheckoutInfo')?.addEventListener('click', forgetSavedCheckoutInfo);
     if (lastReceipt) {
       const b = document.createElement('button');
       b.type = 'button';
@@ -81,7 +82,6 @@ function renderCartDrawer() {
       <div class="cart-summary">
         <div class="cart-checkout-title"><div><span class="cart-eyebrow">CHECKOUT</span><h3>Delivery details</h3></div></div>
         <div class="field">
-          <div id="customerAddressSlot" data-i18n-skip></div>
           <label for="custName">Your name</label>
           <input type="text" id="custName" maxlength="100" placeholder="Full name" autocomplete="name" value="${escapeHtml(checkoutState.name)}">
         </div>
@@ -155,25 +155,19 @@ function renderCartDrawer() {
     renderCartDrawer();
   }));
   $('#forgetCheckoutInfo')?.addEventListener('click', forgetSavedCheckoutInfo);
-  renderCustomerAddressChoices();
-  void loadCustomerCheckoutDetails();
   $('#custName').addEventListener('input', e => {
-    markCustomerAddressEdited();
     checkoutState.name = e.target.value;
     saveCheckoutInfo();
   });
   $('#custPhone').addEventListener('input', e => {
-    markCustomerAddressEdited();
     checkoutState.phone = e.target.value;
     saveCheckoutInfo();
   });
   $('#custAddress').addEventListener('input', e => {
-    markCustomerAddressEdited();
     checkoutState.address = e.target.value;
     saveCheckoutInfo();
   });
   $('#custPinCode').addEventListener('input', e => {
-    markCustomerAddressEdited();
     checkoutState.pinCode = e.target.value;
     saveCheckoutInfo();
   });

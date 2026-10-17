@@ -103,7 +103,6 @@ function applyStaffRole() {
   const profile = ADMIN_PROFILE;
   if (!profile) return;
   $('.live-pill').textContent = profile.name + ' · ' + profile.role;
-  $$('[data-tab="customers"]').forEach(button=>button.hidden=profile.role !== 'admin');
   const aiConfigMenu = $('#aiConfigMenuItem');
   if (aiConfigMenu) aiConfigMenu.hidden = profile.role !== 'admin';
   if (profile.role === 'viewer') {
@@ -287,9 +286,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!product) return;
     if (button.dataset.restore) archiveProduct(product);else permanentlyDeleteProduct(product);
   };
-  $('#signOutBtn').onclick = () => {
+  $('#disconnectAdminBtn').onclick = () => {
     if (editorBusy) return showToast('Wait for the current operation to finish.');
-    if (editorDirty() && !confirm('Sign out? Your draft will remain in this tab for this staff key.')) return;
+    if (editorDirty() && !confirm('Disconnect? Your draft will remain in this tab for this staff key.')) return;
     persistDraft();
     cleanEditor = editorFingerprint();
     ADMIN_KEY = '';

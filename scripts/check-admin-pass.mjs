@@ -10,7 +10,7 @@ const fail=(m)=>{ throw new Error(m); };
 if(!html.includes('admin-surface.css?v=')) fail('admin surface stylesheet not loaded');
 if(!css.includes('--admin-canvas') || !css.includes('--admin-shadow')) fail('surface contrast/elevation tokens missing');
 if(!css.includes('.order-card') || !css.includes('.archive-card') || !css.includes('.dash-panel')) fail('surface pass does not cover major admin tiles');
-if(!html.includes('>Archived</button>') || !html.includes('>Sign out</button>') || !html.includes('>View store</a>')) fail('top action labels not restored');
+if(!html.includes('>Archived</button>') || !html.includes('>Disconnect</button>') || !html.includes('>View store</a>')) fail('top action labels not restored');
 if(!ws.includes("adminWrite('deleteArchivedProduct'")) fail('archive delete is not using explicit action');
 if(ws.includes('Type ${product.id} to confirm')) fail('fragile typed-ID deletion prompt still present');
 if(!auth.includes("action === 'delete' || action === 'deleteArchivedProduct'")) fail('backend does not route explicit archived delete action');

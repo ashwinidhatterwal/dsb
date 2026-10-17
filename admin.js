@@ -906,7 +906,6 @@ function switchTab(name) {
   if (name === 'add' && !productResponse) loadProducts(false);
   if (name === 'analytics' && window.DSBAdminAnalytics) window.DSBAdminAnalytics.load();
   if (name === 'shop-tools' && window.DSBShopTools) window.DSBShopTools.load();
-  if (name === 'customers' && window.DSBAdminCustomers) window.DSBAdminCustomers.load();
   if (name === 'reviews' && window.DSBAdminReviews) window.DSBAdminReviews.load();
   if (name === 'ai-config' && window.DSBAIConfig) window.DSBAIConfig.loadPage();
   window.scrollTo({

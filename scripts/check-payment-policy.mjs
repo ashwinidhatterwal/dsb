@@ -35,7 +35,7 @@ function checkout(upiId) {
     $$:selector=>selector==='input[name="payMethod"]'?['UPI','COD'].map(value=>({addEventListener:(_event,fn)=>listeners.set(value,fn)})):[],
     CartStore:{getAll:()=>({P:{product,qty:1}}),total:()=>100,count:()=>1},
     lastReceipt:null,cartAdjustmentHtml:()=>'',productImageUrl:()=>'',escapeHtml:String,money:n=>'₹'+Number(n).toFixed(2),
-    closeCart(){},forgetSavedCheckoutInfo(){},renderCustomerAddressChoices(){},loadCustomerCheckoutDetails(){},
+    closeCart(){},forgetSavedCheckoutInfo(){},
     applyPromoCode(){},submitOrder(){},requestAnimationFrame:fn=>fn()
   });
   const core=read('cart-ui-core.js');

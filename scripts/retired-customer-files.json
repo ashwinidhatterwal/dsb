@@ -1,0 +1,13 @@
+[
+  "customer-account.js",
+  "profile.html",
+  "profile.js",
+  "profile.css",
+  "admin-customers.js",
+  "admin-customers.css",
+  "src/backend/customers.gs",
+  "CUSTOMER-SETUP.md",
+  "scripts/check-customers.mjs",
+  "scripts/check-customer-checkout.mjs",
+  "scripts/check-customer-experience.mjs"
+]

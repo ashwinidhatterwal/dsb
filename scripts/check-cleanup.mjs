@@ -13,9 +13,7 @@ assert(!checkout.includes('newOrderId_'), 'Unused legacy order ID helper returne
 assert(!bundle.includes('function invalidateDashboardCache_'), 'Generated backend still contains removed cache helper');
 assert(!bundle.includes('function newOrderId_'), 'Generated backend still contains removed order ID helper');
 
-const customers = read('src/backend/customers.gs');
 const cartCore = read('cart-ui-core.js');
-assert(!customers.includes('customer.saved.delete') && !customers.includes('DELETE_SAVED_DETAILS'), 'Obsolete saved-details deletion endpoint returned');
 assert(!cartCore.includes('goToTrackOrder') && !cartCore.includes('trackOrderUrl'), 'Unused cart tracking redirect helpers returned');
 assert(fs.existsSync('CHANGELOG.md'), 'Consolidated changelog is missing');
 for (const oldDoc of ['AUDIT-COMPLETION.md','PHASE-2-3-RELEASE.md','RELIABILITY-RELEASE.md','STAGE-3-RELEASE.md']) assert(!fs.existsSync(oldDoc), `Superseded release note still present: ${oldDoc}`);
