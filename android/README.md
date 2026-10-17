@@ -1,9 +1,9 @@
-# Suhag Bhandar Android 1.0.0
+# Suhag Bhandar Android 1.0.1
 
-Production source based on GitHub main `fa7aa23` (16 October 2026). The approved Trusted Web Activity (TWA) architecture stays in place: the app opens the live shop at https://suhagbhandar.in/ through a compatible browser and uses the website's catalogue, accounts and checkout.
+Production source based on GitHub main `2c0820c` (fetched 17 October 2026). The approved Trusted Web Activity (TWA) architecture stays in place: the app opens the live shop at https://suhagbhandar.in/ through a compatible browser and uses the website's catalogue, accounts and checkout.
 
-- Production identity: `in.suhagbhandar.app`, version **1.0.0**, version code **3**.
-- Preview identity: `in.suhagbhandar.app.preview`, label **Suhag Bhandar Test**. Production installs separately from the preview.
+- Production identity: `in.suhagbhandar.app`, version **1.0.1**, version code **4**.
+- Preview identity: `in.suhagbhandar.app.preview`, label **Suhag Bhandar**. Production installs separately from the preview.
 - Android 7.0+ (API 24); compile/target API 36. Java 21, Gradle 8.13, AGP 8.13.2, Android Browser Helper 2.7.4.
 - Existing DSB icon, brand colours and splash screen; optional monochrome cart icon for themed launchers. System status/navigation bars remain visible.
 - No app background service or sensitive device permissions. The browser manages site sessions, downloads, website permissions and online connectivity.
@@ -57,11 +57,11 @@ The shop bitmap is now included at `android/app/src/main/res/drawable-nodpi/shop
 
 Pushes/pull requests run checks without release signing secrets. Signed releases are manual and restricted to `main`. The workflow does not publish to Google Play or change your website association automatically.
 
-CI debug APK signing differs from the previously supplied preview APK. It may require uninstalling a differently signed preview. Production updates must retain the production package and signing identity; increase versionCode for each Play upload.
+Routine checks publish reports only. Download the installable APK/AAB from the explicit production job using your existing signing secrets. Production updates must retain the production package and signing identity; increase versionCode for each Play upload.
 
 ## Remove the URL bar and enable product links in production
 
-A new production package/key needs a new website association. The preview association in `.well-known/assetlinks.json` remains valid and is preserved.
+This package includes the Play app signing certificate you supplied in `.well-known/assetlinks.json` for `in.suhagbhandar.app`, alongside the preserved preview association. Push the full source including `.well-known`, and wait for website deployment before testing the Play-installed app. Direct GitHub APK installs use the owner keystore certificate, which the release artifact can add using the merge process below.
 
 For **directly installed release APKs**, copy the generated `assetlinks-direct-install.json` from the production artifact to the website root `.well-known/assetlinks.json`, then commit/push and wait for GitHub Pages deployment. That candidate contains the actual release certificate and preserves the existing preview association from this source revision. If associations have changed since building, use the merge command below on the current file instead of replacing it with an old candidate.
 

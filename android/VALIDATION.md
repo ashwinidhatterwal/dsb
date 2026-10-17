@@ -1,4 +1,12 @@
-# Production release validation — 16 October 2026
+# Android release validation
+
+## Version 1.0.1 — 17 October 2026
+
+Based on fetched GitHub main `2c0820c`. Version name is now 1.0.1 and version code is 4 (previously 1.0.0 / 3). The supplied Play app signing SHA-256 certificate has been merged into the website association for `in.suhagbhandar.app`, preserving the existing preview statement. The correct Suhag Bhandar launcher name and signed release workflow are retained. No signing key, app identity or website backend is changed.
+
+Source configuration, association, workflow and source regressions were checked for this package. The Android compilation/startup/signature results below are historical checks on the preceding implementation; Android builds were not rerun locally for this version-and-certificate-only change. Build the new signed APK/AAB through the existing production workflow using the same GitHub Secrets.
+
+## Previous production validation — 16 October 2026
 
 ## GitHub runner setup correction
 

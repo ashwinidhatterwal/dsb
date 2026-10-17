@@ -10,5 +10,17 @@
         "30:90:10:5D:8A:45:EB:A0:51:9A:FA:06:DB:88:AD:4C:2D:83:B0:18:B6:2E:93:93:88:52:E0:0A:0A:78:2A:0F"
       ]
     }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "in.suhagbhandar.app",
+      "sha256_cert_fingerprints": [
+        "15:DD:6C:F3:8E:94:A8:36:69:DE:85:AE:4C:A1:AF:0C:FC:81:67:A6:4B:AE:2F:20:8A:89:CC:D1:3F:C2:6A:17"
+      ]
+    }
   }
 ]
