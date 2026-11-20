@@ -64,7 +64,6 @@ function validateCheckoutDetails(order) {
 }
 async function submitOrder() {
   if (checkoutBusy) return;
-  if (!CONFIG.UPI_ID) { showCheckoutError('UPI payment is temporarily unavailable. Please contact the shop.'); return; }
   const order = checkoutOrderFromForm();
   if (!order.itemsDetail.length) return;
   const problem = validateCheckoutDetails(order);
@@ -95,6 +94,7 @@ async function submitOrder() {
         subtotal,
         discount: totals.discount,
         deliveryCharge: totals.deliveryCharge,
+        codCharge: totals.codCharge,
         correctedTotal: totals.grandTotal,
         items
       }
@@ -152,7 +152,6 @@ function renderCheckoutReview(message = '') {
   $('#cartClose').onclick = closeCart;
   $('#editCheckoutBtn').onclick = () => {
     if (checkoutBusy) return;
-  if (!CONFIG.UPI_ID) { showCheckoutError('UPI payment is temporarily unavailable. Please contact the shop.'); return; }
     checkoutQuote = null;
     renderCartDrawer();
     $('#custName')?.focus();
@@ -297,6 +296,7 @@ async function completeCheckout(data, order) {
     subtotal: data.subtotal,
     discount: data.discount,
     deliveryCharge: data.deliveryCharge,
+    codCharge: data.codCharge,
     total: data.correctedTotal,
     items: data.items
   };
@@ -347,7 +347,6 @@ window.addEventListener('storage', event => {
   if (event.key !== CART_STORAGE_KEY && event.key !== PENDING_CHECKOUT_KEY && event.key !== null) return;
   notifyCartChanged();
   if (checkoutBusy) return;
-  if (!CONFIG.UPI_ID) { showCheckoutError('UPI payment is temporarily unavailable. Please contact the shop.'); return; }
   try {
     pendingCheckout = JSON.parse(localStorage.getItem(PENDING_CHECKOUT_KEY) || 'null');
   } catch (_) {}

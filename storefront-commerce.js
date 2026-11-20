@@ -115,7 +115,7 @@
     return `<section class="commerce-assurance" aria-label="Shopping information">
       <a class="assurance-item" href="returns.html"><strong>Returns & exchanges</strong><span>Read the shop policy before ordering.</span></a>
       <div class="assurance-item"><strong>Delivery checked at checkout</strong><span>Charges and availability are confirmed before your order is saved.</span></div>
-      <div class="assurance-item"><strong>UPI payments</strong><span>Pay securely using your preferred UPI app.</span></div>
+      <div class="assurance-item"><strong>UPI payment</strong><span>Pay securely via UPI after your order is saved.</span></div>
       <a class="assurance-item" href="contact.html"><strong>Need help?</strong><span>Contact the shop for product, size${sized ? '' : ' or'} delivery questions.</span></a>
     </section>`;
   }

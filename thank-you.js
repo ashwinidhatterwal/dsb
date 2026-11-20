@@ -12,7 +12,7 @@
       eyebrow:'ORDER CONFIRMED', title:'Thank you for your order!',
       lead:'We’ve received your order. Keep your Order ID handy for tracking and support.',
       orderDetails:'Order details', orderId:'Order ID', orderTotal:'Order total', qty:'Qty', size:'Size',
-      subtotal:'Subtotal', discount:'Discount', delivery:'Delivery', codFee:'Cash on Delivery fee', total:'Total',
+      subtotal:'Subtotal', discount:'Discount', delivery:'Delivery', total:'Total',
       next:'What happens next', saved:'Order saved', savedText:'Your items, delivery details and total are safely recorded.',
       whatsapp:'WhatsApp confirmation', whatsappText:'We’ll confirm your delivery details from',
       deliveryStep:'Delivery', codText:'Pay {total} in cash when your order arrives.', upiText:'Once payment and details are confirmed, we’ll prepare your order for delivery.',
@@ -89,7 +89,7 @@
           <div class="thank-items">${items || `<div class="thank-item"><div class="thank-item-name">${t.orderDetails}</div><div class="thank-item-price">${money(receipt.total)}</div></div>`}</div>
           <div class="thank-summary">
             <div class="thank-summary-row"><span>${t.subtotal}</span><strong>${money(receipt.subtotal)}</strong></div>
-            ${feeRow(t.discount,receipt.discount,true)}${feeRow(t.delivery,receipt.deliveryCharge,false)}${feeRow(t.codFee,receipt.codCharge,false)}
+            ${feeRow(t.discount,receipt.discount,true)}${feeRow(t.delivery,receipt.deliveryCharge,false)}
             <div class="thank-summary-row total"><span>${t.total}</span><strong>${money(receipt.total)}</strong></div>
           </div>
         </section>

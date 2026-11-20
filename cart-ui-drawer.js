@@ -46,7 +46,6 @@ function renderCartDrawer() {
     deliveryCharge,
     grandTotal
   } = computeCheckoutTotals(subtotal);
-  const showUpi = !!CONFIG.UPI_ID;
   wrap.innerHTML = `
     <div class="cart-header">
       <div><span class="cart-eyebrow">SHOPPING BAG · ${CartStore.count()} ITEM${CartStore.count() === 1 ? '' : 'S'}</span><h2>Your cart</h2><button type="button" class="ghost-btn" id="forgetCheckoutInfo">Forget saved checkout details</button></div>
@@ -106,9 +105,9 @@ function renderCartDrawer() {
         <div class="field">
           <label>Payment method</label>
           <div class="pay-options">
-            ${showUpi ? `<label class="pay-option pay-option-upi"><input type="radio" name="payMethod" value="UPI" checked> <span class="pay-option-copy"><span class="pay-option-title"><span>Pay via UPI</span><small class="payment-recommended">Only payment method</small></span></span></label>` : '<p class="statusline err">UPI payment is temporarily unavailable. Please contact the shop before placing an order.</p>'}
+            <div class="pay-option pay-option-upi"><span class="pay-option-copy"><span class="pay-option-title"><span>Pay via UPI</span></span></span></div>
           </div>
-          ${showUpi && checkoutState.paymentMethod === 'UPI' ? '<p class="hint">UPI payment opens after your order is saved with the confirmed total.</p>' : ''}
+          <p class="hint">UPI payment opens after your order is saved with the confirmed total.</p>
         </div>
         <div class="cart-total-box">
           <div class="row"><span>Items</span><span>${CartStore.count()}</span></div>
@@ -119,7 +118,7 @@ function renderCartDrawer() {
           <div class="row total"><span>${checkoutState.feeConfig ? 'Estimated total' : 'Subtotal — fees checked next'}</span><span>${money(grandTotal)}</span></div>
         </div>
         ${checkoutState.feeConfig && checkoutState.feeConfig.deliveryCharge > 0 ? `<p class="checkout-fee-note">Free delivery on orders of ${money(checkoutState.feeConfig.deliveryFreeAbove)} or more.</p>` : ''}
-        <div class="checkout-honeypot" aria-hidden="true"><label>Website<input id="orderWebsite" tabindex="-1" autocomplete="off"></label></div><button class="primary-btn" id="orderWaBtn" type="button" ${showUpi ? '' : 'disabled'}>Review order</button>
+        <div class="checkout-honeypot" aria-hidden="true"><label>Website<input id="orderWebsite" tabindex="-1" autocomplete="off"></label></div><button class="primary-btn" id="orderWaBtn" type="button">Review order</button>
         <button class="ghost-btn cart-clear" id="clearCartBtn" type="button">Clear cart</button>
       </div>
     </div>`;
@@ -171,11 +170,6 @@ function renderCartDrawer() {
     checkoutState.promoInput = e.target.value;
   });
   $('#applyPromoBtn').addEventListener('click', applyPromoCode);
-  $$('input[name="payMethod"]', wrap).forEach(radio => radio.addEventListener('change', e => {
-    checkoutState.paymentMethod = e.target.value;
-    saveCheckoutInfo();
-    renderCartDrawer();
-  }));
   $('#orderWaBtn').addEventListener('click', submitOrder);
   $('#clearCartBtn').addEventListener('click', async () => {
     if (confirm('Clear all items from your cart?')) {

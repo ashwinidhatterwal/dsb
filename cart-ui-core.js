@@ -220,7 +220,7 @@ async function fetchCheckoutConfigIfNeeded() {
   try {
     const data = await (typeof cachedPublicJson === 'function' ? cachedPublicJson('checkout-config', `${CONFIG.SHEET_API_URL}?action=checkoutConfig`, 60000) : requestJson(`${CONFIG.SHEET_API_URL}?action=checkoutConfig`));
     if (data.checkoutVersion !== 2) throw new Error('Checkout update required.');
-    if (!['deliveryFreeAbove', 'deliveryCharge'].every(k => Number.isFinite(Number(data[k])) && Number(data[k]) >= 0)) throw new Error('Invalid checkout settings.');
+    if (!['deliveryFreeAbove', 'deliveryCharge', 'codCharge'].every(k => Number.isFinite(Number(data[k])) && Number(data[k]) >= 0)) throw new Error('Invalid checkout settings.');
     checkoutState.feeConfig = data;
   } catch (err) {/* Keep fees unknown, never silently treat a failed request as free delivery. */}
   return checkoutState.feeConfig;
@@ -231,12 +231,14 @@ function computeCheckoutTotals(subtotal) {
   const cfg = checkoutState.feeConfig || {
     deliveryFreeAbove: 0,
     deliveryCharge: 0,
+    codCharge: 0
   };
   const deliveryCharge = cfg.deliveryCharge > 0 && merchandiseTotal < cfg.deliveryFreeAbove ? cfg.deliveryCharge : 0;
   return {
     discount,
     merchandiseTotal,
     deliveryCharge,
+    codCharge: 0,
     grandTotal: Math.round((merchandiseTotal + deliveryCharge) * 100) / 100
   };
 }

@@ -4,16 +4,15 @@ import assert from 'node:assert/strict';
 const read = p => fs.readFile(new URL('../' + p, import.meta.url), 'utf8');
 const backend = vm.createContext({console});
 vm.runInContext(await read('code.gs'), backend);
-const order = {customerName:'Test Customer',phone:'9876543210',address:'House 12, Main Road',pinCode:'110001',paymentMethod:'UPI',itemsDetail:[{id:'P',qty:1}]};
+const order = {customerName:'Test Customer',phone:'9876543210',address:'House 12, Main Road',pinCode:'110001',paymentMethod:'Cash on Delivery',itemsDetail:[{id:'P',qty:1}]};
 for (const pinCode of ['', '12345', '1234567', '012345', '11a001']) {
   assert.equal(backend.normalizeAndValidateOrder_({...order,pinCode}).code,'validation_failed');
 }
 assert.equal(backend.normalizeAndValidateOrder_(order).address,'House 12, Main Road\nPIN: 110001');
-assert.equal(backend.normalizeAndValidateOrder_({...order,paymentMethod:'Cash on Delivery'}).code,'validation_failed');
 assert.equal(backend.normalizeAndValidateOrder_({...order,address:order.address+'\nPIN: 110001'}).address,'House 12, Main Road\nPIN: 110001');
 assert.equal(backend.normalizeAndValidateOrder_({...order,address:'x'.repeat(489)}).code,'validation_failed');
 const frontend = await read('cart-ui-checkout.js');
-const front = vm.createContext({checkoutState:{name:order.customerName,phone:order.phone,address:order.address,pinCode:order.pinCode,paymentMethod:'UPI'},CartStore:{getAll:()=>({p:{product:{id:'P'},qty:1}})},$:()=>null});
+const front = vm.createContext({checkoutState:{name:order.customerName,phone:order.phone,address:order.address,pinCode:order.pinCode,paymentMethod:'COD'},CartStore:{getAll:()=>({p:{product:{id:'P'},qty:1}})},$:()=>null});
 vm.runInContext(frontend.slice(frontend.indexOf('function checkoutOrderFromForm()'),frontend.indexOf('async function submitOrder()')),front);
 const payload = front.checkoutOrderFromForm();
 assert.equal(payload.address, 'House 12, Main Road\nPIN: 110001');

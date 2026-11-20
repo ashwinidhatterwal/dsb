@@ -4,7 +4,7 @@ function getCheckoutConfig_() {
     checkoutVersion: 2,
     deliveryFreeAbove: Math.max(0, safeNumber_(DELIVERY_FREE_ABOVE, 0)),
     deliveryCharge: Math.max(0, safeNumber_(DELIVERY_CHARGE, 0)),
-    codCharge: 0
+    codCharge: Math.max(0, safeNumber_(COD_CHARGE, 0))
   };
 }
 
@@ -134,7 +134,7 @@ function normalizeAndValidateOrder_(o) {
   const phone = cleanPhone_(o.phone),
     address = String(o.address || '').trim().replace(/\nPIN: [^\n]*$/, '').trim();
   const pinCode = String(o.pinCode || '').trim();
-  const paymentMethod = String(o.paymentMethod || o.paymentmethod || '');
+  const paymentMethod = String(o.paymentMethod || o.paymentmethod || 'Cash on Delivery');
   const promoCode = String(o.promoCode || o.promocode || '').trim().toUpperCase();
   if (o.website) return {
     success: false,
@@ -365,7 +365,7 @@ function priceOrder_(order, sheets) {
   const cfg = getCheckoutConfig_(),
     merchandiseTotal = roundMoney_(priced.subtotal - discount);
   const deliveryCharge = merchandiseTotal < cfg.deliveryFreeAbove ? cfg.deliveryCharge : 0;
-  const codCharge = 0;
+  const codCharge = order.paymentMethod === 'Cash on Delivery' ? cfg.codCharge : 0;
   const quote = {
     subtotal: roundMoney_(priced.subtotal),
     discount: discount,
