@@ -8,19 +8,15 @@ const backend = vm.createContext({console});
 vm.runInContext(read('code.gs'), backend);
 backend.PropertiesService = {getScriptProperties: () => ({getProperty: () => 'test-signing-key'})};
 backend.hashText_ = value => createHash('sha256').update(String(value)).digest('hex');
-assert.equal(backend.getCheckoutConfig_().codCharge, 50);
+assert.equal(backend.getCheckoutConfig_().codCharge, 0);
 for (const price of [100, 499, 700]) {
   const sheets = {productData: [['id','name','price','stock'],['P','Fixture',price,'in stock']]};
   const order = {itemsDetail:[{id:'P',qty:1}],promoCode:''};
-  const cod = backend.priceOrder_({...order,paymentMethod:'Cash on Delivery'}, sheets);
   const upi = backend.priceOrder_({...order,paymentMethod:'UPI'}, sheets);
-  assert.equal(cod.ok, true); assert.equal(upi.ok, true);
-  assert.equal(cod.quote.codCharge, 50);
+  assert.equal(upi.ok, true);
   assert.equal(upi.quote.codCharge, 0);
-  assert.equal(cod.quote.correctedTotal-upi.quote.correctedTotal, 50);
-  assert.equal(cod.quote.deliveryCharge, price < 499 ? 40 : 0);
-  assert.equal(backend.sameCheckoutQuote_({...cod.quote,codCharge:20,correctedTotal:cod.quote.correctedTotal-30},cod.quote),false,
-    'A stale ₹20 COD quote must require review of the new price');
+  assert.equal(upi.quote.correctedTotal, price + (price < 499 ? 40 : 0));
+  assert.equal(backend.normalizeAndValidateOrder_({customerName:'Test User',phone:'9876543210',address:'House 1',pinCode:'110001',paymentMethod:'Cash on Delivery',itemsDetail:[{id:'P',qty:1}]}).code, 'validation_failed');
 }
 
 function checkout(upiId) {
@@ -48,15 +44,13 @@ function checkout(upiId) {
 }
 const ui=checkout('fixture@upi');
 assert.match(ui.html(),/value="UPI" checked/);
-assert.match(ui.html(),/payment-recommended">Recommended/);
-assert.match(ui.html(),/₹50\.00 extra/);
-assert.match(ui.html(),/Save ₹50\.00 compared with COD/);
-ui.listeners.get('COD')({target:{value:'COD'}});
-assert.match(ui.html(),/value="COD" checked/);
-assert.match(ui.html(),/₹190\.00/);
+assert.match(ui.html(),/payment-recommended">Only payment method/);
+assert.doesNotMatch(ui.html(),/Cash on Delivery|value="COD"|compared with COD/);
+assert.match(ui.html(),/₹140\.00/);
 ui.c.renderCartDrawer();
-assert.match(ui.html(),/value="COD" checked/, 'Rerender must preserve an explicit payment choice');
-assert.match(checkout('').html(),/value="COD" checked/,'A shop with no UPI ID still needs a usable checkout');
+assert.match(ui.html(),/value="UPI" checked/,'UPI remains selected after rerender');
+assert.match(checkout('').html(),/UPI payment is temporarily unavailable/,'Checkout must be blocked when the required UPI ID is missing');
+assert.match(checkout('').html(),/id="orderWaBtn" type="button" disabled/);
 
 // Android already accepts all HTTPS paths for the verified shop host. Keep
 // legacy product.html?id=... and generated /products/... URLs in that scope.
@@ -67,4 +61,4 @@ assert.match(filter,/android:scheme="https" android:host="suhagbhandar\.in"/);
 assert(!/android:path(?:Prefix|Pattern|AdvancedPattern)?=/.test(filter), 'All product URL paths must remain supported');
 const links=JSON.parse(read('.well-known/assetlinks.json'));
 assert(links.some(x=>x.target?.package_name==='in.suhagbhandar.app.preview'&&x.relation?.includes('delegate_permission/common.handle_all_urls')));
-console.log('PASS: authoritative ₹50 COD fee, zero UPI surcharge, default/recommended UPI, COD choice retention, stale-quote protection and product App Links configuration.');
+console.log('PASS: UPI-only checkout, server-side COD rejection, no COD surcharge/UI, missing-UPI checkout lockout and product App Links configuration.');

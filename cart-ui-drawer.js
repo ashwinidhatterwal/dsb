@@ -44,11 +44,9 @@ function renderCartDrawer() {
     discount,
     merchandiseTotal,
     deliveryCharge,
-    codCharge,
     grandTotal
   } = computeCheckoutTotals(subtotal);
   const showUpi = !!CONFIG.UPI_ID;
-  const upiSaving = Math.max(0, Number(checkoutState.feeConfig?.codCharge) || 0);
   wrap.innerHTML = `
     <div class="cart-header">
       <div><span class="cart-eyebrow">SHOPPING BAG · ${CartStore.count()} ITEM${CartStore.count() === 1 ? '' : 'S'}</span><h2>Your cart</h2><button type="button" class="ghost-btn" id="forgetCheckoutInfo">Forget saved checkout details</button></div>
@@ -108,8 +106,7 @@ function renderCartDrawer() {
         <div class="field">
           <label>Payment method</label>
           <div class="pay-options">
-            ${showUpi ? `<label class="pay-option pay-option-upi"><input type="radio" name="payMethod" value="UPI" ${checkoutState.paymentMethod === 'UPI' ? 'checked' : ''}> <span class="pay-option-copy"><span class="pay-option-title"><span>Pay via UPI</span><small class="payment-recommended">Recommended</small></span>${upiSaving > 0 ? `<small class="upi-saving">Save ${money(upiSaving)} compared with COD</small>` : ''}</span></label>` : ''}
-            <label class="pay-option"><input type="radio" name="payMethod" value="COD" ${checkoutState.paymentMethod === 'COD' ? 'checked' : ''}> <span class="pay-option-copy"><span>Cash on Delivery</span>${upiSaving > 0 ? `<small class="payment-surcharge">${money(upiSaving)} extra</small>` : ''}</span></label>
+            ${showUpi ? `<label class="pay-option pay-option-upi"><input type="radio" name="payMethod" value="UPI" checked> <span class="pay-option-copy"><span class="pay-option-title"><span>Pay via UPI</span><small class="payment-recommended">Only payment method</small></span></span></label>` : '<p class="statusline err">UPI payment is temporarily unavailable. Please contact the shop before placing an order.</p>'}
           </div>
           ${showUpi && checkoutState.paymentMethod === 'UPI' ? '<p class="hint">UPI payment opens after your order is saved with the confirmed total.</p>' : ''}
         </div>
@@ -118,12 +115,11 @@ function renderCartDrawer() {
           <div class="row"><span>Subtotal</span><span>${money(subtotal)}</span></div>
           ${discount > 0 ? `<div class="row"><span>Discount</span><span>−${money(discount)}</span></div>` : ''}
           ${deliveryCharge > 0 ? `<div class="row"><span>Delivery</span><span>${money(deliveryCharge)}</span></div>` : ''}
-          ${codCharge > 0 ? `<div class="row"><span>Cash on Delivery fee</span><span>${money(codCharge)}</span></div>` : ''}
           ${checkoutState.feeConfig && checkoutState.feeConfig.deliveryCharge > 0 && deliveryCharge === 0 ? `<div class="row fee-free"><span>Delivery</span><span>FREE</span></div>` : ''}
           <div class="row total"><span>${checkoutState.feeConfig ? 'Estimated total' : 'Subtotal — fees checked next'}</span><span>${money(grandTotal)}</span></div>
         </div>
         ${checkoutState.feeConfig && checkoutState.feeConfig.deliveryCharge > 0 ? `<p class="checkout-fee-note">Free delivery on orders of ${money(checkoutState.feeConfig.deliveryFreeAbove)} or more.</p>` : ''}
-        <div class="checkout-honeypot" aria-hidden="true"><label>Website<input id="orderWebsite" tabindex="-1" autocomplete="off"></label></div><button class="primary-btn" id="orderWaBtn" type="button">Review order</button>
+        <div class="checkout-honeypot" aria-hidden="true"><label>Website<input id="orderWebsite" tabindex="-1" autocomplete="off"></label></div><button class="primary-btn" id="orderWaBtn" type="button" ${showUpi ? '' : 'disabled'}>Review order</button>
         <button class="ghost-btn cart-clear" id="clearCartBtn" type="button">Clear cart</button>
       </div>
     </div>`;

@@ -313,7 +313,7 @@
     'Dhatterwal Suhag Bhandar is a general store based in Goluwala, Hanumangarh, Rajasthan — the kind of shop where you can pick up everything from a lipstick to a notebook to a bar of soap in one visit. This website brings that same shop online, so you can browse from home and have your order confirmed over WhatsApp, the way you\'d naturally message the shop anyway.': 'धत्तरवाल सुहाग भंडार गोलूवाला, हनुमानगढ़, राजस्थान में स्थित एक जनरल स्टोर है, जहाँ एक ही जगह पर लिपस्टिक से लेकर नोटबुक और साबुन तक रोज़मर्रा की कई चीज़ें मिलती हैं। यह वेबसाइट उसी दुकान को ऑनलाइन लाती है ताकि आप घर से उत्पाद देख सकें और अपना ऑर्डर आसानी से कर सकें।',
     'Dhatterwal Suhag Bhandar — also known as Suhag Bhandar or DSB — is based in Goluwala, Hanumangarh, Rajasthan. suhagbhandar.in is our official website and online storefront. We combine the familiarity and personal service of a local shop with the convenience of online shopping.': 'धत्तरवाल सुहाग भंडार — जिसे सुहाग भंडार या DSB के नाम से भी जाना जाता है — गोलूवाला, हनुमानगढ़, राजस्थान में स्थित है। suhagbhandar.in हमारी आधिकारिक वेबसाइट और ऑनलाइन दुकान है। हम स्थानीय दुकान की व्यक्तिगत सेवा को ऑनलाइन खरीदारी की सुविधा के साथ जोड़ते हैं।',
     'Bangles and jewellery are important parts of our catalogue, but the store is broader than bridal or suhag products. We also carry cosmetics, personal care, lingerie, hair accessories, stationery and other everyday products, with the catalogue continuing to grow.': 'चूड़ियाँ और ज्वेलरी हमारे कैटलॉग का महत्वपूर्ण हिस्सा हैं, लेकिन हमारी दुकान केवल दुल्हन या सुहाग के सामान तक सीमित नहीं है। यहाँ कॉस्मेटिक्स, पर्सनल केयर, अंतर्वस्त्र, हेयर एक्सेसरीज़, स्टेशनरी और रोज़मर्रा के अन्य उत्पाद भी मिलते हैं, और हमारा कैटलॉग लगातार बढ़ रहा है।',
-    'Browse the shop, add what you need to your cart, and check out — we\'ll ask for your name, phone number, and delivery address, then your order is sent straight to us on WhatsApp for confirmation. Pay by cash on delivery, or via UPI if that option is shown at checkout.': 'दुकान देखें, जरूरत के उत्पाद कार्ट में जोड़ें और चेकआउट करें। हम आपका नाम, फोन नंबर और डिलीवरी पता पूछेंगे। ऑर्डर दर्ज होने के बाद दुकान की ओर से व्हाट्सऐप पर पुष्टि की जाएगी। भुगतान कैश ऑन डिलीवरी या उपलब्ध होने पर UPI से किया जा सकता है।',
+    'Browse the shop, add what you need to your cart, and check out — we\'ll ask for your name, phone number, and delivery address, then your order is sent straight to us on WhatsApp for confirmation. Pay securely via UPI using your preferred UPI app.': 'दुकान देखें, जरूरत के उत्पाद कार्ट में जोड़ें और चेकआउट करें। हम आपका नाम, फोन नंबर और डिलीवरी पता पूछेंगे। ऑर्डर दर्ज होने के बाद दुकान की ओर से व्हाट्सऐप पर पुष्टि की जाएगी। भुगतान अपने पसंदीदा UPI ऐप से करें।',
     'Message us directly on WhatsApp, or see the Contact page for our number and location.': 'हमें सीधे व्हाट्सऐप पर संदेश भेजें, या हमारे नंबर और स्थान के लिए संपर्क पेज देखें।',
     "The fastest way to reach us is WhatsApp — tap below and we'll reply as soon as we can.": 'हमसे जल्दी संपर्क करने का सबसे आसान तरीका व्हाट्सऐप है — नीचे टैप करें, हम जल्द से जल्द जवाब देंगे।',
     "We use order information to fulfil purchases and provide support. We also measure website activity to improve the shop. This page describes the information and services involved.": "हम खरीदारी पूरी करने और सहायता देने के लिए ऑर्डर की जानकारी का उपयोग करते हैं। दुकान को बेहतर बनाने के लिए वेबसाइट की गतिविधि भी मापते हैं। इस पेज पर संबंधित जानकारी और सेवाओं का विवरण है।",
@@ -328,7 +328,7 @@
     "If something arrives damaged, defective, or isn't what you ordered, message us on WhatsApp within 48 hours of delivery with a photo. We'll arrange a replacement or a full refund.": 'यदि कोई उत्पाद क्षतिग्रस्त, खराब या आपके ऑर्डर से अलग मिले, तो डिलीवरी के 48 घंटे के भीतर फोटो के साथ व्हाट्सऐप पर संदेश भेजें। हम रिप्लेसमेंट या पूरा रिफंड देने की व्यवस्था करेंगे।',
     'Lingerie, cosmetics, and personal care items cannot be returned or exchanged once opened or used, for hygiene and safety reasons. This is standard practice across retail for these categories.': 'स्वच्छता और सुरक्षा कारणों से लॉन्जरी, कॉस्मेटिक्स और पर्सनल केयर उत्पाद खुलने या इस्तेमाल होने के बाद वापस या एक्सचेंज नहीं किए जा सकते।',
     'Unopened, unused items in their original packaging (stationery, hair accessories, festive items, etc.) can be exchanged within 3 days of delivery. Packaged snacks and cold drinks are not returnable once delivered.': 'मूल पैकिंग में बंद और बिना इस्तेमाल किए उत्पाद (स्टेशनरी, हेयर एक्सेसरीज़, त्योहार के सामान आदि) डिलीवरी के 3 दिनों के भीतर एक्सचेंज किए जा सकते हैं। पैकेट वाले स्नैक्स और कोल्ड ड्रिंक्स डिलीवरी के बाद वापस नहीं लिए जाते।',
-    'For orders paid via UPI, approved refunds are sent back to the same UPI ID within a few business days. For cash on delivery orders, refunds are given as cash or adjusted against your next order.': 'UPI से भुगतान किए ऑर्डर का स्वीकृत रिफंड कुछ कार्यदिवसों में उसी UPI ID पर भेजा जाता है। कैश ऑन डिलीवरी ऑर्डर का रिफंड नकद दिया जा सकता है या अगले ऑर्डर में समायोजित किया जा सकता है।',
+    'For orders paid via UPI, approved refunds are sent back to the same UPI ID within a few business days.': 'UPI से भुगतान किए ऑर्डर का स्वीकृत रिफंड कुछ कार्यदिवसों में उसी UPI ID पर भेजा जाता है।',
     "Message us on WhatsApp with your Order ID and the reason — we'll take it from there.": 'अपने ऑर्डर आईडी और कारण के साथ व्हाट्सऐप पर संदेश भेजें — आगे की प्रक्रिया हम बताएँगे।'
   };
   Object.assign(HI, PARAS);
@@ -361,7 +361,7 @@
     'Delivered': 'डिलीवर हो गया',
     'Cancelled': 'रद्द हो गया',
     'Order ID from your order slip': 'ऑर्डर पर्ची पर दिया गया ऑर्डर आईडी',
-    'Browse the shop, add what you need to your cart, and check out — we\'ll ask for your name, phone number, and delivery address, then your order is saved securely and you receive a downloadable order slip. The shop contacts you on WhatsApp to confirm delivery details. Pay by cash on delivery, or via UPI if that option is shown at checkout.': 'दुकान में उत्पाद देखें, कार्ट में जोड़ें और नाम, फ़ोन नंबर व डिलीवरी पता भरें। ऑर्डर दर्ज होने पर डाउनलोड करने योग्य पर्ची मिलेगी। दुकान डिलीवरी की जानकारी की पुष्टि के लिए व्हाट्सऐप पर संपर्क करेगी। भुगतान कैश ऑन डिलीवरी या चेकआउट में उपलब्ध UPI विकल्प से करें।'
+    'Browse the shop, add what you need to your cart, and check out — we\'ll ask for your name, phone number, and delivery address, then your order is saved securely and you receive a downloadable order slip. The shop contacts you on WhatsApp to confirm delivery details. Pay securely via UPI using your preferred UPI app.': 'दुकान में उत्पाद देखें, कार्ट में जोड़ें और नाम, फ़ोन नंबर व डिलीवरी पता भरें। ऑर्डर दर्ज होने पर डाउनलोड करने योग्य पर्ची मिलेगी। दुकान डिलीवरी की जानकारी की पुष्टि के लिए व्हाट्सऐप पर संपर्क करेगी। भुगतान अपने पसंदीदा UPI ऐप से करें।'
   });
   Object.assign(HI, {
     'Popular picks': 'लोकप्रिय उत्पाद',
@@ -386,7 +386,7 @@
     if (m = s.match(/^From (₹.+)$/)) return `${m[1]} से शुरू`;
     if (m = s.match(/^ · (.+) off$/)) return ` · ${m[1]} की छूट`;
     if (m = s.match(/^Use code (.+) at checkout$/)) return `चेकआउट पर ${m[1]} कोड डालें`;
-    if (m = s.match(/^Delivery: (.+) below (.+) after discounts; free at or above that amount\. Cash on Delivery: (.+) extra\.$/)) return `छूट के बाद ${m[2]} से कम पर डिलीवरी ${m[1]}; इस राशि या अधिक पर मुफ़्त। कैश ऑन डिलीवरी: ${m[3]} अतिरिक्त।`;
+    if (m = s.match(/^Delivery: (.+) below (.+) after discounts; free at or above that amount\.$/)) return `छूट के बाद ${m[2]} से कम पर डिलीवरी ${m[1]}; इस राशि या अधिक पर मुफ़्त।`;
     if (m = s.match(/^Photo (\d+) of (\d+)$/)) return `फ़ोटो ${m[1]} / ${m[2]}`;
     if (m = s.match(/^Size: (.+)$/)) return `साइज़: ${m[1]}`;
     const emojiLead = s.match(/^([\p{Extended_Pictographic}\uFE0F\s]+)(.+)$/u);
@@ -397,7 +397,6 @@
     if (m = s.match(/^Only (\d+) left$/)) return `केवल ${m[1]} बाकी`;
     if (m = s.match(/^No results for "(.+)"$/)) return `“${m[1]}” के लिए कोई परिणाम नहीं मिला`;
     if (m = s.match(/^(\d+) reviews?$/)) return `${m[1]} समीक्षाएँ`;
-    if (m = s.match(/^Save (.+) compared with COD$/)) return `COD की तुलना में ${m[1]} बचाएँ`;
     if (m = s.match(/^(₹[\d,.]+) extra$/)) return `${m[1]} अतिरिक्त`;
     if (m = s.match(/^(.+) added to cart$/)) return `${m[1]} कार्ट में जोड़ा गया`;
     return null;

@@ -69,14 +69,14 @@ const ANALYTICS_REPORT_CACHE_KEY = 'dsb.analyticsReport.v2';
 const ANALYTICS_REPORT_CACHE_TTL = 60; // seconds
 const ANALYTICS_BATCH_MAX = 20;
 const ANALYTICS_EVENTS = ['page_view','product_view','search','category_view','filter_change','add_to_cart','begin_checkout','order_completed','delivery_estimate','review_submitted'];
-const ALLOWED_PAYMENT_METHODS = ['Cash on Delivery', 'UPI'];
+const ALLOWED_PAYMENT_METHODS = ['UPI'];
 
 // Checkout fee settings. Edit these three values whenever your policy changes.
 // Delivery is charged only when the discounted merchandise value is BELOW
 // DELIVERY_FREE_ABOVE. Set a charge to 0 to disable it.
 const DELIVERY_FREE_ABOVE = 499; // ₹ — orders at/above this merchandise value get free delivery
 const DELIVERY_CHARGE = 40; // ₹ — delivery fee below the threshold
-const COD_CHARGE = 50; // ₹ — extra fee when Cash on Delivery is selected
+// COD is no longer accepted. Legacy COD order columns remain for historical records.
 // Customer-facing delivery guidance. Keep more-specific prefixes before broader ones.
 // These are estimates after shop confirmation, not courier guarantees.
 const DELIVERY_ESTIMATE_RULES = [

@@ -18,7 +18,7 @@ function checkoutOrderFromForm() {
     phone: checkoutState.phone.trim(),
     address: checkoutState.address.trim() + '\nPIN: ' + checkoutState.pinCode.trim(),
     pinCode: checkoutState.pinCode.trim(),
-    paymentMethod: checkoutState.paymentMethod === 'UPI' ? 'UPI' : 'Cash on Delivery',
+    paymentMethod: 'UPI',
     promoCode: checkoutState.appliedPromo?.code || '',
     itemsDetail: Object.values(CartStore.getAll()).map(({
       product,
@@ -64,6 +64,7 @@ function validateCheckoutDetails(order) {
 }
 async function submitOrder() {
   if (checkoutBusy) return;
+  if (!CONFIG.UPI_ID) { showCheckoutError('UPI payment is temporarily unavailable. Please contact the shop.'); return; }
   const order = checkoutOrderFromForm();
   if (!order.itemsDetail.length) return;
   const problem = validateCheckoutDetails(order);
@@ -94,7 +95,6 @@ async function submitOrder() {
         subtotal,
         discount: totals.discount,
         deliveryCharge: totals.deliveryCharge,
-        codCharge: totals.codCharge,
         correctedTotal: totals.grandTotal,
         items
       }
@@ -148,10 +148,11 @@ function renderCheckoutReview(message = '') {
     order,
     quote: q
   } = checkoutQuote;
-  $('#cartContent').innerHTML = `<button class="closebtn" id="cartClose" aria-label="Close cart">✕</button><section class="checkout-review"><h2>Review your order</h2>${message ? `<p role="alert">${escapeHtml(message)}</p>` : ''}<p>${escapeHtml(order.customerName)} · ${escapeHtml(order.phone)}</p><p>${escapeHtml(order.address)}</p><ul>${q.items.map(x => `<li>${escapeHtml(x.name)}${x.size ? ` (Size: ${escapeHtml(x.size)})` : ''} × ${x.qty} — ${money(x.lineTotal)}</li>`).join('')}</ul><div class="cart-total-box"><div class="row"><span>Subtotal</span><span>${money(q.subtotal)}</span></div><div class="row"><span>Discount</span><span>−${money(q.discount)}</span></div><div class="row"><span>Delivery</span><span>${money(q.deliveryCharge)}</span></div><div class="row"><span>Cash on Delivery fee</span><span>${money(q.codCharge)}</span></div><div class="row total"><span>Total</span><span>${money(q.correctedTotal)}</span></div></div><p>${order.paymentMethod === 'UPI' ? 'UPI payment opens after your order is saved with the confirmed total.' : 'Payment is due at delivery.'}</p><button class="primary-btn" id="confirmOrderBtn">Confirm order</button><button class="ghost-btn" id="editCheckoutBtn">Edit details</button></section>`;
+  $('#cartContent').innerHTML = `<button class="closebtn" id="cartClose" aria-label="Close cart">✕</button><section class="checkout-review"><h2>Review your order</h2>${message ? `<p role="alert">${escapeHtml(message)}</p>` : ''}<p>${escapeHtml(order.customerName)} · ${escapeHtml(order.phone)}</p><p>${escapeHtml(order.address)}</p><ul>${q.items.map(x => `<li>${escapeHtml(x.name)}${x.size ? ` (Size: ${escapeHtml(x.size)})` : ''} × ${x.qty} — ${money(x.lineTotal)}</li>`).join('')}</ul><div class="cart-total-box"><div class="row"><span>Subtotal</span><span>${money(q.subtotal)}</span></div><div class="row"><span>Discount</span><span>−${money(q.discount)}</span></div><div class="row"><span>Delivery</span><span>${money(q.deliveryCharge)}</span></div><div class="row total"><span>Total</span><span>${money(q.correctedTotal)}</span></div></div><p>UPI payment opens after your order is saved with the confirmed total.</p><button class="primary-btn" id="confirmOrderBtn">Confirm order</button><button class="ghost-btn" id="editCheckoutBtn">Edit details</button></section>`;
   $('#cartClose').onclick = closeCart;
   $('#editCheckoutBtn').onclick = () => {
     if (checkoutBusy) return;
+  if (!CONFIG.UPI_ID) { showCheckoutError('UPI payment is temporarily unavailable. Please contact the shop.'); return; }
     checkoutQuote = null;
     renderCartDrawer();
     $('#custName')?.focus();
@@ -296,7 +297,6 @@ async function completeCheckout(data, order) {
     subtotal: data.subtotal,
     discount: data.discount,
     deliveryCharge: data.deliveryCharge,
-    codCharge: data.codCharge,
     total: data.correctedTotal,
     items: data.items
   };
@@ -347,6 +347,7 @@ window.addEventListener('storage', event => {
   if (event.key !== CART_STORAGE_KEY && event.key !== PENDING_CHECKOUT_KEY && event.key !== null) return;
   notifyCartChanged();
   if (checkoutBusy) return;
+  if (!CONFIG.UPI_ID) { showCheckoutError('UPI payment is temporarily unavailable. Please contact the shop.'); return; }
   try {
     pendingCheckout = JSON.parse(localStorage.getItem(PENDING_CHECKOUT_KEY) || 'null');
   } catch (_) {}

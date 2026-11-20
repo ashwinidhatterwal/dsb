@@ -97,9 +97,9 @@ No production signing key or private signing values are included in this source.
 
 ## Final phone acceptance and store setup
 
-The owner has confirmed the preview app works. Before public release, test the actual production-signed APK or Play test build: cold launch/relaunch, product link entry, both languages, search, cart, address/saved delivery details, UPI handoff and return, COD quote, receipt download/print, WhatsApp, back navigation, keyboard, rotation, offline/retry. Check the app on an Android 9 device as well as the current phone if available. Unit tests cannot verify a real bank app or browser OAuth handoff.
+The owner has confirmed the preview app works. Before public release, test the actual production-signed APK or Play test build: cold launch/relaunch, product link entry, both languages, search, cart, address/saved delivery details, UPI handoff and return, rejection of any COD submission, receipt download/print, WhatsApp, back navigation, keyboard, rotation, offline/retry. Check the app on an Android 9 device as well as the current phone if available. Unit tests cannot verify a real bank app or browser OAuth handoff.
 
-The website backend must serve the intended checkout policy: UPI recommended/default, COD surcharge ₹50. `clasp push` alone does not update an Apps Script web-app deployment; deploy a **New version** on the existing deployment if its live fee ever remains ₹20 after a future source update. The live endpoint was checked during this audit and returned `codCharge: 50`. This app always uses the live website/backend.
+The website backend must serve the UPI-only checkout policy. Cash on Delivery is not accepted; the backend rejects COD submissions even if an old client attempts to send one. `clasp push` alone does not update an Apps Script web-app deployment; deploy a **New version** on the existing deployment after pushing the updated Apps Script source. This app always uses the live website/backend.
 
 Use Play App Signing for the AAB. Complete the Play listing, real screenshots, store/privacy/contact links, content rating and Data safety disclosures based on the website's real collection (delivery details/orders, analytics and third-party services). Website-based packaging does not remove those disclosures. No automated Play submission is configured.
 

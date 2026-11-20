@@ -16,9 +16,8 @@ const CONFIG = {
   // tags. Update this the moment you move to a custom domain, or every page's
   // canonical/og:url will keep pointing at the old address.
   SITE_URL: 'https://suhagbhandar.in',
-  // Optional: your UPI ID (e.g. 'yourname@okicici'), for the "Pay via UPI"
-  // checkout option. Leave UPI_ID blank to hide that option entirely and
-  // only offer Cash on Delivery.
+  // Required: checkout accepts UPI payments only. Keep this configured
+  // or the checkout button will remain disabled.
   UPI_ID: '8000519440@ybl',
   UPI_PAYEE_NAME: 'Dhatterwal Suhag Bhandar'
 };

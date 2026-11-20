@@ -69,14 +69,14 @@ const ANALYTICS_REPORT_CACHE_KEY = 'dsb.analyticsReport.v2';
 const ANALYTICS_REPORT_CACHE_TTL = 60; // seconds
 const ANALYTICS_BATCH_MAX = 20;
 const ANALYTICS_EVENTS = ['page_view','product_view','search','category_view','filter_change','add_to_cart','begin_checkout','order_completed','delivery_estimate','review_submitted'];
-const ALLOWED_PAYMENT_METHODS = ['Cash on Delivery', 'UPI'];
+const ALLOWED_PAYMENT_METHODS = ['UPI'];
 
 // Checkout fee settings. Edit these three values whenever your policy changes.
 // Delivery is charged only when the discounted merchandise value is BELOW
 // DELIVERY_FREE_ABOVE. Set a charge to 0 to disable it.
 const DELIVERY_FREE_ABOVE = 499; // ₹ — orders at/above this merchandise value get free delivery
 const DELIVERY_CHARGE = 40; // ₹ — delivery fee below the threshold
-const COD_CHARGE = 50; // ₹ — extra fee when Cash on Delivery is selected
+// COD is no longer accepted. Legacy COD order columns remain for historical records.
 // Customer-facing delivery guidance. Keep more-specific prefixes before broader ones.
 // These are estimates after shop confirmation, not courier guarantees.
 const DELIVERY_ESTIMATE_RULES = [
@@ -2137,7 +2137,7 @@ function getCheckoutConfig_() {
     checkoutVersion: 2,
     deliveryFreeAbove: Math.max(0, safeNumber_(DELIVERY_FREE_ABOVE, 0)),
     deliveryCharge: Math.max(0, safeNumber_(DELIVERY_CHARGE, 0)),
-    codCharge: Math.max(0, safeNumber_(COD_CHARGE, 0))
+    codCharge: 0
   };
 }
 
@@ -2267,7 +2267,7 @@ function normalizeAndValidateOrder_(o) {
   const phone = cleanPhone_(o.phone),
     address = String(o.address || '').trim().replace(/\nPIN: [^\n]*$/, '').trim();
   const pinCode = String(o.pinCode || '').trim();
-  const paymentMethod = String(o.paymentMethod || o.paymentmethod || 'Cash on Delivery');
+  const paymentMethod = String(o.paymentMethod || o.paymentmethod || '');
   const promoCode = String(o.promoCode || o.promocode || '').trim().toUpperCase();
   if (o.website) return {
     success: false,
@@ -2498,7 +2498,7 @@ function priceOrder_(order, sheets) {
   const cfg = getCheckoutConfig_(),
     merchandiseTotal = roundMoney_(priced.subtotal - discount);
   const deliveryCharge = merchandiseTotal < cfg.deliveryFreeAbove ? cfg.deliveryCharge : 0;
-  const codCharge = order.paymentMethod === 'Cash on Delivery' ? cfg.codCharge : 0;
+  const codCharge = 0;
   const quote = {
     subtotal: roundMoney_(priced.subtotal),
     discount: discount,
