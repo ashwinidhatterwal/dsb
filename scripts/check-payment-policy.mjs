@@ -58,7 +58,9 @@ assert.equal(vm.runInContext('checkoutState.paymentMethod',ui.c),'UPI','Rerender
 
 // After a fresh UPI order the thank-you page opens the UPI app once (mobile only), keeping the button/QR as fallback.
 const thank=read('thank-you.js');
-assert(thank.includes('shouldAutoOpenUpi(receipt.orderId)') && thank.includes('window.location.href=upiLink'),'thank-you must auto-open the UPI app');
+assert(thank.includes('shouldAutoOpenUpi(receipt.orderId)') && thank.includes('tryOpenUpiApp(upiLink)'),'thank-you must auto-open the UPI app');
+assert(!thank.includes('window.location.href=upiLink') && !/tr:\s*orderId/.test(thank),'UPI launch must never replace the confirmation page and must not send merchant-only tr param');
+assert(thank.includes('copyUpiIdBtn') && thank.includes('copyUpiAmtBtn'),'manual UPI ID/amount copy fallback required');
 assert(/Android\|iPhone/.test(thank) && thank.includes("'dsb_upi_autoopen_'"),'auto-open must be mobile-only and once per order');
 assert(thank.includes('${t.openUpi}'),'manual Open UPI app fallback must remain');
 

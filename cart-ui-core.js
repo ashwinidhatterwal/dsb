@@ -250,10 +250,7 @@ function buildUpiLink(amount, orderId) {
     pn: CONFIG.UPI_PAYEE_NAME || CONFIG.SHOP_NAME,
     am: amount.toFixed(2),
     cu: 'INR',
-    tn: orderId ? `Order ${orderId}` : `Order at ${CONFIG.SHOP_NAME}`,
-    ...(orderId ? {
-      tr: orderId
-    } : {})
+    tn: orderId ? `Order ${orderId}` : `Order at ${CONFIG.SHOP_NAME}`
   });
   return `upi://pay?${params.toString()}`;
 }
