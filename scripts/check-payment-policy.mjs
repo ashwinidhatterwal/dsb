@@ -56,6 +56,12 @@ assert.match(ui.html(),/₹140\.00/,'Total must carry no COD fee');
 ui.c.renderCartDrawer();
 assert.equal(vm.runInContext('checkoutState.paymentMethod',ui.c),'UPI','Rerender keeps UPI');
 
+// After a fresh UPI order the thank-you page opens the UPI app once (mobile only), keeping the button/QR as fallback.
+const thank=read('thank-you.js');
+assert(thank.includes('shouldAutoOpenUpi(receipt.orderId)') && thank.includes('window.location.href=upiLink'),'thank-you must auto-open the UPI app');
+assert(/Android\|iPhone/.test(thank) && thank.includes("'dsb_upi_autoopen_'"),'auto-open must be mobile-only and once per order');
+assert(thank.includes('${t.openUpi}'),'manual Open UPI app fallback must remain');
+
 // Android already accepts all HTTPS paths for the verified shop host. Keep
 // legacy product.html?id=... and generated /products/... URLs in that scope.
 const manifest=read('android/app/src/main/AndroidManifest.xml');

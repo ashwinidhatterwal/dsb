@@ -17,7 +17,7 @@
       whatsapp:'WhatsApp confirmation', whatsappText:'We’ll confirm your delivery details from',
       deliveryStep:'Delivery', codText:'Pay {total} in cash when your order arrives.', upiText:'Once payment and details are confirmed, we’ll prepare your order for delivery.',
       paymentTitle:'UPI payment is not yet confirmed', paymentText:'Pay the exact order total below. The shop verifies UPI payments manually on WhatsApp. If you already paid for this order, do not pay again.',
-      openUpi:'Open UPI app', reference:'Reference', track:'Track this order', download:'Download order slip', print:'Print / Save as PDF', shop:'Continue shopping',
+      openUpi:'Open UPI app', autoUpi:'Opening your UPI app… if it does not open, tap “Open UPI app” below.', reference:'Reference', track:'Track this order', download:'Download order slip', print:'Print / Save as PDF', shop:'Continue shopping',
       help:'Need help with this order?', contact:'Contact us', missingTitle:'No recent order found', missingText:'This page shows the most recent order placed on this device. If you already have an Order ID, you can still track it securely.', trackOrder:'Track an order', backShop:'Back to shop'
     },
     hi: {
@@ -29,7 +29,7 @@
       whatsapp:'व्हाट्सऐप पर पुष्टि', whatsappText:'हम आपके डिलीवरी विवरण की पुष्टि इस नंबर से करेंगे',
       deliveryStep:'डिलीवरी', codText:'ऑर्डर आने पर {total} नकद भुगतान करें।', upiText:'भुगतान और विवरण की पुष्टि के बाद हम आपका ऑर्डर डिलीवरी के लिए तैयार करेंगे।',
       paymentTitle:'UPI भुगतान अभी पुष्टि नहीं हुआ है', paymentText:'नीचे दी गई सही कुल राशि का भुगतान करें। दुकान UPI भुगतान की पुष्टि व्हाट्सऐप पर मैन्युअली करती है। यदि आप इस ऑर्डर के लिए पहले ही भुगतान कर चुके हैं, दोबारा भुगतान न करें।',
-      openUpi:'UPI ऐप खोलें', reference:'रेफरेंस', track:'इस ऑर्डर को ट्रैक करें', download:'ऑर्डर स्लिप डाउनलोड करें', print:'प्रिंट / PDF सेव करें', shop:'खरीदारी जारी रखें',
+      openUpi:'UPI ऐप खोलें', autoUpi:'आपका UPI ऐप खुल रहा है… न खुले तो नीचे “UPI ऐप खोलें” दबाएँ।', reference:'रेफरेंस', track:'इस ऑर्डर को ट्रैक करें', download:'ऑर्डर स्लिप डाउनलोड करें', print:'प्रिंट / PDF सेव करें', shop:'खरीदारी जारी रखें',
       help:'इस ऑर्डर में मदद चाहिए?', contact:'संपर्क करें', missingTitle:'हाल का ऑर्डर नहीं मिला', missingText:'यह पेज इस डिवाइस पर दिए गए सबसे हाल के ऑर्डर को दिखाता है। यदि आपके पास ऑर्डर ID है, तो आप उसे सुरक्षित रूप से ट्रैक कर सकते हैं।', trackOrder:'ऑर्डर ट्रैक करें', backShop:'दुकान पर वापस जाएँ'
     }
   };
@@ -47,6 +47,18 @@
       ...(orderId ? { tr: orderId } : {})
     });
     return `upi://pay?${params.toString()}`;
+  }
+  // After a fresh order, send phones straight to the UPI app. Fires once per
+  // order (refresh / language toggle / revisit won't re-trigger); the button
+  // and QR stay on the page as fallback. Skipped on desktop (no UPI handler).
+  function shouldAutoOpenUpi(orderId) {
+    if (!orderId || !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')) return false;
+    const key = 'dsb_upi_autoopen_' + orderId;
+    try {
+      if (localStorage.getItem(key)) return false;
+      localStorage.setItem(key, '1');
+    } catch (_) { return false; }
+    return true;
   }
   function renderQr(link) {
     const target = document.getElementById('thankQr');
@@ -76,6 +88,7 @@
     const shopPhone=formatShopPhone(CONFIG.WHATSAPP_NUMBER);
     const items=(receipt.items||[]).map(item=>`<div class="thank-item"><div><div class="thank-item-name">${escapeHtml(item.name||'Item')}</div><div class="thank-item-meta">${t.qty}: ${Number(item.qty)||0}${item.size ? ` · ${t.size}: ${escapeHtml(item.size)}`:''}</div></div><div class="thank-item-price">${money(item.lineTotal)}</div></div>`).join('');
     const upiLink=isUpi ? buildUpiLink(receipt.total,receipt.orderId):'';
+    const autoUpi=isUpi && shouldAutoOpenUpi(receipt.orderId);
     shell.innerHTML=`
       <section class="thank-hero">
         <div class="thank-check" aria-hidden="true">✓</div>
@@ -95,13 +108,14 @@
         </section>
         <aside class="thank-card">
           <div class="thank-next"><h2>${t.next}</h2><ol class="thank-next-list"><li><span class="thank-step">✓</span><div><strong>${t.saved}</strong><span>${t.savedText}</span></div></li><li><span class="thank-step">2</span><div><strong>${t.whatsapp}</strong><span>${t.whatsappText}${shopPhone?` <strong>${escapeHtml(shopPhone)}</strong>`:''}.</span></div></li><li><span class="thank-step">3</span><div><strong>${t.deliveryStep}</strong><span>${isUpi?t.upiText:t.codText.replace('{total}',money(receipt.total))}</span></div></li></ol></div>
-          ${isUpi?`<div class="thank-payment"><h3>${t.paymentTitle}</h3><p>${t.paymentText}</p><div class="thank-qr" id="thankQr" aria-label="UPI payment QR code"></div><a class="thank-btn primary" href="${escapeHtml(upiLink)}">${t.openUpi}</a><p class="thank-upi-ref">UPI ID: ${escapeHtml(CONFIG.UPI_ID)} · ${t.reference}: ${escapeHtml(receipt.orderId)}</p></div>`:''}
+          ${isUpi?`<div class="thank-payment"><h3>${t.paymentTitle}</h3><p>${t.paymentText}</p>${autoUpi?`<p class="thank-upi-ref" role="status">${t.autoUpi}</p>`:''}<div class="thank-qr" id="thankQr" aria-label="UPI payment QR code"></div><a class="thank-btn primary" href="${escapeHtml(upiLink)}">${t.openUpi}</a><p class="thank-upi-ref">UPI ID: ${escapeHtml(CONFIG.UPI_ID)} · ${t.reference}: ${escapeHtml(receipt.orderId)}</p></div>`:''}
           <div class="thank-card-pad" style="padding-top:0"><div class="thank-actions"><a class="thank-btn primary" href="track-order.html?orderId=${encodeURIComponent(receipt.orderId)}">${t.track}</a><button class="thank-btn secondary" id="downloadReceiptBtn" type="button">${t.download}</button><button class="thank-btn soft" id="printReceiptBtn" type="button">${t.print}</button><a class="thank-btn secondary" href="index.html">${t.shop}</a></div><p class="thank-help">${t.help} <a href="contact.html">${t.contact}</a></p></div>
         </aside>
       </div>`;
     document.getElementById('downloadReceiptBtn')?.addEventListener('click',()=>downloadReceipt(receipt));
     document.getElementById('printReceiptBtn')?.addEventListener('click',()=>downloadReceipt(receipt,true));
     if(isUpi) renderQr(upiLink);
+    if(autoUpi) setTimeout(()=>{ window.location.href=upiLink; },700);
   }
   langBtn.addEventListener('click',()=>{lang=lang==='hi'?'en':'hi';try{localStorage.setItem(LANG_KEY,lang);}catch(_){}render();});
   render();
